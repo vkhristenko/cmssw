@@ -1,0 +1,50 @@
+#ifndef HCALDQSOURCE_H
+#define HCALDQSOURCE_H
+
+/*
+ *	file:			HcalDQSource.h
+ *	Author:			Viktor Khristenko
+ *	Start Date:		03/04/2015
+ */
+
+#include "DQMServices/Core/interface/DQMEDAnalyzer.h"
+
+#include "DQM/HcalCommon/interface/HcalMECollection.h"
+#include "DQM/HcalCommon/interface/HcalDQMonitor.h"
+
+#include "FWCore/Framework/interface/Frameworkfwd.h"
+#include "FWCore/Framework/interface/ESHandle.h"
+#include "FWCore/Framework/interface/Event.h"
+#include "FWCore/Framework/interface/MakerMacros.h"
+#include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/ServiceRegistry/interface/Service.h"
+
+namespace hcaldqm
+{
+	/*
+	 *	HcalDQSource Class - Base Class for DQSources
+	 */
+	class HcalDQSource : public DQMEDAnalyzer, public HcalDQMonitor
+	{
+		public:
+			HcalDQSource(edm::ParameterSet const&);
+			virtual ~HcalDQSource();
+
+			//	Genetic doWork function for all DQSources
+			//	Note: Different def from DQClients
+			virtual void doWork(edm::Event const&e, 
+					edm::EventSetup const& es) = 0;
+
+			//	Functions which have to be reimplemented from DQMEDAnalyzer
+			virtual void analyze(edm::Event const& e, edm::EventSetup const& es);
+			virtual void bookHistograms(DQMStore::IBooker &ib, edm::Run const&,
+					edm::EventSetup const&);
+			virtual void dqmBeginRun(edm::Run const&, edm::EventSetup const&);
+
+		protected:
+			HcalMECollection		_mes;
+	};
+}
+
+#endif
+

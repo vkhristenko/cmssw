@@ -1,0 +1,94 @@
+#ifndef HCALDQMONITOR_H
+#define HCALDQMONITOR_H
+
+/*
+ *	file:			HcalDQMonitor.h
+ *	Author:			Viktor Khristenko
+ *	Start Date:		03/04/2015
+ */
+
+#include "DQM/HcalCommon/interface/HcalDQUtils.h"
+#include "DQM/HcalCommon/interface/HcalCommonHeaders.h"
+
+#include <string>
+
+namespace hcaldqm
+{
+	enum EventType
+	{
+		iNormal,
+		iCalibration,
+		nEventType
+	};
+
+	enum RunType
+	{
+		iOnline,
+		iOffline,
+		iLocal,				//	a la DetDiag
+		nRunType
+	};
+
+	enum ModuleType
+	{
+		iClient,
+		iSource,
+		nModuleType
+	};
+
+	struct ModuleInfo
+	{
+		std::string		type;
+		std::string		runType;
+		std::string		eventType;
+		std::string		name;
+		int				debug;
+	};
+
+	/*
+	 *	HcalDQMonitor Class: Commont Base Class for DQSources and DQClients
+	 *	and all the modules to be used
+	 */
+	class HcalDQMonitor
+	{
+		public:
+			HcalDQMonitor(edm::ParameterSet const&);
+			virtual ~HcalDQMonitor();
+
+			ModuleInfo info() const {return _mi;}
+
+			inline void throw_(std::string const msg) const
+			{
+				throw cms::Exception("HcalDQM") << _mi.name << "::"	<< msg;
+			}
+
+			inline void warn_(std::string const msg) const
+			{
+				edm::LogWarning("HcalDQM") << _mi.name << "::" << msg;
+			}
+
+			//	For the case when msg and msg1 cannot be concatenated
+			inline void warn_(std::string const msg, std::string const msg1) const
+			{
+				edm::LogWarning("HcalDQM") << _mi.name << "::" << msg << msg1;
+			}
+
+		protected:
+			ModuleInfo		_mi;
+			Labels			_labels;
+	};
+
+}
+
+#define INITCOLL(LABEL, COLL) \
+	if (!(e.getByLabel(LABEL, COLL))) \
+		warn_("Collection" #COLL " not available", \
+				"  " + LABEL.label()+ "  " + LABEL.instance())
+
+#endif
+
+
+
+
+
+
