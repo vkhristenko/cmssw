@@ -5,6 +5,10 @@
  *	file:			HcalDQMonitor.h
  *	Author:			Viktor Khristenko
  *	Start Date:		03/04/2015
+ *
+ *	TODO:
+ *		1) Other module-generic parameters???
+ *		2) Other module-genetic functionality???
  */
 
 #include "DQM/HcalCommon/interface/HcalDQUtils.h"
@@ -12,8 +16,12 @@
 
 #include <string>
 
+
 namespace hcaldqm
 {
+	/*
+	 * Structs below are for the future
+	 */
 	enum EventType
 	{
 		iNormal,
@@ -38,11 +46,11 @@ namespace hcaldqm
 
 	struct ModuleInfo
 	{
-		std::string		type;
-		std::string		runType;
-		std::string		eventType;
-		std::string		name;
-		int				debug;
+		std::string			type;
+		std::string			runType;
+		std::vector<int>	calibTypesAllowed;
+		std::string			name;
+		int					debug;
 	};
 
 	/*
@@ -71,6 +79,16 @@ namespace hcaldqm
 			inline void warn_(std::string const msg, std::string const msg1) const
 			{
 				edm::LogWarning("HcalDQM") << _mi.name << "::" << msg << msg1;
+			}
+
+			inline void info_(std::string const msg) const
+			{
+				edm::LogInfo("HcalDQM") << _mi.name << "::" << msg;
+			}
+
+			inline void debug_(std::string const msg) const
+			{
+				LogDebug("HcalDQM") << _mi.name << "::" << msg;
 			}
 
 		protected:

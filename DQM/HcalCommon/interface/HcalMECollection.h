@@ -5,6 +5,11 @@
  *	file:			HcalMECollection.h
  *	Author:			Viktor Khristenko
  *	Start Date:		03/04/2015
+ *
+ *	TODO:
+ *		1) Extend MEAxis for variable binning
+ *		2) Allow labels to be put for axis
+ *		3) Allow some Mes to be updated
  */
 
 #include "DQM/HcalCommon/interface/HcalCommonHeaders.h"
@@ -67,6 +72,9 @@ namespace hcaldqm
 			MonitorElement& getME(std::string name) {return (*this)[name];}
 			MonitorElement& operator[](std::string);
 
+			//	Update all the MEs
+			void update();
+
 		private:
 			//	do the actual Booking
 			void doBook(DQMStore::IBooker&, MEInfo const&);
@@ -81,6 +89,8 @@ namespace hcaldqm
 			//	a Map: MEname -> ME*
 			typedef boost::ptr_map<std::string, MonitorElement> MEMap;
 			MEMap											_meMap;
+			//	a List of MEs to be updated
+			std::vector<std::string>						_namesToUpdate;
 			//	Parameter Set of MEs	
 			edm::ParameterSet const&						_ps;
 	};

@@ -13,7 +13,13 @@ namespace hcaldqm
 
 	HcalMECollection::~HcalMECollection()
 	{
-		//	Clean the ME map
+		//	Cannot delete the MEMap, have to release all the MEs
+		for (MEMap::iterator it=_meMap.begin();
+				it!=_meMap.end(); ++it)
+		{
+			MEMap::auto_type ptr = _meMap.release(it);
+			ptr.release();
+		}
 	}
 
 	//	for booking Monitor Elements based on PSet
@@ -37,6 +43,11 @@ namespace hcaldqm
 				"path");
 		std::string kind = info.getPS().getUntrackedParameter<std::string>(
 				"kind");
+		bool toUpdate = false;
+		if (info.getPS().exists("toUpdate"))
+			toUpdate = info.getPS().getUntrackedParameter<bool>("toUpdate");
+		if (toUpdate)
+			_namesToUpdate.push_back(info.getName());
 		MonitorElement *me;
 
 		ib.setCurrentFolder(path);
@@ -225,6 +236,14 @@ namespace hcaldqm
 		me->setAxisTitle(xaxis.title, 1);
 		me->setAxisTitle(yaxis.title, 2);
 		return me;
+	}
+
+	//	update all the MEs
+	void HcalMECollection::update()
+	{
+		for (std::vector<std::string>::const_iterator it=_namesToUpdate.begin();
+				it!=_namesToUpdate.end(); ++it)
+			_meMap[*it].update();
 	}
 }
 

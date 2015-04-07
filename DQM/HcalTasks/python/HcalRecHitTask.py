@@ -4,8 +4,8 @@ from DQM.HcalCommon.HcalDQSourceEx import hcalDQSourceEx
 #	List of FEDs
 lFEDs = [x+700 for x in range(32)] + [929, 1118, 1120, 1122]
 
-moduleName = "HcalDigiTask"
-hcalDigiTask = cms.EDAnalyzer(
+moduleName = "HcalRecHitTask"
+hcalRecHitTask = cms.EDAnalyzer(
 	moduleName,
 	moduleParameters	= cms.untracked.PSet(
 		name		= cms.untracked.string(moduleName),
@@ -16,10 +16,10 @@ hcalDigiTask = cms.EDAnalyzer(
 		Labels		= hcalDQSourceEx.moduleParameters.Labels
 	),
 	MEs					= cms.untracked.PSet(
-		HEDigiShape				= cms.untracked.PSet(
+		HERecHitShape				= cms.untracked.PSet(
 			path	= cms.untracked.string("Hcal/%s/HE" % moduleName),
 			kind	= cms.untracked.string("TH1D"),
-			desc	= cms.untracked.string("HE Digi Shape"),
+			desc	= cms.untracked.string("HE RecHit Shape"),
 			xaxis	= cms.untracked.PSet(
 				edges	= cms.untracked.bool(False),
 				nbins	= cms.untracked.int32(10),
@@ -28,10 +28,10 @@ hcalDigiTask = cms.EDAnalyzer(
 				title	= cms.untracked.string("TS")
 			)
 		),
-		HFDigiShape				= cms.untracked.PSet(
+		HFRecHitShape				= cms.untracked.PSet(
 			path	= cms.untracked.string("Hcal/%s/HF" % moduleName),
 			kind	= cms.untracked.string("TH1D"),
-			desc	= cms.untracked.string("HF Digi Shape"),
+			desc	= cms.untracked.string("HF RecHit Shape"),
 			xaxis	= cms.untracked.PSet(
 				edges	= cms.untracked.bool(False),
 				nbins	= cms.untracked.int32(10),
@@ -40,10 +40,10 @@ hcalDigiTask = cms.EDAnalyzer(
 				title	= cms.untracked.string("TS")
 			)
 		),
-		HODigiShape				= cms.untracked.PSet(
+		HORecHitShape				= cms.untracked.PSet(
 			path	= cms.untracked.string("Hcal/%s/HO" % moduleName),
 			kind	= cms.untracked.string("TH1D"),
-			desc	= cms.untracked.string("HO Digi Shape"),
+			desc	= cms.untracked.string("HO RecHit Shape"),
 			xaxis	= cms.untracked.PSet(
 				edges	= cms.untracked.bool(False),
 				nbins	= cms.untracked.int32(10),
@@ -52,10 +52,10 @@ hcalDigiTask = cms.EDAnalyzer(
 				title	= cms.untracked.string("TS")
 			)	
 		),
-		DigiSizeCheck			= cms.untracked.PSet(
+		RecHitSizeCheck			= cms.untracked.PSet(
 			path	= cms.untracked.string("Hcal/%s/" % moduleName),
 			kind	= cms.untracked.string("TH2D"),
-			desc	= cms.untracked.string("Digi Size Check for SubSystems"),
+			desc	= cms.untracked.string("RecHit Size Check for SubSystems"),
 			xaxis	= cms.untracked.PSet(
 				edges	= cms.untracked.bool(False),
 				nbins	= cms.untracked.int32(5),
@@ -68,7 +68,7 @@ hcalDigiTask = cms.EDAnalyzer(
 				nbins	= cms.untracked.int32(20),
 				min		= cms.untracked.double(0),
 				max		= cms.untracked.double(20),
-				title	= cms.untracked.string("Digi Size")
+				title	= cms.untracked.string("RecHit Size")
 			)
 		),
 #		me4			= cms.untracked.PSet(

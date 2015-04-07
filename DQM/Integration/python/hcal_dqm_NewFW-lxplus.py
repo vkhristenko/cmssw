@@ -104,7 +104,6 @@ process.valHcalTriggerPrimitiveDigis.InputTagFEDRaw = cms.InputTag("rawDataColle
 
 process.load("DQM.HcalMonitorModule.HcalMonitorModule_cfi")
 process.load("DQM.HcalCommon.HcalDQSourceEx")
-process.load("DQM.HcalTasks.HcalDigiTask")
 process.load("DQM.HcalMonitorModule.ZDCMonitorModule_cfi")
 
 process.load("DQM.HcalMonitorTasks.HcalMonitorTasks_cfi")
@@ -291,6 +290,34 @@ process.GlobalTag.globaltag = 'GR_E_V42::All'
 process.utcaDigis = process.hcalDigis.clone()
 process.utcaDigis.FEDs  = cms.untracked.vint32(929, 1118, 1120, 1122)
 
+#	Load New DQM FW Modules
+process.load("DQM.HcalTasks.HcalDigiTask")
+process.load("DQM.HcalTasks.HcalDeadCellTask")
+process.load("DQM.HcalTasks.HcalHotCellTask")
+process.load("DQM.HcalTasks.HcalLEDTask")
+process.load("DQM.HcalTasks.HcalLaserTask")
+process.load("DQM.HcalTasks.HcalNoiseTask")
+process.load("DQM.HcalTasks.HcalPedestalTask")
+process.load("DQM.HcalTasks.HcalRawTask")
+process.load("DQM.HcalTasks.HcalRecHitTask")
+process.load("DQM.HcalTasks.HcalTPTask")
+process.load("DQM.HcalTasks.HcalTimingTask")
+process.load("DQM.HcalTasks.HcaluTCATask")
+process.tasksSequence = cms.Sequence(
+		process.hcalDigiTask
+		*process.hcalDeadCellTask
+		*process.hcalHotCellTask
+		*process.hcalLEDTask
+		*process.hcalLaserTask
+		*process.hcalNoiseTask
+		*process.hcalPedestalTask
+		*process.hcalRawTask
+		*process.hcalRecHitTask
+		*process.hcalTPTask
+		*process.hcalTimingTask
+		*process.hcaluTCATask
+)
+
 process.p = cms.Path(process.hcalDigis
 					 *process.utcaDigis
                      *process.valHcalTriggerPrimitiveDigis
@@ -301,10 +328,10 @@ process.p = cms.Path(process.hcalDigis
                      *process.hbhereco
                      *process.zdcreco
                      #*process.hcalMonitor
-					 *process.hcalDigiTask
+					 *process.tasksSequence
                      #*process.hcalMonitorTasksOnlineSequence 
                      #*process.hcalClient
-                     *process.qTester
+                     #*process.qTester
                      #*process.hcalZDCMonitor
                      *process.dqmEnv
                      *process.dqmSaver)

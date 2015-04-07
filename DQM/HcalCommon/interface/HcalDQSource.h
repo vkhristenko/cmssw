@@ -5,6 +5,10 @@
  *	file:			HcalDQSource.h
  *	Author:			Viktor Khristenko
  *	Start Date:		03/04/2015
+ *
+ *	TODO:
+ *		1) Extracting the Calibration Type
+ *		2) Other Source-specific functionality
  */
 
 #include "DQMServices/Core/interface/DQMEDAnalyzer.h"
@@ -19,8 +23,15 @@
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/ServiceRegistry/interface/Service.h"
 
+
 namespace hcaldqm
 {
+	//	Common info to all Sources
+	struct SourceInfo
+	{
+		int			currentCalibType;
+	};
+
 	/*
 	 *	HcalDQSource Class - Base Class for DQSources
 	 */
@@ -41,8 +52,13 @@ namespace hcaldqm
 					edm::EventSetup const&);
 			virtual void dqmBeginRun(edm::Run const&, edm::EventSetup const&);
 
+			//	Functions specific for Sources, but generic to all of them
+			void extractCalibType(edm::Event const&);
+			bool isAllowedCalibType();
+
 		protected:
 			HcalMECollection		_mes;
+			SourceInfo				_si;
 	};
 }
 

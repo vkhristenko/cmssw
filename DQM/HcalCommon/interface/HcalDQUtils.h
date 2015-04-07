@@ -5,6 +5,9 @@
  *	file:				HcalDigiTask.h
  *	Author:				Viktor Khristenko
  *	Start Date:			03/04/2015
+ *
+ *	TODO:
+ *		1) Other utilities???	
  */
 
 #include "DQM/HcalCommon/interface/HcalCommonHeaders.h"
