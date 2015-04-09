@@ -18,6 +18,16 @@ class HcalDigiTask : public hcaldqm::HcalDQSource
 
 		virtual void doWork(edm::Event const&e,
 				edm::EventSetup const& es);
+	
+	private:
+		//	declare the template for specializing
+		template<typename Hit>
+		void specialize(Hit const& hit);
+		
+		//	define and initialize the collection processors
+		DEFPROCESSOR(HBHEDigiCollection, HBHEDataFrame);
+		DEFPROCESSOR(HODigiCollection, HODataFrame);
+		DEFPROCESSOR(HFDigiCollection, HFDataFrame);
 
 //	private:
 		//	MEs Collection come from the base class

@@ -10,6 +10,8 @@ namespace hcaldqm
 		_mi.runType		= ps.getUntrackedParameter<std::string>("runType");
 		_mi.calibTypesAllowed	= ps.getUntrackedParameter<std::vector<int> >(
 				"calibTypes");
+		_mi.feds		= ps.getUntrackedParameter<std::vector<int> >(
+				"FEDs");
 		_mi.name		= ps.getUntrackedParameter<std::string>("name");
 		_mi.debug		= ps.getUntrackedParameter<int>("debug");
 	}

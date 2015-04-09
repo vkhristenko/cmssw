@@ -16,7 +16,6 @@ HcalRawTask::HcalRawTask(edm::ParameterSet const&ps):
 /* virtual */ void HcalRawTask::doWork(edm::Event const& e,
 		edm::EventSetup const& es)
 {
-	this->info_("Plugged and Running...");
 }
 
 DEFINE_FWK_MODULE(HcalRawTask);

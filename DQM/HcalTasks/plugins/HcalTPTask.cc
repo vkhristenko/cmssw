@@ -16,7 +16,6 @@ HcalTPTask::HcalTPTask(edm::ParameterSet const&ps):
 /* virtual */ void HcalTPTask::doWork(edm::Event const& e,
 		edm::EventSetup const& es)
 {
-	this->info_("Plugged and Running...");
 }
 
 DEFINE_FWK_MODULE(HcalTPTask);

@@ -49,6 +49,7 @@ namespace hcaldqm
 		std::string			type;
 		std::string			runType;
 		std::vector<int>	calibTypesAllowed;
+		std::vector<int>	feds;
 		std::string			name;
 		int					debug;
 	};
@@ -88,7 +89,9 @@ namespace hcaldqm
 
 			inline void debug_(std::string const msg) const
 			{
-				LogDebug("HcalDQM") << _mi.name << "::" << msg;
+				std::cout << "%MSG" << std::endl;
+				std::cout << "%MSG-d HcalDQM::" << _mi.name << "::" << msg;
+				std::cout << std::endl;
 			}
 
 		protected:

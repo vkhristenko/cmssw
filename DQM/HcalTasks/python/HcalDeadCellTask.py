@@ -1,21 +1,32 @@
 import FWCore.ParameterSet.Config as cms 
-from DQM.HcalCommon.HcalDQSourceEx import hcalDQSourceEx
+
+# import standard set and clone it
+import DQM.HcalCommon.HcalDQStandard as standard
+StandardSet = standard.StandardSet.clone()
 
 #	List of FEDs
 lFEDs = [x+700 for x in range(32)] + [929, 1118, 1120, 1122]
 
 moduleName = "HcalDeadCellTask"
+#	Modify whatever is in StandardSet importing
+StandardSet.moduleParameters.name		= cms.untracked.string(moduleName)
+StandardSet.EventsProcessed.path		= cms.untracked.string(
+	"Hcal/%s/" % moduleName)
+StandardSet.EventsProcessedPerLS.path	= cms.untracked.string(
+	"Hcal/%s/" % moduleName)
+StandardSet.Standard2DMap.path			= cms.untracked.string(
+	"Hcal/%s/" % moduleName)
+StandardSet.Standard2DMap.desc			= cms.untracked.string(
+	"Some DeadCell Task 2D Map")
+
+#	Main Task Description
 hcalDeadCellTask = cms.EDAnalyzer(
 	moduleName,
-	moduleParameters	= cms.untracked.PSet(
-		name		= cms.untracked.string(moduleName),
-		debug		= cms.untracked.int32(10),
-		calibTypes	= cms.untracked.vint32(0),
-		runType		= cms.untracked.string("TEST"),
-		mtype		= cms.untracked.string("SOURCE"),
-		Labels		= hcalDQSourceEx.moduleParameters.Labels
-	),
+	moduleParameters	= StandardSet.moduleParameters,
 	MEs					= cms.untracked.PSet(
+		EventsProcessed			= StandardSet.EventsProcessed,
+		EventsProcessedPerLS	= StandardSet.EventsProcessedPerLS,
+		
 		HEDeadCellShape				= cms.untracked.PSet(
 			path	= cms.untracked.string("Hcal/%s/HE" % moduleName),
 			kind	= cms.untracked.string("TH1D"),
@@ -52,25 +63,7 @@ hcalDeadCellTask = cms.EDAnalyzer(
 				title	= cms.untracked.string("TS")
 			)	
 		),
-		DeadCellSizeCheck			= cms.untracked.PSet(
-			path	= cms.untracked.string("Hcal/%s/" % moduleName),
-			kind	= cms.untracked.string("TH2D"),
-			desc	= cms.untracked.string("DeadCell Size Check for SubSystems"),
-			xaxis	= cms.untracked.PSet(
-				edges	= cms.untracked.bool(False),
-				nbins	= cms.untracked.int32(5),
-				min		= cms.untracked.double(0),
-				max		= cms.untracked.double(5),
-				title	= cms.untracked.string("Subsystem")
-			),
-			yaxis	= cms.untracked.PSet(
-				edges	= cms.untracked.bool(False),
-				nbins	= cms.untracked.int32(20),
-				min		= cms.untracked.double(0),
-				max		= cms.untracked.double(20),
-				title	= cms.untracked.string("DeadCell Size")
-			)
-		),
+		DeadCellSizeCheck			= StandardSet.Standard2DMap 
 #		me4			= cms.untracked.PSet(
 #			path	= cms.untracked.string("Hcal/%s/" % moduleName),
 #			kind	= cms.untracked.string("PROF"),

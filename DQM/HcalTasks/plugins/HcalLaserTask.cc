@@ -16,7 +16,6 @@ HcalLaserTask::HcalLaserTask(edm::ParameterSet const&ps):
 /* virtual */ void HcalLaserTask::doWork(edm::Event const& e,
 		edm::EventSetup const& es)
 {
-	this->info_("Plugged and Running...");
 }
 
 DEFINE_FWK_MODULE(HcalLaserTask);

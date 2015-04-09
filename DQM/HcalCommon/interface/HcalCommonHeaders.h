@@ -21,5 +21,10 @@
 #include "FWCore/ServiceRegistry/interface/Service.h"
 #include "DQMServices/Core/interface/DQMStore.h"
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
+#include "DQM/HcalCommon/interface/HcalDQMConstants.h"
+#include "EventFilter/HcalRawToDigi/interface/HcalDCCHeader.h"
+#include "EventFilter/HcalRawToDigi/interface/HcalHTRData.h"
+
+#include "boost/lexical_cast.hpp"
 
 #endif

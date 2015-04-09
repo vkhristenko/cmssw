@@ -23,6 +23,7 @@
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/ServiceRegistry/interface/Service.h"
 
+#include <vector>
 
 namespace hcaldqm
 {
@@ -30,6 +31,9 @@ namespace hcaldqm
 	struct SourceInfo
 	{
 		int			currentCalibType;
+		int			evsTotal;
+		int			evsGood;
+		int			evsPerLS;
 	};
 
 	/*
@@ -52,6 +56,12 @@ namespace hcaldqm
 					edm::EventSetup const&);
 			virtual void dqmBeginRun(edm::Run const&, edm::EventSetup const&);
 
+			virtual void beginLuminosityBlock(edm::LuminosityBlock const& ,
+					edm::EventSetup const&);
+			virtual void endLuminosityBlock(edm::LuminosityBlock const& ,
+					edm::EventSetup const&);
+
+		protected:
 			//	Functions specific for Sources, but generic to all of them
 			void extractCalibType(edm::Event const&);
 			bool isAllowedCalibType();
@@ -61,6 +71,17 @@ namespace hcaldqm
 			SourceInfo				_si;
 	};
 }
+
+#define DEFPROCESSOR(COLLECTIONTYPE, HITTYPE) \
+	void process(COLLECTIONTYPE const& c) \
+	{	\
+		for (COLLECTIONTYPE::const_iterator it=c.begin(); it!=c.end(); ++it)	\
+		{	\
+			const HITTYPE hit = (const HITTYPE)(*it);	\
+			specialize<HITTYPE>(hit);	\
+		}	\
+	}	
+
 
 #endif
 
