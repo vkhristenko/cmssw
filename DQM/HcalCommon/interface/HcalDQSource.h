@@ -73,12 +73,12 @@ namespace hcaldqm
 }
 
 #define DEFPROCESSOR(COLLECTIONTYPE, HITTYPE) \
-	void process(COLLECTIONTYPE const& c) \
+	void process(COLLECTIONTYPE const& c, std::string const& nameRes) \
 	{	\
 		for (COLLECTIONTYPE::const_iterator it=c.begin(); it!=c.end(); ++it)	\
 		{	\
 			const HITTYPE hit = (const HITTYPE)(*it);	\
-			specialize<HITTYPE>(hit);	\
+			specialize<HITTYPE>(hit, nameRes);	\
 		}	\
 	}	
 

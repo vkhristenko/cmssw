@@ -24,9 +24,9 @@ HcalDigiTask::HcalDigiTask(edm::ParameterSet const&ps):
 	INITCOLL(_labels["HODigi"], cho);
 	INITCOLL(_labels["HFDigi"], chf);
 
-	this->process(*chbhe);
-	this->process(*cho);
-	this->process(*chf);
+	this->process(*chbhe, std::string("HBHE"));
+	this->process(*cho, std::string("HO"));
+	this->process(*chf, std::string("HF"));
 
 	//process<HBHEDigiCollection, HBHEDataFrame>(chbhe);
 
@@ -42,9 +42,10 @@ HcalDigiTask::HcalDigiTask(edm::ParameterSet const&ps):
 
 //	specializer
 template<typename Hit>
-void HcalDigiTask::specialize(Hit const& hit)
+void HcalDigiTask::specialize(Hit const& hit, std::string const& nameRes)
 {
-	//
+	for (int i=0; i<hit.size(); i++)
+		_mes[nameRes+"DigiShape"].Fill(i+1, hit.sample(i).adc());
 }
 
 DEFINE_FWK_MODULE(HcalDigiTask);
