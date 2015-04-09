@@ -23,14 +23,29 @@ StandardSet.Standard2DMap.desc			= cms.untracked.string(
 hcalDigiTask = cms.EDAnalyzer(
 	moduleName,
 	moduleParameters	= StandardSet.moduleParameters,
+	specParameters		= cms.untracked.PSet(
+		OrnMsgTime				= cms.untracked.int32(3559)
+	),
 	MEs					= cms.untracked.PSet(
 		EventsProcessed			= StandardSet.EventsProcessed,
 		EventsProcessedPerLS	= StandardSet.EventsProcessedPerLS,
 		
-		HBHEDigiShape			= cms.untracked.PSet(
-			path	= cms.untracked.string("Hcal/%s/HBHE" % moduleName),
+		HBDigiShape			= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HB" % moduleName),
 			kind	= cms.untracked.string("TH1D"),
-			desc	= cms.untracked.string("HBHE Digi Shape"),
+			desc	= cms.untracked.string("HB Digi Shape"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(10),
+				min		= cms.untracked.double(0.),
+				max		= cms.untracked.double(10.),
+				title	= cms.untracked.string("TS")
+			)
+		),
+		HEDigiShape			= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HE" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HE Digi Shape"),
 			xaxis	= cms.untracked.PSet(
 				edges	= cms.untracked.bool(False),
 				nbins	= cms.untracked.int32(10),
@@ -61,6 +76,198 @@ hcalDigiTask = cms.EDAnalyzer(
 				min		= cms.untracked.double(0.),
 				max		= cms.untracked.double(10.),
 				title	= cms.untracked.string("TS")
+			)	
+		),
+		HBADCCountPerTS		= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HB" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HB ADC Counts per 1TS"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(130),
+				min		= cms.untracked.double(0.),
+				max		= cms.untracked.double(130),
+				title	= cms.untracked.string("TS")
+			)	
+		),
+		HEADCCountPerTS		= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HE" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HE ADC Counts per 1TS"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(130),
+				min		= cms.untracked.double(0.),
+				max		= cms.untracked.double(130),
+				title	= cms.untracked.string("TS")
+			)	
+		),
+		HOADCCountPerTS		= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HO" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HO ADC Counts per 1TS"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(130),
+				min		= cms.untracked.double(0.),
+				max		= cms.untracked.double(130),
+				title	= cms.untracked.string("TS")
+			)	
+		),
+		HFADCCountPerTS		= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HF" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HF ADC Counts per 1TS"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(130),
+				min		= cms.untracked.double(0.),
+				max		= cms.untracked.double(130),
+				title	= cms.untracked.string("TS")
+			)	
+		),
+		HBPresamples		= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HB" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HB Number of Presamples"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(20),
+				min		= cms.untracked.double(0.),
+				max		= cms.untracked.double(20),
+				title	= cms.untracked.string("# Presamples")
+			)	
+		),
+		HEPresamples		= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HE" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HE Number of Presamples"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(20),
+				min		= cms.untracked.double(0.),
+				max		= cms.untracked.double(20),
+				title	= cms.untracked.string("# Presamples")
+			)	
+		),
+		HOPresamples		= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HO" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HO Number of Presamples"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(20),
+				min		= cms.untracked.double(0.),
+				max		= cms.untracked.double(20),
+				title	= cms.untracked.string("# Presamples")
+			)	
+		),
+		HFPresamples		= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HF" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HF Number of Presamples"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(20),
+				min		= cms.untracked.double(0.),
+				max		= cms.untracked.double(20),
+				title	= cms.untracked.string("# Presamples")
+			)	
+		),
+		HBCapId		= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HB" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HB Cap ID"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(5),
+				min		= cms.untracked.double(-0.5),
+				max		= cms.untracked.double(4.5),
+				title	= cms.untracked.string("Cap ID")
+			)	
+		),
+		HECapId		= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HE" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HE Cap ID"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(5),
+				min		= cms.untracked.double(-0.5),
+				max		= cms.untracked.double(4.5),
+				title	= cms.untracked.string("Cap ID")
+			)	
+		),
+		HOCapId		= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HO" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HO Cap ID"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(5),
+				min		= cms.untracked.double(-0.5),
+				max		= cms.untracked.double(4.5),
+				title	= cms.untracked.string("Cap ID")
+			)	
+		),
+		HFCapId		= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HF" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HF Cap ID"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(5),
+				min		= cms.untracked.double(-0.5),
+				max		= cms.untracked.double(4.5),
+				title	= cms.untracked.string("Cap ID")
+			)	
+		),
+		HBbcnOffset	= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HB" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HB Fiber Idle BCN Offset"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(16),
+				min		= cms.untracked.double(-8),
+				max		= cms.untracked.double(8),
+				title	= cms.untracked.string("BCN Offset")
+			)	
+		),
+		HEbcnOffset	= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HE" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HE Fiber Idle BCN Offset"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(16),
+				min		= cms.untracked.double(-8),
+				max		= cms.untracked.double(8),
+				title	= cms.untracked.string("BCN Offset")
+			)	
+		),
+		HObcnOffset	= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HO" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HO Fiber Idle BCN Offset"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(16),
+				min		= cms.untracked.double(-8),
+				max		= cms.untracked.double(8),
+				title	= cms.untracked.string("BCN Offset")
+			)	
+		),
+		HFbcnOffset	= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HF" % moduleName),
+			kind	= cms.untracked.string("TH1D"),
+			desc	= cms.untracked.string("HF Fiber Idle BCN Offset"),
+			xaxis	= cms.untracked.PSet(
+				edges	= cms.untracked.bool(False),
+				nbins	= cms.untracked.int32(16),
+				min		= cms.untracked.double(-8),
+				max		= cms.untracked.double(8),
+				title	= cms.untracked.string("BCN Offset")
 			)	
 		),
 		DigiSizeCheck			= StandardSet.Standard2DMap 

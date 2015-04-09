@@ -72,12 +72,17 @@ namespace hcaldqm
 	};
 }
 
+//	The use of this macro must be properly controlled!
+//	Becaue the COLLECTIONTYPE and HITTYPE must go in accord with each other
 #define DEFPROCESSOR(COLLECTIONTYPE, HITTYPE) \
 	void process(COLLECTIONTYPE const& c, std::string const& nameRes) \
 	{	\
 		for (COLLECTIONTYPE::const_iterator it=c.begin(); it!=c.end(); ++it)	\
 		{	\
 			const HITTYPE hit = (const HITTYPE)(*it);	\
+			if ((nameRes=="HB" && hit.id().subdet()!=HcalBarrel)	\
+					|| (nameRes=="HE" && hit.id().subdet()!=HcalEndcap))	\
+				continue;	\
 			specialize<HITTYPE>(hit, nameRes);	\
 		}	\
 	}	
