@@ -57,6 +57,32 @@ StandardSet		= cms.untracked.PSet(
 			max			= cms.untracked.double(72),
 			title		= cms.untracked.string("iphi")
 		)
+	),
+
+	StandardPhiProf		= cms.untracked.PSet(
+		path			= cms.untracked.string("Hcal/HcalDQStandard/"),
+		kind			= cms.untracked.string("PROF"),
+		desc			= cms.untracked.string("Standard Phi Profile"),
+		xaxis			= cms.untracked.PSet(
+			edges		= cms.untracked.bool(False),
+			nbins		= cms.untracked.int32(72),
+			min			= cms.untracked.double(0),
+			max			= cms.untracked.double(72),
+			title		= cms.untracked.string("iphi")
+		)
+	),
+
+	StandardEtaProf		= cms.untracked.PSet(
+		path			= cms.untracked.string("Hcal/HcalDQStandard/"),
+		kind			= cms.untracked.string("PROF"),
+		desc			= cms.untracked.string("Standard Eta Profile"),
+		xaxis			= cms.untracked.PSet(
+			edges		= cms.untracked.bool(False),
+			nbins		= cms.untracked.int32(84),
+			min			= cms.untracked.double(-42),
+			max			= cms.untracked.double(42),
+			title		= cms.untracked.string("ieta")
+		)
 	)
 )
 

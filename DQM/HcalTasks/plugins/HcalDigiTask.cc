@@ -8,8 +8,7 @@
 HcalDigiTask::HcalDigiTask(edm::ParameterSet const&ps):
 	hcaldqm::HcalDQSource(ps)
 {
-	_ornMsgTime = ps.getUntrackedParameterSet("specParameters"
-			).getUntrackedParameter<int>("OrnMsgTime", 3559);
+	_ornMsgTime = ps.getUntrackedParameter<int>("OrnMsgTime", 3559);
 }
 
 /* virtual */ HcalDigiTask::~HcalDigiTask()
@@ -32,16 +31,6 @@ HcalDigiTask::HcalDigiTask(edm::ParameterSet const&ps):
 	this->process(*cho, std::string("HO"));
 	this->process(*chf, std::string("HF"));
 
-	//process<HBHEDigiCollection, HBHEDataFrame>(chbhe);
-
-	/*
-	for (HBHEDigiCollection::const_iterator it=chbhe.begin();
-			it!=chbhe.end(); ++it)
-	{
-		const HBHEDataFrame digi = (const HBHEDataFrame)(*it);
-		for (int i=0; i<digi.size(); i++)
-			_mes["HBHEDigiShape"].Fill(i+1, digi.sample(i).adc());
-	}*/
 }
 
 //	specializer

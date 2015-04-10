@@ -85,8 +85,10 @@ namespace hcaldqm
 				continue;	\
 			specialize<HITTYPE>(hit, nameRes);	\
 		}	\
-	}	
+	}
 
+//	Define a specializer
+//#define DEFSPECIALIZER()
 
 #endif
 

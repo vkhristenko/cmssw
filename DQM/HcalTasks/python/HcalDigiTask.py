@@ -23,13 +23,9 @@ StandardSet.Standard2DMap.desc			= cms.untracked.string(
 hcalDigiTask = cms.EDAnalyzer(
 	moduleName,
 	moduleParameters	= StandardSet.moduleParameters,
-	specParameters		= cms.untracked.PSet(
-		OrnMsgTime				= cms.untracked.int32(3559)
-	),
 	MEs					= cms.untracked.PSet(
 		EventsProcessed			= StandardSet.EventsProcessed,
-		EventsProcessedPerLS	= StandardSet.EventsProcessedPerLS,
-		
+		EventsProcessedPerLS	= StandardSet.EventsProcessedPerLS,	
 		HBDigiShape			= cms.untracked.PSet(
 			path	= cms.untracked.string("Hcal/%s/HB" % moduleName),
 			kind	= cms.untracked.string("TH1D"),

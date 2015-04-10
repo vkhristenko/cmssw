@@ -20,9 +20,6 @@ class HcalDigiTask : public hcaldqm::HcalDQSource
 				edm::EventSetup const& es);
 	
 	private:
-		//	MEs Collection come from the base class
-		//	Here, we only need module specific parameters
-		//
 		//	declare the template for specializing
 		template<typename Hit>
 		void specialize(Hit const& hit, std::string const&);
@@ -33,6 +30,8 @@ class HcalDigiTask : public hcaldqm::HcalDQSource
 		DEFPROCESSOR(HFDigiCollection, HFDataFrame);
 
 	private:
+		//	MEs Collection come from the base class
+		//	Here, we only need module specific parameters
 		int _ornMsgTime;
 };
 
