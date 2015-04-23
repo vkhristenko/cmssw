@@ -60,6 +60,12 @@ namespace hcaldqm
 					edm::EventSetup const&);
 			virtual void endLuminosityBlock(edm::LuminosityBlock const& ,
 					edm::EventSetup const&);
+			
+		protected:
+			//	Apply Reset/Update if neccessary
+			//	Resets the contents of MEs
+			//	periodflag: 0 for Event Reset and 1 for LS Reset
+			virtual void reset(int const periodflag);
 
 		protected:
 			//	Functions specific for Sources, but generic to all of them

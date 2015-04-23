@@ -9,10 +9,24 @@ HcalDigiTask::HcalDigiTask(edm::ParameterSet const&ps):
 	hcaldqm::HcalDQSource(ps)
 {
 	_ornMsgTime = ps.getUntrackedParameter<int>("OrnMsgTime", 3559);
+	for (int i=0; i<4; i++)
+		_numDigis.push_back(0);
 }
 
 /* virtual */ HcalDigiTask::~HcalDigiTask()
 {
+}
+
+/* virtual */ void HcalDigiTask::beginLuminosityBlock(
+		edm::LuminosityBlock const& lb, edm::EventSetup const& es)
+{
+	HcalDQSource::beginLuminosityBlock(lb, es);
+}
+
+/* virtual */ void HcalDigiTask::endLuminosityBlock(
+		edm::LuminosityBlock const& lb, edm::EventSetup const& es)
+{
+	HcalDQSource::endLuminosityBlock(lb, es);
 }
 
 /* virtual */ void HcalDigiTask::doWork(edm::Event const& e,
@@ -30,7 +44,26 @@ HcalDigiTask::HcalDigiTask(edm::ParameterSet const&ps):
 	this->process(*chbhe, std::string("HE"));
 	this->process(*cho, std::string("HO"));
 	this->process(*chf, std::string("HF"));
+	
+	_mes["HBNumberDigis"].Fill(_numDigis[0]);
+	_mes["HENumberDigis"].Fill(_numDigis[1]);
+	_mes["HONumberDigis"].Fill(_numDigis[2]);
+	_mes["HFNumberDigis"].Fill(_numDigis[3]);
+}
 
+/* virtual */ void HcalDigiTask::reset(int const periodflag)
+{
+	HcalDQSource::reset(periodflag);
+	if (periodflag==0)
+	{
+		// each events reset
+		for (unsigned int i=0; i<_numDigis.size(); i++)
+			_numDigis[0]=0;
+	}
+	else if (periodflag==1)
+	{
+		// each LS reset
+	}
 }
 
 //	specializer
@@ -42,6 +75,13 @@ void HcalDigiTask::specialize(Hit const& hit, std::string const& nameRes)
 	int offset = hit.fiberIdleOffset();
 	if (offset!=INVALID_FIBER_IDLEOFFSET && _ornMsgTime>-1)
 		_mes[nameRes+"bcnOffset"].Fill(offset);
+
+	int iphi = hit.id().iphi();
+	int ieta = hit.id().ieta();
+	int depth = hit.id().depth();
+	if (nameRes!="HO")
+		_mes["HBHEHFOccupancyMapD" + 
+			boost::lexical_cast<std::string>(depth)].Fill(ieta, iphi, 1);
 	
 	//	
 	for (int i=0; i<hit.size(); i++)

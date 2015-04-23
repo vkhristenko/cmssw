@@ -15,7 +15,7 @@ StandardSet		= cms.untracked.PSet(
 	
 	Labels				= cms.untracked.PSet(
 		HBHEDigi		= cms.untracked.InputTag("hcalDigis"),
-		HFDigi			= cms.untracked.InputTag("utcaDigis"),
+		HFDigi			= cms.untracked.InputTag("hcalDigis"),
 		HODigi			= cms.untracked.InputTag("hcalDigis"),
 		RAW				= cms.untracked.InputTag("rawDataCollector"),
 		HBHERecHit		= cms.untracked.InputTag("hbhereco"),
@@ -43,6 +43,26 @@ StandardSet		= cms.untracked.PSet(
 		path			= cms.untracked.string("Hcal/HcalDQStandard/"),
 		kind			= cms.untracked.string("TH2D"),
 		desc			= cms.untracked.string("Standard 2D Map"),
+		xaxis			= cms.untracked.PSet(
+			edges		= cms.untracked.bool(False),
+			nbins		= cms.untracked.int32(84),
+			min			= cms.untracked.double(-42),
+			max			= cms.untracked.double(42),
+			title		= cms.untracked.string("ieta")
+		),
+		yaxis			= cms.untracked.PSet(
+			edges		= cms.untracked.bool(False),
+			nbins		= cms.untracked.int32(72),
+			min			= cms.untracked.double(0),
+			max			= cms.untracked.double(72),
+			title		= cms.untracked.string("iphi")
+		)
+	),
+
+	Standard2DProf		= cms.untracked.PSet(
+		path			= cms.untracked.string("Hcal/HcalDQStandard/"),
+		kind			= cms.untracked.string("PROF2D"),
+		desc			= cms.untracked.string("Standard 2D Profile"),
 		xaxis			= cms.untracked.PSet(
 			edges		= cms.untracked.bool(False),
 			nbins		= cms.untracked.int32(84),

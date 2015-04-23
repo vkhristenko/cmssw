@@ -6,7 +6,7 @@ namespace hcaldqm
 {
 	HcalDQSource::HcalDQSource(edm::ParameterSet const& ps) :
 		HcalDQMonitor(ps.getUntrackedParameterSet("moduleParameters")), 
-		_mes(ps.getUntrackedParameterSet("MEs"))
+		_mes(ps.getUntrackedParameterSet("MEs"), _mi.debug)
 	{
 		_si.currentCalibType = -1;
 		_si.evsTotal = 0;
@@ -23,6 +23,7 @@ namespace hcaldqm
 	/* virtual */ void HcalDQSource::analyze(edm::Event const &e,
 			edm::EventSetup const& es)
 	{
+		this->reset(0);
 		//	Update event counters;
 		_si.evsTotal++; _mes["EventsProcessed"].Fill(_si.evsTotal);
 		_si.evsGood++;
@@ -42,14 +43,19 @@ namespace hcaldqm
 
 	/* virtual */ void HcalDQSource::dqmBeginRun(edm::Run const& r,
 			edm::EventSetup const& es)
-	{}
+	{
+		this->reset(0);
+		this->reset(1);
+	}
 
 	/* virtual */ void HcalDQSource::beginLuminosityBlock(
 			edm::LuminosityBlock const& lb, edm::EventSetup const& es)
 	{
-		//	Reset things per LS
-		_si.evsPerLS = 0;
-		_mes["EventsProcessedPerLS"].Fill(_si.evsPerLS);
+		this->reset(1);
+		//	Reset things per LS.
+		//	But at least 100 events in LS
+//		if (_si.evsPerLS>100)
+//			this->reset(1);
 	}
 
 	/* virtual */ void HcalDQSource::endLuminosityBlock(
@@ -101,6 +107,23 @@ namespace hcaldqm
 				return true;
 
 		return false;
+	}
+
+	//	reset
+	/* virtual */ void HcalDQSource::reset(int const periodflag)
+	{
+		//	Collection Class will determine itself who needs a reset and when
+		_mes.reset(periodflag);
+
+		if (periodflag==0)
+		{
+			//	each event reset
+		}
+		else if (periodflag==1)
+		{
+			//	each LS reset
+			_si.evsPerLS=0;
+		}
 	}
 
 }

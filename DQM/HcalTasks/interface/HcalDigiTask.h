@@ -18,6 +18,13 @@ class HcalDigiTask : public hcaldqm::HcalDQSource
 
 		virtual void doWork(edm::Event const&e,
 				edm::EventSetup const& es);
+
+		virtual void beginLuminosityBlock(edm::LuminosityBlock const&,
+				edm::EventSetup const&);
+		virtual void endLuminosityBlock(edm::LuminosityBlock const&,
+				edm::EventSetup const&);
+
+		virtual void reset(int const);
 	
 	private:
 		//	declare the template for specializing
@@ -33,6 +40,8 @@ class HcalDigiTask : public hcaldqm::HcalDQSource
 		//	MEs Collection come from the base class
 		//	Here, we only need module specific parameters
 		int _ornMsgTime;
+		//	number of digis for HB(0), HE(1), HO(2), HF(3) for an event
+		std::vector<int> _numDigis;
 };
 
 #endif

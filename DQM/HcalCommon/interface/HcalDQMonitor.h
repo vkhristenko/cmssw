@@ -84,11 +84,17 @@ namespace hcaldqm
 
 			inline void info_(std::string const msg) const
 			{
+				if (_mi.debug==0)
+					return;
+
 				edm::LogInfo("HcalDQM") << _mi.name << "::" << msg;
 			}
 
 			inline void debug_(std::string const msg) const
 			{
+				if (_mi.debug==0)
+					return;
+
 				std::cout << "%MSG" << std::endl;
 				std::cout << "%MSG-d HcalDQM::" << _mi.name << "::" << msg;
 				std::cout << std::endl;

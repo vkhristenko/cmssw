@@ -7,8 +7,8 @@ namespace hcaldqm
 		meps(ps)
 	{}
 
-	HcalMECollection::HcalMECollection(edm::ParameterSet const& ps)
-		: _ps(ps)
+	HcalMECollection::HcalMECollection(edm::ParameterSet const& ps, int debug)
+		: _ps(ps), _debug(debug)
 	{}
 
 	HcalMECollection::~HcalMECollection()
@@ -49,6 +49,15 @@ namespace hcaldqm
 		if (toUpdate)
 			_namesToUpdate.push_back(info.getName());
 		MonitorElement *me;
+		std::string period;
+		if (info.getPS().exists("reset"))
+		{
+			period = info.getPS().getUntrackedParameter<std::string>("reset");
+			if (period=="EVENT")
+				_namesResetEv.push_back(info.getName());
+			else if (period=="LS")
+				_namesResetLS.push_back(info.getName());
+		}
 
 		ib.setCurrentFolder(path);
 		if  (kind=="INT")
@@ -76,6 +85,7 @@ namespace hcaldqm
 			me = NULL;
 
 		std::string key = info.getName();
+		debug(key);
 		std::pair<MEMap::iterator, bool> r = _meMap.insert(key, me);
 		if (r.second)
 			return;
@@ -123,7 +133,47 @@ namespace hcaldqm
 
 	MonitorElement* HcalMECollection::createProf2D(DQMStore::IBooker &ib, 
 			MEInfo const& info)
-	{return NULL;}
+	{
+		edm::ParameterSet const& xaxisps = 
+			info.getPS().getUntrackedParameterSet("xaxis");
+		edm::ParameterSet const& yaxisps = 
+			info.getPS().getUntrackedParameterSet("yaxis");
+		edm::ParameterSet const& zaxisps = 
+			info.getPS().getUntrackedParameterSet("zaxis");
+		std::string desc = info.getPS().getUntrackedParameter<std::string>(
+				"desc");
+
+		MEAxis xaxis, yaxis, zaxis;
+		xaxis.nbins = GETPAR(xaxisps, int, "nbins");
+		xaxis.min = GETPAR(xaxisps, double, "min");
+		xaxis.max = GETPAR(xaxisps, double, "max");
+		xaxis.title = GETPAR(xaxisps, std::string, "title");
+		yaxis.nbins = GETPAR(yaxisps, int, "nbins");
+		yaxis.min = GETPAR(yaxisps, double, "min");
+		yaxis.max = GETPAR(yaxisps, double, "max");
+		yaxis.title = GETPAR(yaxisps, std::string, "title");
+		zaxis.min = GETPAR(zaxisps, double, "min");
+		zaxis.max = GETPAR(zaxisps, double, "max");
+		zaxis.wnbins = GETPAR(zaxisps, bool, "wnbins");
+		MonitorElement *me = NULL;
+
+		if (zaxis.wnbins)
+		{
+			// create 2D Profile with z-bins explicitly
+			zaxis.nbins = GETPAR(zaxisps, int, "nbins");
+			me = ib.bookProfile2D(info.getName(), desc, xaxis.nbins,
+					xaxis.min, xaxis.max, yaxis.nbins, yaxis.min, yaxis.max,
+					zaxis.nbins, zaxis.min, zaxis.max);
+		}
+		else
+			me = ib.bookProfile2D(info.getName(), desc, xaxis.nbins,
+					xaxis.min, xaxis.max, yaxis.nbins, yaxis.min, yaxis.max,
+					zaxis.min, zaxis.max);
+
+		me->setAxisTitle(xaxis.title, 1);
+		me->setAxisTitle(yaxis.title, 2);
+		return me;
+	}
 
 	MonitorElement* HcalMECollection::createProf(DQMStore::IBooker &ib, 
 			MEInfo const& info)
@@ -236,6 +286,46 @@ namespace hcaldqm
 		me->setAxisTitle(xaxis.title, 1);
 		me->setAxisTitle(yaxis.title, 2);
 		return me;
+	}
+
+	//	reset
+	//	periodflag == 0 for Event and 1 for LS
+	void HcalMECollection::reset(int const periodflag)
+	{
+		if (periodflag==0)
+		{
+			//	Event Reset
+			for (std::vector<std::string>::const_iterator 
+					it=_namesResetEv.begin(); it!=_namesResetEv.end(); ++it)
+			{
+				MonitorElement::Kind kind = _meMap[*it].kind();
+				if (kind==MonitorElement::DQM_KIND_INT || 
+						kind==MonitorElement::DQM_KIND_REAL)
+					_meMap[*it].Fill(0);
+				else if (kind==MonitorElement::DQM_KIND_STRING)
+					continue;
+//					_meMap[*it].Fill("");
+				else
+					_meMap[*it].Reset();
+			}
+		}
+		else if (periodflag==1)
+		{
+			//	LS Reset
+			for (std::vector<std::string>::const_iterator
+					it=_namesResetLS.begin(); it!=_namesResetLS.end(); ++it)
+			{
+				MonitorElement::Kind kind = _meMap[*it].kind();
+				if (kind==MonitorElement::DQM_KIND_INT || 
+						kind==MonitorElement::DQM_KIND_REAL)
+					_meMap[*it].Fill(0);
+				else if (kind==MonitorElement::DQM_KIND_STRING)
+					continue;
+//					_meMap[*it].Fill("");
+				else
+					_meMap[*it].Reset();
+			}
+		}
 	}
 
 	//	update all the MEs

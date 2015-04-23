@@ -14,10 +14,17 @@ StandardSet.EventsProcessed.path		= cms.untracked.string(
 	"Hcal/%s/" % moduleName)
 StandardSet.EventsProcessedPerLS.path	= cms.untracked.string(
 	"Hcal/%s/" % moduleName)
-StandardSet.Standard2DMap.path			= cms.untracked.string(
-	"Hcal/%s/" % moduleName)
-StandardSet.Standard2DMap.desc			= cms.untracked.string(
-	"Some Digi Task 2D Map")
+
+
+
+HcalMap = [StandardSet.Standard2DMap.clone() for x in range(3)]
+for i in range(3):
+	HcalMap[i].path						= cms.untracked.string("Hcal/%s/" %
+			moduleName)
+	HcalMap[i].desc						= cms.untracked.string(
+	"HB HE HF Depth%d Occupancy" % (i+1))
+
+
 
 #	Main Task Description
 hcalDigiTask = cms.EDAnalyzer(
@@ -26,6 +33,26 @@ hcalDigiTask = cms.EDAnalyzer(
 	MEs					= cms.untracked.PSet(
 		EventsProcessed			= StandardSet.EventsProcessed,
 		EventsProcessedPerLS	= StandardSet.EventsProcessedPerLS,	
+		HBNumberDigis			= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HB/Diagnostics" 
+				% moduleName),
+			kind	= cms.untracked.string("INT")
+		),
+		HENumberDigis			= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HE/Diagnostics" 
+				% moduleName),
+			kind	= cms.untracked.string("INT")
+		),
+		HONumberDigis			= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HO/Diagnostics" 
+				% moduleName),
+			kind	= cms.untracked.string("INT")
+		),
+		HFNumberDigis			= cms.untracked.PSet(
+			path	= cms.untracked.string("Hcal/%s/HF/Diagnostics" 
+				% moduleName),
+			kind	= cms.untracked.string("INT")
+		),
 		HBDigiShape			= cms.untracked.PSet(
 			path	= cms.untracked.string("Hcal/%s/HB" % moduleName),
 			kind	= cms.untracked.string("TH1D"),
@@ -266,6 +293,9 @@ hcalDigiTask = cms.EDAnalyzer(
 				title	= cms.untracked.string("BCN Offset")
 			)	
 		),
+		HBHEHFOccupancyMapD1	= HcalMap[0],
+		HBHEHFOccupancyMapD2	= HcalMap[1],
+		HBHEHFOccupancyMapD3	= HcalMap[2],
 		DigiSizeCheck			= StandardSet.Standard2DMap 
 #		me4			= cms.untracked.PSet(
 #			path	= cms.untracked.string("Hcal/%s/" % moduleName),

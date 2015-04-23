@@ -59,7 +59,7 @@ namespace hcaldqm
 	class HcalMECollection
 	{
 		public:
-			HcalMECollection(edm::ParameterSet const&);
+			HcalMECollection(edm::ParameterSet const&, int debug=0);
 			~HcalMECollection();
 
 			//	Book MEs based on the PSet
@@ -68,12 +68,26 @@ namespace hcaldqm
 			//	Retrieve MEs based on PSet
 			void retrieve(DQMStore::IGetter&);
 
+			//	reset
+			void reset(int const periodflag);
+
 			//	Simple getters
 			MonitorElement& getME(std::string name) {return (*this)[name];}
 			MonitorElement& operator[](std::string);
 
 			//	Update all the MEs
 			void update();
+
+		private:
+			inline void debug(std::string const msg)
+			{
+				if (_debug==0)
+					return;
+
+				std::cout << "%MSG" << std::endl;
+				std::cout << "%MSG-d HCALDQM::" << "HcalMECollection::" << msg;
+				std::cout << std::endl;
+			}
 
 		private:
 			//	do the actual Booking
@@ -89,10 +103,13 @@ namespace hcaldqm
 			//	a Map: MEname -> ME*
 			typedef boost::ptr_map<std::string, MonitorElement> MEMap;
 			MEMap											_meMap;
-			//	a List of MEs to be updated
+			//	a List of MEs to be Reset each Event and LS
+			std::vector<std::string>						_namesResetEv;
+			std::vector<std::string>						_namesResetLS;
 			std::vector<std::string>						_namesToUpdate;
 			//	Parameter Set of MEs	
 			edm::ParameterSet const&						_ps;
+			int												_debug;
 	};
 
 }

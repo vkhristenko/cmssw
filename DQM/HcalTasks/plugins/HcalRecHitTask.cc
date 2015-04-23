@@ -31,6 +31,20 @@ HcalRecHitTask::HcalRecHitTask(edm::ParameterSet const&ps):
 	this->process(*chf, std::string("HF"));
 }
 
+//	reset
+/* virtual */ void HcalRecHitTask::reset(int const periodflag)
+{
+	HcalDQSource::reset(periodflag);
+	if (periodflag==0)
+	{
+		//	each event reset
+	}
+	else if (periodflag==1)
+	{
+		//	each LS reset
+	}
+}
+
 //	specializer
 template<typename Hit>
 void HcalRecHitTask::specialize(Hit const& hit, std::string const& nameRes)
@@ -51,10 +65,19 @@ void HcalRecHitTask::specialize(Hit const& hit, std::string const& nameRes)
 			ieta, iphi, en);
 		_mes["HBHEHFTimeSumMapD" + 
 			boost::lexical_cast<std::string>(depth)].Fill(
-			ieta, iphi, en);
+			ieta, iphi, time);
 		_mes["HBHEHFOccupancyMapD" + 
 			boost::lexical_cast<std::string>(depth)].Fill(
 			ieta, iphi);
+		_mes["HBHEHFEnergyProfD" + 
+			boost::lexical_cast<std::string>(depth)].Fill(
+			ieta, iphi, en);
+		_mes["HBHEHFTimeProfD" + 
+			boost::lexical_cast<std::string>(depth)].Fill(
+			ieta, iphi, time);
+		_mes["HBHEHFOccupancyProfD" + 
+			boost::lexical_cast<std::string>(depth)].Fill(
+			ieta, iphi,1);
 	}
 
 	//	subsystem specific

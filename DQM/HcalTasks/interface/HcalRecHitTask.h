@@ -19,6 +19,8 @@ class HcalRecHitTask : public hcaldqm::HcalDQSource
 		virtual void doWork(edm::Event const&e,
 				edm::EventSetup const& es);
 
+		virtual void reset(int const);
+
 	private:
 		//	MEs Collection come from the base class
 		//	Here, we only need module specific parameters

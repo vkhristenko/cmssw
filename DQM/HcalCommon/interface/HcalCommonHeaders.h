@@ -26,5 +26,6 @@
 #include "EventFilter/HcalRawToDigi/interface/HcalHTRData.h"
 
 #include "boost/lexical_cast.hpp"
+#include <typeinfo>
 
 #endif
