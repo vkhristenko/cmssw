@@ -270,7 +270,6 @@ hcalRecHitTask = cms.EDAnalyzer(
 		HBHEHFOccupancyProfD1		= HcalProf[6],
 		HBHEHFOccupancyProfD2		= HcalProf[7],
 		HBHEHFOccupancyProfD3		= HcalProf[8],
-		RecHitSizeCheck			= StandardSet.Standard2DMap 
 #		me4			= cms.untracked.PSet(
 #			path	= cms.untracked.string("Hcal/%s/" % moduleName),
 #			kind	= cms.untracked.string("PROF"),

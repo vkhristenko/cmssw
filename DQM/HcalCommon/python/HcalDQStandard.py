@@ -59,6 +59,26 @@ StandardSet		= cms.untracked.PSet(
 		)
 	),
 
+	Standard2DSubSystem = cms.untracked.PSet(
+		path			= cms.untracked.string("Hcal/HcalDQStandard/"),
+		kind			= cms.untracked.string("TH2D"),
+		desc			= cms.untracked.string("Standard 2D SubSystem Map"),
+		xaxis			= cms.untracked.PSet(
+			edges		= cms.untracked.bool(False),
+			nbins		= cms.untracked.int32(4),
+			min			= cms.untracked.double(0),
+			max			= cms.untracked.double(4),
+			title		= cms.untracked.string("Sub Detector")
+		),
+		yaxis			= cms.untracked.PSet(
+			edges		= cms.untracked.bool(False),
+			nbins		= cms.untracked.int32(20),
+			min			= cms.untracked.double(0),
+			max			= cms.untracked.double(20),
+			title		= cms.utnracked.string("Y-axis")
+		)
+	),
+
 	Standard2DProf		= cms.untracked.PSet(
 		path			= cms.untracked.string("Hcal/HcalDQStandard/"),
 		kind			= cms.untracked.string("PROF2D"),

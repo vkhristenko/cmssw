@@ -15,7 +15,13 @@ StandardSet.EventsProcessed.path		= cms.untracked.string(
 StandardSet.EventsProcessedPerLS.path	= cms.untracked.string(
 	"Hcal/%s/" % moduleName)
 
+HcalDigiSizeCheck	= StandardSet.Standard2DSubSystem.clone()
+HcalDigiSizeCheck.desc = cms.untrackd.string("Digi Size Check")
+HcalDigiSizeCheck.yaxis.title = cms.untracked.string("Digi Size")
 
+HcalDigiSizeExp		= StandardSet.Standard2DSubSystem.clone()
+HcalDigiSizeExp.desc =	cms.untracked.string("Digi Size Expected(from RAW)")
+HcalDigiSizeExp.yaxis.title	= cms.untracked.string("Digi Size")
 
 HcalMap = [StandardSet.Standard2DMap.clone() for x in range(3)]
 for i in range(3):
@@ -296,7 +302,9 @@ hcalDigiTask = cms.EDAnalyzer(
 		HBHEHFOccupancyMapD1	= HcalMap[0],
 		HBHEHFOccupancyMapD2	= HcalMap[1],
 		HBHEHFOccupancyMapD3	= HcalMap[2],
-		DigiSizeCheck			= StandardSet.Standard2DMap 
+		DigiSizeCheck			= HcalDigiSizeCheck,
+		DigiSizeExp				= HcalDigiSizeExp
+
 #		me4			= cms.untracked.PSet(
 #			path	= cms.untracked.string("Hcal/%s/" % moduleName),
 #			kind	= cms.untracked.string("PROF"),
