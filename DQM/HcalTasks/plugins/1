@@ -82,21 +82,8 @@ void HcalDigiTask::specialize(Hit const& hit, std::string const& nameRes)
 	if (nameRes!="HO")
 		_mes["HBHEHFOccupancyMapD" + 
 			boost::lexical_cast<std::string>(depth)].Fill(ieta, iphi, 1);
-
-	//	Get the digi size
-	//	To be done better
-	int subdet = 0;
-	if (nameRes=="HF")
-		subdet = SUBDET_HF;
-	else if (nameRes=="HB" || nameRes=="HE")
-		subdet = SUBDET_HBHE;
-	else if (nameRes=="HO")
-		subdet = SUBDET_HO;
-	else 
-		subdet = SUBDET_OTHER;
-	_mes["DigiSizeCheck"].Fill(subdet, hit.size());
 	
-	//	Extract per digi Information
+	//	Extract digi Information
 	for (int i=0; i<hit.size(); i++)
 	{
 		_mes[nameRes+"DigiShape"].Fill(i, hit.sample(i).nominal_fC());

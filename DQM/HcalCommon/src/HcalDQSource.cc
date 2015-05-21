@@ -7,12 +7,7 @@ namespace hcaldqm
 	HcalDQSource::HcalDQSource(edm::ParameterSet const& ps) :
 		HcalDQMonitor(ps.getUntrackedParameterSet("moduleParameters")), 
 		_mes(ps.getUntrackedParameterSet("MEs"), _mi.debug)
-	{
-		_si.currentCalibType = -1;
-		_si.evsTotal = 0;
-		_si.evsGood = 0;
-		_si.evsPerLS = 0;
-	}
+	{}
 
 	/* virtual */HcalDQSource::~HcalDQSource() 
 	{
@@ -25,9 +20,9 @@ namespace hcaldqm
 	{
 		this->reset(0);
 		//	Update event counters;
-		_si.evsTotal++; _mes["EventsProcessed"].Fill(_si.evsTotal);
-		_si.evsGood++;
-		_si.evsPerLS++; _mes["EventsProcessedPerLS"].Fill(_si.evsPerLS);
+		_mi.evsTotal++; _mes["EventsProcessed"].Fill(_mi.evsTotal);
+		_mi.evsGood++;
+		_mi.evsPerLS++; _mes["EventsProcessedPerLS"].Fill(_mi.evsPerLS);
 
 		this->extractCalibType(e);
 		if (this->isAllowedCalibType()==false)
@@ -54,7 +49,7 @@ namespace hcaldqm
 		this->reset(1);
 		//	Reset things per LS.
 		//	But at least 100 events in LS
-//		if (_si.evsPerLS>100)
+//		if (_mi.evsPerLS>100)
 //			this->reset(1);
 	}
 
@@ -88,14 +83,14 @@ namespace hcaldqm
 		for (unsigned int ic=0; ic<types.size(); ic++)
 		{
 			if (types[ic]>max)
-			{_si.currentCalibType=ic; max=types[ic];}
+			{_mi.currentCalibType=ic; max=types[ic];}
 			if (max==_mi.feds.size())
 				break;
 		}
 
 		if (max!=(_mi.feds.size()-badFEDs))
 			warn_("Conflictings Calibration Types found. Assigning " + 
-					boost::lexical_cast<std::string>(_si.currentCalibType));
+					boost::lexical_cast<std::string>(_mi.currentCalibType));
 	}
 
 	//	Check if calibration type set is among allowed
@@ -103,7 +98,7 @@ namespace hcaldqm
 	{
 		for (std::vector<int>::const_iterator it=_mi.calibTypesAllowed.begin();
 				it!=_mi.calibTypesAllowed.end(); ++it)
-			if (_si.currentCalibType==*it)
+			if (_mi.currentCalibType==*it)
 				return true;
 
 		return false;
@@ -122,7 +117,7 @@ namespace hcaldqm
 		else if (periodflag==1)
 		{
 			//	each LS reset
-			_si.evsPerLS=0;
+			_mi.evsPerLS=0;
 		}
 	}
 

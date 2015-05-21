@@ -52,6 +52,11 @@ namespace hcaldqm
 		std::vector<int>	feds;
 		std::string			name;
 		int					debug;
+
+		int					currentCalibType;
+		int					evsTotal;
+		int					evsGood;
+		int					evsPerLS;
 	};
 
 	/*

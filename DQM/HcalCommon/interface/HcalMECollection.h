@@ -92,6 +92,8 @@ namespace hcaldqm
 		private:
 			//	do the actual Booking
 			void doBook(DQMStore::IBooker&, MEInfo const&);
+			void doRetrieve(DQMStore::IGetter&, MEInfo const&);
+			void forceEmpty();
 
 			//	for clarity - separate
 			MonitorElement* create1D(DQMStore::IBooker&, MEInfo const&);
@@ -110,6 +112,7 @@ namespace hcaldqm
 			//	Parameter Set of MEs	
 			edm::ParameterSet const&						_ps;
 			int												_debug;
+			bool											_wasRetr;
 	};
 
 }

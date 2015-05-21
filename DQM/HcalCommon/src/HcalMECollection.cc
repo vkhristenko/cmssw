@@ -8,10 +8,16 @@ namespace hcaldqm
 	{}
 
 	HcalMECollection::HcalMECollection(edm::ParameterSet const& ps, int debug)
-		: _ps(ps), _debug(debug)
+		: _ps(ps), _debug(debug), _wasRetr(false)
 	{}
 
 	HcalMECollection::~HcalMECollection()
+	{
+		forceEmpty();
+	}
+
+	//	Force the release of the contents of the MECollection
+	void HcalMECollection::forceEmpty()
 	{
 		//	Cannot delete the MEMap, have to release all the MEs
 		for (MEMap::iterator it=_meMap.begin();
@@ -92,8 +98,38 @@ namespace hcaldqm
 	}
 
 	//	for retirieving Monitor Elements based on PSet
+	//	Right now done every time before retrieving MEs
 	void HcalMECollection::retrieve(DQMStore::IGetter &ig)
-	{}
+	{
+		if (_wasRetr)
+			return;
+
+		std::vector<std::string> const& meNames(_ps.getParameterNames());
+		for (std::vector<std::string>::const_iterator it=meNames.begin();
+				it!=meNames.end(); ++it)
+		{
+			std::string meName = *it;
+			MEInfo meinfo(_ps.getUntrackedParameterSet(*it));
+			meinfo.setName(meName);
+			doRetrieve(ig, meinfo);
+		}
+		
+		_wasRetr = true;
+		return;
+	}
+
+	void HcalMECollection::doRetrieve(DQMStore::IGetter &ig, MEInfo const& info)
+	{
+		std::string path = info.getPS().getUntrackedParameter<std::string>(
+				"path");
+		MonitorElement *me = ig.get(path+info.getName());
+
+		std::string key = info.getName();
+		debug(key);
+		std::pair<MEMap::iterator, bool> r = _meMap.insert(key, me);
+		if (r.second)
+			return;
+	}
 
 	MonitorElement& HcalMECollection::operator[](std::string name)
 	{

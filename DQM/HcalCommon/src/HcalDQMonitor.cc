@@ -14,6 +14,11 @@ namespace hcaldqm
 				"FEDs");
 		_mi.name		= ps.getUntrackedParameter<std::string>("name");
 		_mi.debug		= ps.getUntrackedParameter<int>("debug");
+
+		_mi.currentCalibType	= -1;
+		_mi.evsTotal			= 0;
+		_mi.evsGood				= 0;
+		_mi.evsPerLS			= 0;
 	}
 
 	//	Destructor

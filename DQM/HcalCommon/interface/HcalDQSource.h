@@ -27,15 +27,6 @@
 
 namespace hcaldqm
 {
-	//	Common info to all Sources
-	struct SourceInfo
-	{
-		int			currentCalibType;
-		int			evsTotal;
-		int			evsGood;
-		int			evsPerLS;
-	};
-
 	/*
 	 *	HcalDQSource Class - Base Class for DQSources
 	 */
@@ -74,7 +65,6 @@ namespace hcaldqm
 
 		protected:
 			HcalMECollection		_mes;
-			SourceInfo				_si;
 	};
 }
 

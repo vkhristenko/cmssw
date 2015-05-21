@@ -30,7 +30,9 @@ for i in range(3):
 	HcalMap[i].desc						= cms.untracked.string(
 	"HB HE HF Depth%d Occupancy" % (i+1))
 
-
+HcalProblemsMap = StandardSet.Standard2DMap.clone()
+HcalProblemsMap.path = cms.untracked.string("Hcal/%s/" % moduleName)
+HcalProblemsMap.desc = cms.untracked.string("Hcal Problems Fraction per LS")
 
 #	Main Task Description
 hcalDigiTask = cms.EDAnalyzer(
@@ -303,7 +305,21 @@ hcalDigiTask = cms.EDAnalyzer(
 		HBHEHFOccupancyMapD2	= HcalMap[1],
 		HBHEHFOccupancyMapD3	= HcalMap[2],
 		DigiSizeCheck			= HcalDigiSizeCheck,
-		DigiSizeExp				= HcalDigiSizeExp
+		DigiSizeExp				= HcalDigiSizeExp,
+		ProblemsMap				= HcalProblemsMap,
+		ProblemsVsLS = cms.untracked.PSet(
+				path	= cms.untracked.string("Hcal/%s/Problems" % moduleName),
+				kind	= cms.untracked.string("TH1D"),
+				desc	= cms.untracked.string("Hcal Problems vs LS"),
+				xaxis	= cms.untracked.PSet(
+					edges	= cms.untracked.bool(False),
+					nbins	= cms.untracked.int32(400),
+					min		= cms.untracked.double(0),
+					max		= cms.untracked.double(400),
+					title	= cms.untracked.string("LS")
+				)
+		)
+
 
 #		me4			= cms.untracked.PSet(
 #			path	= cms.untracked.string("Hcal/%s/" % moduleName),
