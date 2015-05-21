@@ -16,7 +16,7 @@ StandardSet.EventsProcessedPerLS.path	= cms.untracked.string(
 	"Hcal/%s/" % moduleName)
 
 HcalDigiSizeCheck	= StandardSet.Standard2DSubSystem.clone()
-HcalDigiSizeCheck.desc = cms.untrackd.string("Digi Size Check")
+HcalDigiSizeCheck.desc = cms.untracked.string("Digi Size Check")
 HcalDigiSizeCheck.yaxis.title = cms.untracked.string("Digi Size")
 
 HcalDigiSizeExp		= StandardSet.Standard2DSubSystem.clone()

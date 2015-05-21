@@ -1,6 +1,6 @@
 #include "DQM/HcalCommon/interface/HcalDQClient.h"
 
-using namespace hcaldqm
+namespace hcaldqm
 {
 	HcalDQClient::HcalDQClient(edm::ParameterSet const& ps)
 		: HcalDQMonitor(ps.getUntrackedParameterSet("moduleParameters")),

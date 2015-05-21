@@ -7,6 +7,7 @@
  *	Start Date:			05/06/2015
  */
 
+#include "DQM/HcalCommon/interface/HcalDQMonitor.h"
 #include "DQM/HcalCommon/interface/HcalCommonHeaders.h"
 
 namespace hcaldqm
@@ -20,7 +21,7 @@ namespace hcaldqm
 			HcalDQClient(edm::ParameterSet const&);
 			virtual ~HcalDQClient();
 
-i			//	Generic doWork functions for all DQClients
+			//	Generic doWork functions for all DQClients
 			//	per LS or per Run
 			virtual void doWork(DQMStore::IGetter&,
 					edm::LuminosityBlock const&, edm::EventSetup const&) = 0;
@@ -29,7 +30,7 @@ i			//	Generic doWork functions for all DQClients
 			//	EndJob is mandatory and EndLumiBlock is optional
 			virtual void dqmEndJob(DQMStore::IBooker&, DQMStore::IGetter&);
 			virtual void dqmEndLuminosityBlock(DQMStore::IGetter&, 
-					edm::LuminostiyBlock const&, edm::EventSetup const&);
+					edm::LuminosityBlock const&, edm::EventSetup const&);
 
 		protected:
 			//	Apply Reset/Update if neccessary

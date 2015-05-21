@@ -75,7 +75,7 @@ StandardSet		= cms.untracked.PSet(
 			nbins		= cms.untracked.int32(20),
 			min			= cms.untracked.double(0),
 			max			= cms.untracked.double(20),
-			title		= cms.utnracked.string("Y-axis")
+			title		= cms.untracked.string("Y-axis")
 		)
 	),
 
