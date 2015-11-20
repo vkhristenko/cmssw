@@ -60,8 +60,10 @@ from DQMServices.Core.DQMStore_cfi import *
 DQM = cms.Service("DQM",
                   debug = cms.untracked.bool(False),
                   publishFrequency = cms.untracked.double(5.0),
-                  collectorPort = dqmRunConfig.collectorPort,
-                  collectorHost = dqmRunConfig.collectorHost,
+				  collectorPort = cms.untracked.int32(9190),
+				  collectorHost = cms.untracked.string("fu-c2f11-21-03.cms"),
+#                  collectorPort = dqmRunConfig.collectorPort,
+ #                 collectorHost = dqmRunConfig.collectorHost,
                   filter = cms.untracked.string(''),
 )
 

@@ -355,6 +355,27 @@ void ZDCMonitorModule::analyze(const edm::Event& e, const edm::EventSetup& event
 	if (zdcMon_!=NULL && zdchitOK_ && digiOK_)
 		zdcMon_->processEvent(*zdc_digi,*zdc_hits, *report);
 
+	/*
+	 *	Modified by VK
+	 */
+	
+	int counter = 0;
+	for (ZDCDigiCollection::const_iterator it=zdc_digi->begin();
+		it!=zdc_digi->end(); ++it)
+	{
+		HcalZDCDetId did(it->id());
+		std::cout << did.section() << " " << did.depth() << " "
+			<< did.channel() << "  " << did.rawId() << " "
+			<< did.zside() << std::endl;
+		std::cout << "size=" << it->size() << std::endl;
+		counter++;
+	}
+	std::cout << "counter=" << counter << std::endl;
+
+	/*
+	 *	\Modified by VK
+	 */
+
 	if (showTiming_)
 	{
 		cpu_timer.stop();

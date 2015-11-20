@@ -13,7 +13,7 @@ hcalZDCMonitorTask = cms.PSet(
 
         # Collections to get
 
-        digiLabel            = cms.InputTag("hcalDigis"),  # what label is used for ZDC?  ZDC digis?
+        digiLabel            = cms.InputTag("castorDigis"),  # what label is used for ZDC?  ZDC digis?
         rechitLabel          = cms.InputTag("zdcreco"),
         makeDiagnostics      = cms.untracked.bool(False),
 

@@ -13,7 +13,8 @@ options.register('runNumber',
                  "Run number.")
 
 options.register('runInputDir',
-                 '/tmp',
+#                 '/fff/BU0/output/interestingruns',
+				 '/fff/BU0/output/lookarea',
                  VarParsing.VarParsing.multiplicity.singleton,
                  VarParsing.VarParsing.varType.string,
                  "Directory where the DQM files will appear.")
@@ -50,12 +51,10 @@ source = cms.Source("DQMStreamerReader",
     runInputDir = cms.untracked.string(options.runInputDir),
     SelectEvents = cms.untracked.vstring('*'),
     streamLabel = cms.untracked.string('streamDQM'),
-    minEventsPerLumi = cms.untracked.int32(1),
+    minEventsPerLumi = cms.untracked.int32(-1),
     delayMillis = cms.untracked.uint32(500),
     nextLumiTimeoutMillis = cms.untracked.int32(90000),
     skipFirstLumis = cms.untracked.bool(options.skipFirstLumis),
     deleteDatFiles = cms.untracked.bool(False),
     endOfRunKills  = cms.untracked.bool(True),
 )
-
-print "Source:", source
