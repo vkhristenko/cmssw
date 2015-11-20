@@ -1461,10 +1461,10 @@ class ConfigBuilder(object):
         if self._options.gflash==True:
                 self.loadAndRemember("Configuration/StandardSequences/GFlashDIGI_cff")
 
-        if sequence == 'pdigi_valid' or sequence == 'pdigi_valid_nogen' :
+        if sequence == 'pdigi_valid' or sequence == 'pdigi_valid_nogen' or sequence == 'pdigi_hi':
             self.executeAndRemember("process.mix.digitizers = cms.PSet(process.theDigitizersValid)")
 
-	if sequence != 'pdigi_nogen' and sequence != 'pdigi_valid_nogen' and not self.process.source.type_()=='EmptySource':
+	if sequence != 'pdigi_nogen' and sequence != 'pdigi_valid_nogen' and sequence != 'pdigi_hi' and not self.process.source.type_()=='EmptySource':
 		if self._options.inputEventContent=='':
 			self._options.inputEventContent='REGEN'
 		else:
@@ -2199,13 +2199,7 @@ class ConfigBuilder(object):
 		self.pythonCfgCode +="#Setup FWK for multithreaded\n"
 		self.pythonCfgCode +="process.options.numberOfThreads=cms.untracked.uint32("+self._options.nThreads+")\n"
 		self.pythonCfgCode +="process.options.numberOfStreams=cms.untracked.uint32(0)\n"
-	#repacked version
-	if self._options.isRepacked:
-		self.pythonCfgCode +="\n"
-		self.pythonCfgCode +="from Configuration.Applications.ConfigBuilder import MassReplaceInputTag\n"
-		self.pythonCfgCode +="MassReplaceInputTag(process)\n"
-		MassReplaceInputTag(self.process)
-		
+
         # special treatment in case of production filter sequence 2/2
         if self.productionFilterSequence:
                 self.pythonCfgCode +='# filter all path with the production filter sequence\n'
@@ -2224,6 +2218,14 @@ class ConfigBuilder(object):
 
         # dump customise fragment
 	self.pythonCfgCode += self.addCustomise()
+
+	#repacked version
+	if self._options.isRepacked:
+		self.pythonCfgCode +="\n"
+		self.pythonCfgCode +="from Configuration.Applications.ConfigBuilder import MassReplaceInputTag\n"
+		self.pythonCfgCode +="MassReplaceInputTag(process)\n"
+		MassReplaceInputTag(self.process)
+
 
 	if self._options.runUnscheduled:	
 		# prune and delete paths
