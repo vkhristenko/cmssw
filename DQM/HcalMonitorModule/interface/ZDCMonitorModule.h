@@ -171,6 +171,21 @@ private:
 	bool dump2database_;
 	//std::map<HcalDetId, unsigned int> myquality_;
 	//HcalChannelQuality* chanquality_;
+
+	/*
+	 *	Modified by VK
+	 */
+
+	int	_nChs;
+	std::vector<HcalZDCDetId>  _vDetIds;
+	std::vector<MonitorElement*> _vShape;
+	std::vector<MonitorElement*> _vADC;
+	MonitorElement*				_NumDigisvsLS;
+	MonitorElement*				_NumTimeSamplesvsLS;
+
+	/*
+	 *	\Modified by VK
+	 */
 };
 
 #endif
