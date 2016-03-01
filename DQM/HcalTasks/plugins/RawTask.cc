@@ -140,15 +140,15 @@ RawTask::RawTask(edm::ParameterSet const& ps):
 	ib.setCurrentFolder("Hcal/EventInfo");
 	_reportSummaryMap = ib.book2D("reportSummaryMap", "reportSummaryMap",
 		vFEDs.size(), 0, vFEDs.size(), 4, 0, 4);
-	_reportSummaryMap.setBinLabel(1, "RAW", 2);
-	_reportSummaryMap.setBinLabel(2, "DIGI", 2);
-	_reportSummaryMap.setBinLabel(3, "RECO", 2);
-	_reportSummaryMap.setBinLabel(4, "TP", 2);
+	_reportSummaryMap->setBinLabel(1, "RAW", 2);
+	_reportSummaryMap->setBinLabel(2, "DIGI", 2);
+	_reportSummaryMap->setBinLabel(3, "RECO", 2);
+	_reportSummaryMap->setBinLabel(4, "TP", 2);
 	for (uint32_t i=0; i<vFEDs.size(); i++)
 	{
 		char name[5];
 		sprintf(name, "%d", vFEDs[i]);
-		_reportSummaryMap.setBinLabel(i+1, name, 1);
+		_reportSummaryMap->setBinLabel(i+1, name, 1);
 	}
 
 	//	BOOK HISTOGRAMS
@@ -170,7 +170,7 @@ RawTask::RawTask(edm::ParameterSet const& ps):
 	_cSummary.book(ib);
 
 	//	initialize hash map
-	_ehashmap.initialize(_emap, hcaldqm::electronicsmap::fE2DHashMap);
+	_ehashmap.initialize(_emap, hcaldqm::electronicsmap::fD2EHashMap);
 }
 
 /* virtual */ void RawTask::_resetMonitors(UpdateFreq uf)

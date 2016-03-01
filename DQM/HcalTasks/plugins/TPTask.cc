@@ -1,4 +1,4 @@
-#include "DQM/TPTasks/interface/TPTask.h"
+#include "DQM/HcalTasks/interface/TPTask.h"
 
 TPTask::TPTask(edm::ParameterSet const& ps):
 	DQTask(ps)

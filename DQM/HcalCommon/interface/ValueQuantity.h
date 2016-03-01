@@ -43,7 +43,7 @@ namespace hcaldqm
 			fEnergyTotal = 29,
 			fN_m0to10000 = 30,
 			fEtCorr_256 = 31,
-			fADCCorr_128 = 32
+			fADCCorr_128 = 32,
 			nValueQuantityType = 33
 		};
 		std::string const name_value[nValueQuantityType] = {

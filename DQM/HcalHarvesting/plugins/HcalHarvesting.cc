@@ -35,11 +35,14 @@ HcalHarvesting::HcalHarvesting(edm::ParameterSet const& ps) :
 {
 	//	Initialize what you need
 	ContainerSingle2D rawSummary;
+	ContainerSingle2D digiSummary;
+	ContainerSingle2D recoSummary;
+	ContainerSingle2D tpSummary;
 	rawSummary.initialize("RawTask", "Summary",
 		new quantity::FEDQuantity(_vFEDs),
 		new quantity::FlagQuantity(_frawnames),
 		new quantity::QualityQuantity());
-	dataSummary.initialize("DigiTask", "Summary",
+	digiSummary.initialize("DigiTask", "Summary",
 		new quantity::FEDQuantity(_vFEDs),
 		new quantity::FlagQuantity(_fdiginames),
 		new quantity::QualityQuantity());
@@ -105,8 +108,8 @@ HcalHarvesting::HcalHarvesting(edm::ParameterSet const& ps) :
 				counter++;
 		}
 		counter>0?
-			_reportSummaryMap->setBinContent(ifed+1, 1, quantity::fLow):
-			_reportSummaryMap->setBinContent(ifed+1, 1, quantity::fGood);
+			reportSummaryMap->setBinContent(ifed+1, 1, quantity::fLow):
+			reportSummaryMap->setBinContent(ifed+1, 1, quantity::fGood);
 
 		//	DIGI
 		counter=0;
@@ -119,8 +122,8 @@ HcalHarvesting::HcalHarvesting(edm::ParameterSet const& ps) :
 				counter++;
 		}
 		counter>0?
-			_reportSummaryMap->setBinContent(ifed+1, 2, quantity::fLow):
-			_reportSummaryMap->setBinContent(ifed+1, 2, quantity::fGood);
+			reportSummaryMap->setBinContent(ifed+1, 2, quantity::fLow):
+			reportSummaryMap->setBinContent(ifed+1, 2, quantity::fGood);
 
 		//	RECO
 		counter=0;
@@ -133,8 +136,8 @@ HcalHarvesting::HcalHarvesting(edm::ParameterSet const& ps) :
 				counter++;
 		}
 		counter>0?
-			_reportSummaryMap->setBinContent(ifed+1, 3, quantity::fLow):
-			_reportSummaryMap->setBinContent(ifed+1, 3, quantity::fGood);
+			reportSummaryMap->setBinContent(ifed+1, 3, quantity::fLow):
+			reportSummaryMap->setBinContent(ifed+1, 3, quantity::fGood);
 
 		//	TP
 		counter=0;
@@ -147,8 +150,8 @@ HcalHarvesting::HcalHarvesting(edm::ParameterSet const& ps) :
 				counter++;
 		}
 		counter>0?
-			_reportSummaryMap->setBinContent(ifed+1, 4, quantity::fLow):
-			_reportSummaryMap->setBinContent(ifed+1, 4, quantity::fGood);
+			reportSummaryMap->setBinContent(ifed+1, 4, quantity::fLow):
+			reportSummaryMap->setBinContent(ifed+1, 4, quantity::fGood);
 
 		ifed++;
 	}

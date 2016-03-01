@@ -1,5 +1,5 @@
 
-#include "DQM/HcalTasksTasks/interface/DigiComparisonTask.h"
+#include "DQM/HcalTasks/interface/DigiComparisonTask.h"
 
 using namespace hcaldqm;
 DigiComparisonTask::DigiComparisonTask(edm::ParameterSet const& ps):

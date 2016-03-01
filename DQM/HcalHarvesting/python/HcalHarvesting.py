@@ -3,7 +3,7 @@ import FWCore.ParameterSet.Config as cms
 hcalHarvesting = cms.EDAnalyzer(
 	"HcalHarvesting",
 
-	name = cms.untracked.string("Harvesting"),
+	name = cms.untracked.string("HcalHarvesting"),
 	debug = cms.untracked.int32(0),
 	runkeyVal = cms.untracked.int32(0),
 	runkeyName = cms.untracked.string('pp_run'),

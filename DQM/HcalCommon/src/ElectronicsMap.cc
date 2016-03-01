@@ -15,22 +15,17 @@ namespace hcaldqm
 			{
 				if (_etype==fD2EHashMap)
 				{
-					//	HcalDetId -> HcalElectronicsId hash map
-					std::vector<HcalGenericDetId> dids=emap->allPrecisionId();
-					for (std::vector<HcalGenericDetId>::const_iterator it=
-						dids.begin(); it!=dids.end(); ++it)
+					std::vector<HcalElectronicsId> eids = 
+						emap->allElectronicsIdPrecision();
+					for (std::vector<HcalElectronicsId>::const_iterator it=
+						eids.begin(); it!=eids.end(); ++it)
 					{
-						if (!it->isHcalDetId())
+						HcalGenericDetId did = HcalGenericDetId(
+							_emap->lookup(*it));
+						if (!did.isHcalDetId())
 							continue;
 
-						HcalElectronicsId eid = _emap->lookup(
-							HcalDetId(it->rawId()));
-						uint32_t hash = it->rawId();
-						EMapType::iterator eit = _ids.find(hash);
-						if (eit!=_ids.end())
-							continue;
-
-						_ids.insert(std::make_pair(hash, eid.rawId()));
+						_ids.insert(std::make_pair(did.rawId(), it->rawId()));
 					}
 				}
 				else if (_etype==fT2EHashMap)

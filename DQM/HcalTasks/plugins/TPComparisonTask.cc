@@ -1,5 +1,5 @@
 
-#include "DQM/HcalTasksTasks/interface/TPComparisonTask.h"
+#include "DQM/HcalTasks/interface/TPComparisonTask.h"
 
 using namespace hcaldqm;
 TPComparisonTask::TPComparisonTask(edm::ParameterSet const& ps):
