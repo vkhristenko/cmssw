@@ -9,13 +9,18 @@
 
 #include "DQM/HcalCommon/interface/DQTask.h"
 #include "DQM/HcalCommon/interface/Utilities.h"
+#include "DQM/HcalCommon/interface/ElectronicsMap.h"
 #include "DQM/HcalCommon/interface/ContainerCompact.h"
+#include "DQM/HcalCommon/interface/ContainerXXX.h"
 #include "DQM/HcalCommon/interface/Container1D.h"
 #include "DQM/HcalCommon/interface/Container2D.h"
+#include "DQM/HcalCommon/interface/ContainerSingle2D.h"
+#include "DQM/HcalCommon/interface/ContainerSingleProf2D.h"
 #include "DQM/HcalCommon/interface/ContainerProf1D.h"
 #include "DQM/HcalCommon/interface/ContainerProf2D.h"
 
 using namespace hcaldqm;
+
 class LaserTask : public DQTask
 {
 	public:
@@ -35,7 +40,7 @@ class LaserTask : public DQTask
 		virtual bool _isApplicable(edm::Event const&);
 		virtual void _dump();
 
-		//	Tags and Tokens
+		//	tags and tokens
 		edm::InputTag	_tagHBHE;
 		edm::InputTag	_tagHO;
 		edm::InputTag	_tagHF;
@@ -45,29 +50,46 @@ class LaserTask : public DQTask
 		edm::EDGetTokenT<HFDigiCollection> _tokHF;
 		edm::EDGetTokenT<HcalTBTriggerData> _tokTrigger;
 
+		//	emap
+		HcalElectronicsMap const* _emap;
+
 		//	Cuts
 		double _lowHBHE;
 		double _lowHO;
 		double _lowHF;
 
 		//	Compact
-		ContainerCompact _cSignals;
-		ContainerCompact _cTiming;
+		ContainerXXX _cSignals_DChannel;
+		ContainerXXX _cTiming_DChannel;
 
 		//	1D
-		Container1D _cSignalMeans_SubDet;
-		Container1D _cSignalRMSs_SubDet;
-		Container1D _cTimingMeans_SubDet;
-		Container1D _cTimingRMSs_SubDet;
+		Container1D		_cSignalMean_Subdet;
+		Container1D		_cSignalRMS_Subdet;
+		Container1D		_cTimingMean_Subdet;
+		Container1D		_cTimingRMS_Subdet;
 
-		//	Prof 1D
-		ContainerProf1D _cShapeCut_SubDetPM_iphi;
+		//	Prof1D
+		ContainerProf1D	_cShapeCut_FEDSlot;
+		ContainerProf1D _cTimingvsEvent_SubdetPM;
+		ContainerProf1D _cSignalvsEvent_SubdetPM;
+		ContainerProf1D _cTimingvsLS_SubdetPM;
+		ContainerProf1D _cSignalvsLS_SubdetPM;
 
-		//	2D
-		Container2D _cSignalMeans_depth;
-		Container2D _cSignalRMSs_depth;
-		Container2D _cTimingMeans_depth;
-		Container2D _cTimingRMSs_depth;
+		//	2D timing/signals
+		ContainerProf2D		_cSignalMean_depth;
+		ContainerProf2D		_cSignalRMS_depth;
+		ContainerProf2D		_cTimingMean_depth;
+		ContainerProf2D		_cTimingRMS_depth;
+
+		ContainerSingleProf2D _cTimingVME;
+		ContainerSingleProf2D _cSignalVME;
+		ContainerSingle2D _cOccupancyVME;
+		ContainerSingleProf2D _cTiminguTCA;
+		ContainerSingleProf2D _cSignaluTCA;
+		ContainerSingle2D _cOccupancyuTCA;
+
+		//	Bad Quality and Missing Channels
+		Container2D		_cMissing_depth;
 };
 
 #endif

@@ -6,28 +6,21 @@
  *	Author:			Viktor Khristenko
  *
  *	Description:
- *		1D Compact Container
+ *		No Type Usage adjustment - only use in histo-like mode
  */
 
 #include "DQM/HcalCommon/interface/Container1D.h"
+#include "DQM/HcalCommon/interface/Compact.h"
 
 namespace hcaldqm
 {
-	using namespace axis;
-	using namespace mapper;
 	using namespace constants;
-	
-	struct Compact
-	{
-		double _sum;
-		double _sum2;
-		unsigned int _entries;
-	};
-
+	using namespace compact;	
 	class ContainerCompact
 	{
 		public:
-			ContainerCompact(){}
+			ContainerCompact()
+			{}
 			virtual ~ContainerCompact() {}
 
 			//	fills
@@ -35,7 +28,7 @@ namespace hcaldqm
 			virtual void dump(Container1D*, bool);
 
 		protected:
-			Compact		_data[SUBDET_NUM][IPHI_NUM][IETA_NUM][DEPTH_NUM];
+			Compact			_data[SUBDET_NUM][IPHI_NUM][IETA_NUM][DEPTH_NUM];
 	};
 }
 

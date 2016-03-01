@@ -46,6 +46,9 @@ referenceFileName = '/dqmdata/dqm/reference/hcal_reference.root'
 process.DQMStore.referenceFileName = referenceFileName
 process = customise(process)
 process.DQMStore.verbose = 0
+process.DQM.collectorPort = cms.untracked.int32(9190)
+process.DQM.collectorHost = cms.untracked.string("fu-c2f11-21-03.cms")
+process.dqmSaver.path = "/data/hcaldqm/DQMIO/ONLINE_PLAYBACK"
 
 #-------------------------------------
 #	CMSSW/Hcal non-DQM Related Module import
@@ -167,7 +170,7 @@ process.tasksSequence = cms.Sequence(
 #-------------------------------------
 process.preRecoSequence = cms.Sequence(
 		process.hcalDigis
-		*process.l1GtUnpack
+#		*process.l1GtUnpack
 )
 
 process.recoSequence = cms.Sequence(
