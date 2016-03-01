@@ -3,8 +3,6 @@
 
 namespace hcaldqm
 {
-	using namespace mapper;
-	using namespace axis;
 	using namespace constants;
 
 	/* virtual */ void ContainerCompact::fill(HcalDetId const& did, double x)
@@ -18,9 +16,9 @@ namespace hcaldqm
 			did.ieta()-IETA_MIN+IETA_NUM/2;
 		int idepth = did.depth()-1;
 
-		_data[isubdet][iiphi][iieta][idepth]._sum += x;
-		_data[isubdet][iiphi][iieta][idepth]._sum2 += x*x;
-		_data[isubdet][iiphi][iieta][idepth]._entries++;
+		_data[isubdet][iiphi][iieta][idepth]._x1 += x;
+		_data[isubdet][iiphi][iieta][idepth]._x2 += x*x;
+		_data[isubdet][iiphi][iieta][idepth]._n++;
 	}
 
 	/* virtual */ void ContainerCompact::dump(Container1D* c, bool q)
@@ -41,7 +39,7 @@ namespace hcaldqm
 					for (int id=0; id<DEPTH_NUM; id++)
 					{
 						Compact tmp(_data[idet][iiphi][iieta][id]);
-						if (tmp._entries<=0)
+						if (tmp._n<=0)
 							continue;
 
 						int iphi = iiphi+1;
@@ -49,8 +47,8 @@ namespace hcaldqm
 							iieta-IETA_NUM/2+IETA_MIN;
 						int d = id+1;
 						HcalDetId did(subd, ieta, iphi, d);
-						double mean= tmp._sum/tmp._entries;
-						double rms = sqrt(tmp._sum2/tmp._entries - 
+						double mean= tmp._x1/tmp._n;
+						double rms = sqrt(tmp._x2/tmp._n - 
 							mean*mean);
 						if (q)
 							c->fill(did, mean);

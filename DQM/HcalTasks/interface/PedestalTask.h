@@ -9,11 +9,12 @@
 
 #include "DQM/HcalCommon/interface/DQTask.h"
 #include "DQM/HcalCommon/interface/Utilities.h"
-#include "DQM/HcalCommon/interface/ContainerCompact.h"
 #include "DQM/HcalCommon/interface/Container1D.h"
 #include "DQM/HcalCommon/interface/Container2D.h"
 #include "DQM/HcalCommon/interface/ContainerProf1D.h"
 #include "DQM/HcalCommon/interface/ContainerProf2D.h"
+#include "DQM/HcalCommon/interface/ContainerCompact.h"
+#include "DQM/HcalCommon/interface/ContainerXXX.h"
 
 using namespace hcaldqm;
 class PedestalTask : public DQTask
@@ -25,8 +26,7 @@ class PedestalTask : public DQTask
 
 		virtual void bookHistograms(DQMStore::IBooker&,
 			edm::Run const&, edm::EventSetup const&);
-		virtual void endRun(edm::Run const&, edm::EventSetup const&)
-		{this->_dump();}
+		virtual void endRun(edm::Run const&, edm::EventSetup const&);
 
 	protected:
 		//	funcs
@@ -35,7 +35,7 @@ class PedestalTask : public DQTask
 		virtual bool _isApplicable(edm::Event const&);
 		virtual void _dump();
 
-		//	vars
+		//	tags and tokens
 		edm::InputTag	_tagHBHE;
 		edm::InputTag	_tagHO;
 		edm::InputTag	_tagHF;
@@ -45,15 +45,33 @@ class PedestalTask : public DQTask
 		edm::EDGetTokenT<HFDigiCollection> _tokHF;
 		edm::EDGetTokenT<HcalTBTriggerData> _tokTrigger;
 
-		ContainerCompact _cPedestals;
+		//	emap
+		HcalElectronicsMap const*	_emap;
+		HcalPedestal const*			_condPeds;
 
-		//	1D
-		Container1D		_cPedestalMeans_SubDet;
-		Container1D		_cPedestalRMSs_SubDet;
+		ContainerXXX		_cPed;
+		ContainerXXX		_cPedRef;
+
+		//	1D Means/RMSs
+		Container1D		_cMean_Subdet;
+		Container1D		_cRMS_Subdet;
+
+		//	1D Means/RMSs Conditions DB comparison
+		Container1D		_cMeanDBRef_Subdet;
+		Container1D		_cRMSDBRef_Subdet;
 
 		//	2D
-		Container2D		_cPedestalMeans_depth;
-		Container2D		_cPedestalRMSs_depth;
+		ContainerProf2D		_cMean_depth;
+		ContainerProf2D		_cRMS_depth;
+		
+		//	with DB Conditions comparison
+		ContainerProf2D		_cMeanDBRef_depth;
+		ContainerProf2D		_cRMSDBRef_depth;
+
+		//	Missing + Bad Quality
+		Container2D		_cMissing_depth;
+		Container2D		_cMeanBad_depth;
+		Container2D		_cRMSBad_depth;
 };
 
 #endif
