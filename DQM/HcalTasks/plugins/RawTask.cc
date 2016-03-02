@@ -136,21 +136,6 @@ RawTask::RawTask(edm::ParameterSet const& ps):
 		new quantity::FlagQuantity(fnames),
 		new quantity::QualityQuantity());
 
-	//	create a reportSummaryMap
-	ib.setCurrentFolder("Hcal/EventInfo");
-	_reportSummaryMap = ib.book2D("reportSummaryMap", "reportSummaryMap",
-		vFEDs.size(), 0, vFEDs.size(), 4, 0, 4);
-	_reportSummaryMap->setBinLabel(1, "RAW", 2);
-	_reportSummaryMap->setBinLabel(2, "DIGI", 2);
-	_reportSummaryMap->setBinLabel(3, "RECO", 2);
-	_reportSummaryMap->setBinLabel(4, "TP", 2);
-	for (uint32_t i=0; i<vFEDs.size(); i++)
-	{
-		char name[5];
-		sprintf(name, "%d", vFEDs[i]);
-		_reportSummaryMap->setBinLabel(i+1, name, 1);
-	}
-
 	//	BOOK HISTOGRAMS
 	_cEvnMsm_ElectronicsVME.book(ib, _emap, _filter_uTCA);
 	_cBcnMsm_ElectronicsVME.book(ib, _emap, _filter_uTCA);

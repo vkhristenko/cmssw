@@ -546,7 +546,8 @@ DigiTask::DigiTask(edm::ParameterSet const& ps):
 			_cTimingCut_FEDSlot.fill(eid, timing);
 			_cTimingCutvsLS_FEDSlot.fill(eid, _currentLS, timing);
 			_cOccupancyCut_depth.fill(did);
-			_cQ2Q12CutvsLS_FEDHFSlot.fill(eid, _currentLS, q2q12);
+			if (!eid.isVMEid())
+				_cQ2Q12CutvsLS_FEDHFSlot.fill(eid, _currentLS, q2q12);
 			if (eid.isVMEid())
 			{
 				_cTimingCut_FEDVME.fill(eid, timing);

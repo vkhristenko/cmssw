@@ -14,9 +14,11 @@ from DQM.CSCMonitorModule.csc_dqm_offlineclient_collisions_cff import *
 from DQM.EcalPreshowerMonitorClient.es_dqm_client_offline_cff import *
 from DQM.BeamMonitor.AlcaBeamMonitorClient_cff import *
 from DQMServices.Components.DQMFEDIntegrityClient_cff import *
+from DQM.HcalHarvesting.HcalHarvesting import *
 
 DQMOfflineHeavyIons_SecondStep_PreDPG = cms.Sequence( dqmDcsInfoClient *
                                                       ecal_dqm_client_offline *
+													  hcalHarvesting *
                                                       SiStripOfflineDQMClientHI *
                                                       PixelOfflineDQMClientWithDataCertificationHI *
                                                       dtClients *

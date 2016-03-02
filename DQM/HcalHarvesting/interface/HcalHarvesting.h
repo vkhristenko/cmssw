@@ -34,6 +34,12 @@ class HcalHarvesting : public DQHarvester
 		virtual void _dqmEndJob(DQMStore::IBooker&,
 			DQMStore::IGetter&);
 
+		//	flags to harvest...
+		bool _digiHarvesting;
+		bool _rawHarvesting;
+		bool _recoHarvesting;
+		bool _tpHarvesting;
+
 		//	electronicsmap hash
 		electronicsmap::ElectronicsMap _emaphash;
 
@@ -42,6 +48,9 @@ class HcalHarvesting : public DQHarvester
 		std::vector<std::string> _fdiginames;
 		std::vector<std::string> _freconames;
 		std::vector<std::string> _ftpnames;
+
+		//	reportSummaryMap
+		MonitorElement *_reportSummaryMap;
 };
 
 #endif

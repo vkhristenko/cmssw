@@ -33,7 +33,6 @@ tpTask.tagEmul = cms.untracked.InputTag("valHcalTriggerPrimitiveDigis")
 
 hcalOfflineSourceSequence = cms.Sequence(
 	digiTask
-	+tpTask
 	+recHitTask
 	+rawTask)
 

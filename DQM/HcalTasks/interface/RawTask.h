@@ -84,9 +84,6 @@ class RawTask : public DQTask
 		//	Summary
 		ContainerSingle2D _cSummary;
 		Container2D		  _cSummaryvsLS_FED;
-
-		//	Final Summary = reportSummaryMap make it simple here
-		MonitorElement *_reportSummaryMap;
 };
 
 #endif
