@@ -15,6 +15,10 @@ namespace hcaldqm
 {
 	using namespace constants;
 
+	typedef boost::unordered_map<uint32_t, double> doubleCompactMap;
+	typedef boost::unordered_map<uint32_t, int> intCompactMap;
+	typedef boost::unordered_map<uint32_t, uint32_t> uintCompactMap;
+
 	template<typename STDTYPE>
 	class ContainerXXX
 	{
@@ -24,18 +28,27 @@ namespace hcaldqm
 			{}
 			virtual ~ContainerXXX() {_cmap.clear();}
 
+			//	initialize, booking. booking is done from Electronicsmap.
 			virtual void initialize(hashfunctions::HashType,int debug=0);
 			virtual void book(HcalElectronicsMap const*);
 			virtual void book(HcalElectronicsMap const*,
 				filter::HashFilter const&);
 
+			//	setters
 			virtual void set(HcalDetId const&, STDTYPE);
 			virtual void set(HcalElectronicsId const&, STDTYPE);
 			virtual void set(HcalTrigTowerDetId const&, STDTYPE);
 
+			//	getters
 			virtual STDTYPE& get(HcalDetId const&);
 			virtual STDTYPE& get(HcalElectronicsId const&);
 			virtual STDTYPE& get(HcalTrigTowerDetId const&);
+
+			//	pushers/adders - not a push_back.
+			//	ignored if already is present
+			virtual void push(HcalDetId const&, STDTYPE);
+			virtual void push(HcalElectronicsId const&, STDTYPE);
+			virtual void push(HcalTrigTowerDetId const&, STDTYPE);
 
 			virtual void dump(Container1D*);
 			virtual void dump(std::vector<Container1D*> const&);
@@ -50,6 +63,12 @@ namespace hcaldqm
 			CompactMap              _cmap;
 			mapper::HashMapper      _hashmap;
 			Logger                  _logger;
+
+		public:
+			virtual typename CompactMap::const_iterator begin()
+			{return _cmap.begin();}
+			virtual typename CompactMap::const_iterator end()
+			{return _cmap.end();}
 	};
 
 	template<typename STDTYPE>
@@ -73,8 +92,8 @@ namespace hcaldqm
 				if (!it->isHcalDetId())
 					continue;
 
-				uint32_t hash = it->rawId();
-				HcalDetId did = HcalDetId(hash);
+				HcalDetId did = HcalDetId(it->rawId());
+				uint32_t hash = _hashmap.getHash(did);
 				_logger.debug(_hashmap.getName(did));
 				typename CompactMap::iterator mit = _cmap.find(hash);
 				if (mit!=_cmap.end())
@@ -91,8 +110,8 @@ namespace hcaldqm
 			for (std::vector<HcalElectronicsId>::const_iterator it=
 				eids.begin(); it!=eids.end(); ++it)
 			{
-				uint32_t hash = it->rawId();
-				HcalElectronicsId eid = HcalElectronicsId(hash);
+				HcalElectronicsId eid = HcalElectronicsId(it->rawId());
+				uint32_t hash = _hashmap.getHash(eid);
 				_logger.debug(_hashmap.getName(eid));
 				typename CompactMap::iterator mit = _cmap.find(hash);
 				if (mit!=_cmap.end())
@@ -108,8 +127,8 @@ namespace hcaldqm
 			for (std::vector<HcalTrigTowerDetId>::const_iterator it=
 				tids.begin(); it!=tids.end(); ++it)
 			{
-				uint32_t hash = it->rawId();
-				HcalTrigTowerDetId tid = HcalTrigTowerDetId(hash);
+				HcalTrigTowerDetId tid = HcalTrigTowerDetId(it->rawId());
+				uint32_t hash = _hashmap.getHash(tid);
 				_logger.debug(_hashmap.getName(tid));
 				typename CompactMap::iterator mit = _cmap.find(hash);
 				if (mit!=_cmap.end())
@@ -135,14 +154,15 @@ namespace hcaldqm
 				if (!it->isHcalDetId())
 					continue;
 
-				uint32_t hash = it->rawId();
-				HcalDetId did = HcalDetId(hash);
-				_logger.debug(_hashmap.getName(did));
+				HcalDetId did = HcalDetId(it->rawId());
+				uint32_t hash = _hashmap.getHash(did);
 				typename CompactMap::iterator mit = _cmap.find(hash);
 				if (mit!=_cmap.end())
 					continue;
 				if (filter.filter(did))
 					continue;
+				
+				_logger.debug(_hashmap.getName(did));
 
 				_cmap.insert(
 					std::make_pair(hash, STDTYPE(0)));
@@ -155,14 +175,14 @@ namespace hcaldqm
 			for (std::vector<HcalElectronicsId>::const_iterator it=
 				eids.begin(); it!=eids.end(); ++it)
 			{
-				uint32_t hash = it->rawId();
-				HcalElectronicsId eid = HcalElectronicsId(hash);
-				_logger.debug(_hashmap.getName(eid));
+				HcalElectronicsId eid = HcalElectronicsId(it->rawId());
+				uint32_t hash = _hashmap.getHash(eid);
 				typename CompactMap::iterator mit = _cmap.find(hash);
-				if (mit!=_cmap.end())
-					continue;
 				if (filter.filter(eid))
 					continue;
+				if (mit!=_cmap.end())
+					continue;
+				_logger.debug(eid);
 
 				_cmap.insert(
 					std::make_pair(hash, STDTYPE(0)));
@@ -174,14 +194,14 @@ namespace hcaldqm
 			for (std::vector<HcalTrigTowerDetId>::const_iterator it=
 				tids.begin(); it!=tids.end(); ++it)
 			{
-				uint32_t hash = it->rawId();
-				HcalTrigTowerDetId tid = HcalTrigTowerDetId(hash);
-				_logger.debug(_hashmap.getName(tid));
+				HcalTrigTowerDetId tid = HcalTrigTowerDetId(it->rawId());
+				uint32_t hash = _hashmap.getHash(tid);
 				typename CompactMap::iterator mit = _cmap.find(hash);
 				if (mit!=_cmap.end())
 					continue;
 				if (filter.filter(tid))
 					continue;
+				_logger.debug(_hashmap.getName(tid));
 
 				_cmap.insert(
 					std::make_pair(hash, STDTYPE(0)));
@@ -225,6 +245,39 @@ namespace hcaldqm
 	STDTYPE& ContainerXXX<STDTYPE>::get(HcalTrigTowerDetId const& tid)
 	{
 		return _cmap[_hashmap.getHash(tid)];
+	}
+
+	template<typename STDTYPE>
+	void ContainerXXX<STDTYPE>::push(HcalDetId const& did, STDTYPE x)
+	{
+		uint32_t hash = did.rawId();
+		typename CompactMap::iterator mit=_cmap.find(hash);
+		if (mit!=_cmap.end())
+			return;
+		_cmap.insert(
+			std::make_pair(hash, x));
+	}
+
+	template<typename STDTYPE>
+	void ContainerXXX<STDTYPE>::push(HcalElectronicsId const& eid, STDTYPE x)
+	{
+		uint32_t hash = eid.rawId();
+		typename CompactMap::iterator mit=_cmap.find(hash);
+		if (mit!=_cmap.end())
+			return;
+		_cmap.insert(
+			std::make_pair(hash, x));
+	}
+	
+	template<typename STDTYPE>
+	void ContainerXXX<STDTYPE>::push(HcalTrigTowerDetId const& tid, STDTYPE x)
+	{
+		uint32_t hash = tid.rawId();
+		typename CompactMap::iterator mit=_cmap.find(hash);
+		if (mit!=_cmap.end())
+			return;
+		_cmap.insert(
+			std::make_pair(hash, x));
 	}
 
 	template<typename STDTYPE>

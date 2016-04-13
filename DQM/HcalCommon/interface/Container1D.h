@@ -301,11 +301,23 @@ namespace hcaldqm
 				std::string const& prepend="", DQMStore::OpenRunDirs
 				mode=DQMStore::StripRunDirs);
 
+			//	loading using DQMStore::IGetter
+			virtual void load(DQMStore::IGetter&, HcalElectronicsMap const*,
+				std::string const& subsystem="Hcal",
+				std::string const& aux="");
+			virtual void load(DQMStore::IGetter&, HcalElectronicsMap const*,
+				filter::HashFilter const&,
+				std::string const& subsystem="Hcal",
+				std::string const& aux="");
+
 			//	reset all the elements
 			virtual void reset();
 
 			//	print all the elements
 			virtual void print();
+
+			virtual void extendAxisRange(int);
+			//virtual void release();
 
 		protected:
 			virtual void customize(MonitorElement*);
