@@ -25,7 +25,8 @@
 <use   name="DataFormats/TrackReco"/>
 <use   name="RecoMET/METAlgorithms"/>
 <use   name="CondFormats/RunInfo"/>
+<use   name="DQM/HcalCommon"/>
 
-<use   name="DQM/HcalCommon" />
-<use   name="DQM/HcalTasks"/>
-<flags EDM_PLUGIN="1" />
+<export>
+	<lib name="DQMHcalTasks"/>
+</export>

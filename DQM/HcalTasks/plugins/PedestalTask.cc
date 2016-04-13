@@ -135,19 +135,19 @@ PedestalTask::PedestalTask(edm::ParameterSet const& ps):
 
 	_cMissingvsLS_FED.initialize(_name, "MissingvsLS", 
 		hashfunctions::fFED,
-		new quantity::LumiSection(_numLSstart),
+		new quantity::LumiSection(_maxLS),
 		new quantity::ValueQuantity(quantity::fN));
 	_cOccupancyvsLS_Subdet.initialize(_name, "OccupancyvsLS", 
 		hashfunctions::fSubdet,
-		new quantity::LumiSection(_numLSstart),
+		new quantity::LumiSection(_maxLS),
 		new quantity::ValueQuantity(quantity::fN));
 	_cNBadMeanvsLS_FED.initialize(_name, "NBadMeanvsLS", 
 		hashfunctions::fFED,
-		new quantity::LumiSection(_numLSstart),
+		new quantity::LumiSection(_maxLS),
 		new quantity::ValueQuantity(quantity::fN));
 	_cNBadRMSvsLS_FED.initialize(_name, "NBadRMSvsLS", 
 		hashfunctions::fFED,
-		new quantity::LumiSection(_numLSstart),
+		new quantity::LumiSection(_maxLS),
 		new quantity::ValueQuantity(quantity::fN));
 
 	_cMissing_depth.initialize(_name, "Missing", hashfunctions::fdepth,
@@ -187,6 +187,7 @@ PedestalTask::PedestalTask(edm::ParameterSet const& ps):
 		new quantity::ElectronicsQuantity(quantity::fFiberuTCAFiberCh),
 		new quantity::ValueQuantity(quantity::fN));
 
+	/*
 	std::vector<std::string> fnames;
 	fnames.push_back("Msn");
 	fnames.push_back("BadMean");
@@ -195,6 +196,7 @@ PedestalTask::PedestalTask(edm::ParameterSet const& ps):
 		new quantity::FEDQuantity(vFEDs),
 		new quantity::FlagQuantity(fnames),
 		new quantity::QualityQuantity());
+		*/
 
 	//	book plots
 	_cMean_Subdet.book(ib, _emap, _subsystem);
@@ -229,7 +231,7 @@ PedestalTask::PedestalTask(edm::ParameterSet const& ps):
 	_cNBadMeanvsLS_FED.book(ib, _emap, _subsystem);
 	_cNBadRMSvsLS_FED.book(ib, _emap, _subsystem);
 
-	_cSummary.book(ib, _subsystem);
+//	_cSummary.book(ib, _subsystem);
 	
 	//	book compact containers
 	_xPedSum.book(_emap);
@@ -271,6 +273,18 @@ PedestalTask::PedestalTask(edm::ParameterSet const& ps):
 /* virtual */ void PedestalTask::_resetMonitors(UpdateFreq uf)
 {
 	DQTask::_resetMonitors(uf);
+
+	switch(uf)
+	{
+		case hcaldqm::f50LS:
+			//	reset the containers for Sums, SumSqr, #Entries
+			_xPedSum.reset();
+			_xPedSum2.reset();
+			_xPedEntries.reset();
+			break;
+		default:
+			break;
+	}
 }
 
 /* virtual */ void PedestalTask::endRun(edm::Run const& r, 
@@ -384,12 +398,25 @@ PedestalTask::PedestalTask(edm::ParameterSet const& ps):
 	}
 
 	//	set flags
+	/*
 	for (std::vector<uint32_t>::const_iterator it=_vhashFEDs.begin();
 		it!=_vhashFEDs.end(); ++it)
 	{
+		//	set first as inapplicable
 		HcalElectronicsId eid = HcalElectronicsId(*it);
 		for (int flag=fMsn; flag<nPedestalFlag; flag++)
 			_cSummary.setBinContent(eid, flag, fNA);
+
+		//	second, check if this FED is @cDAQ
+		//	if not, leave status as inapplicable
+		//	for global online running
+		if (_ptype!=fLocal)
+		{
+			std::vector<uint32_t>::const_iterator jt=
+				std::find(_vcdaqEids.begin(), _vcdaqEids.end(), (*it));
+			if (jt==_vcdaqEids.end())
+				continue;
+		}
 
 		//	set all the flags
 		_xNMsn.get(eid)>0?
@@ -408,6 +435,7 @@ PedestalTask::PedestalTask(edm::ParameterSet const& ps):
 		_cNBadRMSvsLS_FED.fill(eid, _currentLS, _xNBadRMS.get(eid));
 	}
 	_xNMsn.reset(); _xNBadMean.reset(); _xNBadRMS.reset();
+	*/
 }
 
 /* virtual */ void PedestalTask::endLuminosityBlock(edm::LuminosityBlock const&,
