@@ -6,7 +6,7 @@
 cmsrel CMSSW_10_0_DEVEL_X_2017-11-02-2300
 cd CMSSW_10_0_DEVEL_X_2017-11-02-2300
 ```
-- `scrma setup cuda`
+- `scram setup cuda`
 - `cmsenv`
 - Pull the branch with cuda samples and edm dummy examples
 ```
