@@ -1,0 +1,16 @@
+<lcgdict>
+    <class name="testgpu::Vector<int>"/>
+    <class name="testgpu::Vector<float>"/>
+    <class name="testgpu::Vector<double>"/>
+    <class name="edm::Wrapper<testgpu::Vector<int> >"/>
+    <class name="edm::Wrapper<testgpu::Vector<float> >"/>
+    <class name="edm::Wrapper<testgpu::Vector<double> >"/>
+    <!--
+    <class name="testgpu::Vector<int>"/>
+    <class name="testgpu::Vector<float>"/>
+    <class name="testgpu::Vector<double>"/>
+    <class name="edm::Wrapper<testgpu::Vector<int> >" />
+    <class name="edm::Wrapper<testgpu::Vector<float> >" />
+    <class name="edm::Wrapper<testgpu::Vector<double> >" />
+    -->
+</lcgdict>
