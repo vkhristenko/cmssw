@@ -1,0 +1,17 @@
+<tool name="cuda" version="9.0">
+  <info url="https://developer.nvidia.com/cuda-toolkit"/>
+  <lib name="cudart"/>
+  <lib name="nppc"/>
+  <lib name="nvToolsExt"/>
+  <client>
+    <environment name="CUDA_BASE" default="/usr/local/cuda"/>
+    <environment name="NVCC"      default="$CUDA_BASE/bin/nvcc"/>
+    <environment name="BINDIR"    default="$CUDA_BASE/bin"/>
+    <environment name="LIBDIR"    default="$CUDA_BASE/lib64"/>
+    <environment name="INCLUDE"   default="$CUDA_BASE/include"/>
+  </client>
+  <flags CUDA_CFLAGS="-O2 -fPIC -std=c++14"/>
+  <!-- NOTE: Compute Capability of the device on felk40 is 6.1 - of Pascal Architecture -->
+  <flags CUDA_FLAGS="-Xptxas -v --maxrregcount=32 --default-stream per-thread -O2 -std=c++14 -gencode arch=compute_61,code=sm_61"/>
+  <runtime name="PATH" value="$CUDA_BASE/bin" type="path"/>
+</tool>
