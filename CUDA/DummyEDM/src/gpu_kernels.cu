@@ -11,7 +11,7 @@ template<typename T>
 __global__
 void vectorAdd(T *a, T *b, T *c) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    for (size_t j=0; j<100000; j++)
+    for (size_t j=0; j<10000; j++)
         c[i] = a[i] + b[i];
 }
 

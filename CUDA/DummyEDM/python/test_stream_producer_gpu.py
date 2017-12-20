@@ -33,7 +33,7 @@ process.source = cms.Source("EmptySource")
 # Declare an edm::stream producer to put into the pipeline
 #
 process.testGPU = cms.EDProducer('DummyStreamProducer',
-    size = cms.untracked.int32(10000),
+    size = cms.untracked.int32(10000000),
     # allocates the data as Page-Locked
     isPinned = cms.untracked.bool(True)
 )
