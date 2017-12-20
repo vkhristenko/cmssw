@@ -17,6 +17,7 @@
 
 // system include files
 #include <memory>
+#include <chrono>
 
 // user include files
 #include "FWCore/Framework/interface/Frameworkfwd.h"
@@ -173,10 +174,18 @@ DummyStreamProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
     // 
     // Perform memcpy
     //
+    auto startCopy = std::chrono::high_resolution_clock::now();
     cudaMemcpyAsync(m_da, m_ha, m_size * sizeof(DataType),
                     cudaMemcpyHostToDevice, m_stream);
+    auto finishCopy = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = finishCopy - startCopy;
+    printf("Duration of cudaMemcpyAsync function call: %f s\n", diff.count());
+    startCopy = std::chrono::high_resolution_clock::now();
     cudaMemcpyAsync(m_db, m_hb, m_size * sizeof(DataType),
                     cudaMemcpyHostToDevice, m_stream);
+    finishCopy = std::chrono::high_resolution_clock::now();
+    diff = finishCopy - startCopy;
+    printf("Duration of cudaMemcpyAsync function call: %f s\n", diff.count());
 
     // 
     // call the kernel wrapper
@@ -186,8 +195,13 @@ DummyStreamProducer::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
     // 
     // copy the results
     //
+    startCopy = std::chrono::high_resolution_clock::now();
     cudaMemcpyAsync(m_hc, m_dc, m_size * sizeof(DataType),
                     cudaMemcpyDeviceToHost, m_stream);
+    finishCopy = std::chrono::high_resolution_clock::now();
+    diff = finishCopy - startCopy;
+    printf("Duration of cudaMemcpyAsync function call: %f s\n", 
+        diff.count());
 
     // 
     // synch with the stream
