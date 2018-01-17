@@ -1,6 +1,10 @@
 import FWCore.ParameterSet.Config as cms
 import os
 
+numEvents = 20
+size = 1000000
+isPinned = True
+
 #
 # define a new process
 #
@@ -22,7 +26,7 @@ process.MessageLogger = cms.Service("MessageLogger",
 #
 # 10 events max to process
 #
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(20) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(numEvents) )
 
 #
 # Nothing to read -> empty source
@@ -33,9 +37,9 @@ process.source = cms.Source("EmptySource")
 # Declare an edm::stream producer to put into the pipeline
 #
 process.testGPU = cms.EDProducer('DummyStreamProducer',
-    size = cms.untracked.int32(10000000),
+    size = cms.untracked.int32(size),
     # allocates the data as Page-Locked
-    isPinned = cms.untracked.bool(True)
+    isPinned = cms.untracked.bool(isPinned)
 )
 
 #
@@ -48,7 +52,8 @@ process.p = cms.Path(process.testGPU)
 #
 process.out = cms.OutputModule(
     "PoolOutputModule",
-    fileName = cms.untracked.string("test_streamproducer.root")
+    fileName = cms.untracked.string("test_streamproducer_%d_%d_%d.root" % (
+        numEvents, size, isPinned))
 )
 
 #
