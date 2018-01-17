@@ -18,6 +18,8 @@
 // system include files
 #include <memory>
 #include <chrono>
+#include <thread>
+#include <iostream>
 
 // user include files
 #include "FWCore/Framework/interface/Frameworkfwd.h"
@@ -39,7 +41,7 @@
 //
 // class declaration
 //
-class DummyStreamProducerExtWorker : public edm::stream::EDProducer<edm::ExternalWorker> {
+class DummyStreamProducerExtWorker : public edm::stream::EDProducer<edm::ExternalWork> {
 public:
     // some type aliasing
     using DataType = int;
@@ -154,8 +156,9 @@ void DummyStreamProducerExtWorker::acquire(edm::Event const& iEvent,
                                            edm::WaitingTaskWithArenaHolder holder) {
     std::thread(
         // capture list
-        [holder, &m_stream, &m_estart, &m_estop, m_size, &m_ha, &m_hb, &m_hc, &m_da, 
-         &m_db, &m_dc]{
+//        [holder, &m_stream, &m_estart, &m_estop, m_size, &m_ha, &m_hb, &m_hc, &m_da, 
+//         &m_db, &m_dc]{
+          [holder, this]{
             // do the work in this thread
             std::cout << "starting the work in external thread" << std::endl;
 
@@ -166,7 +169,7 @@ void DummyStreamProducerExtWorker::acquire(edm::Event const& iEvent,
             }
 
             // record the start of the event
-            cudaEventRecod(m_estart, m_stream);
+            cudaEventRecord(m_estart, m_stream);
 
             // perform the copy to device
             auto startCopy = std::chrono::high_resolution_clock::now();
@@ -200,7 +203,7 @@ void DummyStreamProducerExtWorker::acquire(edm::Event const& iEvent,
             cudaEventRecord(m_estop, m_stream);
             cudaEventSynchronize(m_estop);
             float elapsedTime {0.0};
-            cudaEventElapsedTime(&elapsedTiem, m_estart, m_estop);
+            cudaEventElapsedTime(&elapsedTime, m_estart, m_estop);
             printf("Time taken: %3.1f ms\n", elapsedTime);
 
             // move the holder and call done
