@@ -32,23 +32,23 @@ process.source = cms.Source("EmptySource")
 #
 # Declare an edm::stream producer to put into the pipeline
 #
-process.testGPU = cms.EDProducer('DummyStreamProducer',
-    size = cms.untracked.int32(10000),
+process.testExtWorker = cms.EDProducer('DummyExternalWorker',
+#    size = cms.untracked.int32(10000),
     # allocates the data as Page-Locked
-    isPinned = cms.untracked.bool(True)
+#    isPinned = cms.untracked.bool(True)
 )
 
 #
 # the pipeline
 #
-process.p = cms.Path(process.testGPU)
+process.p = cms.Path(process.testExtWorker)
 
 #
 # Preserve the edm Event content into the ROOT file
 #
 process.out = cms.OutputModule(
     "PoolOutputModule",
-    fileName = cms.untracked.string("test_streamproducer.root")
+    fileName = cms.untracked.string("test_stream_extworker.root")
 )
 
 #

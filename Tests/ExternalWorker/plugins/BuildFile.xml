@@ -2,7 +2,7 @@
 <use name="FWCore/PluginManager"/>
 <use name="FWCore/ParameterSet"/>
 
-<library file="*.cc" name="TestExternalWorkerPlugins">
+<library file="*.cc" name="TestsExternalWorkerPlugins">
     <flags EDM_PLUGIN="1"/>
 </library>
 

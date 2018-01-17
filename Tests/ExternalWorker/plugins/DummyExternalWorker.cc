@@ -17,6 +17,9 @@
 
 // system include files
 #include <memory>
+#include <thread>
+#include <iostream>
+#include <chrono>
 
 // user include files
 #include "FWCore/Framework/interface/Frameworkfwd.h"
@@ -46,6 +49,9 @@ public:
 
 private:
     // ----------member data ---------------------------
+    //
+    // external std thread
+    std::unique_ptr<std::thread> m_extThread;
 };
 
 //
@@ -62,12 +68,24 @@ DummyExternalWorker::~DummyExternalWorker()
 
 // acquire
 void DummyExternalWorker::acquire(edm::Event const& iEvent, edm::EventSetup const& iSetup,
-                                  edm::WaitingTaskWithArenaHolder) {
-
+                                  edm::WaitingTaskWithArenaHolder holder) {
+    // create an external thread and laucnh it!
+    std::thread(
+        [holder]{
+            // do work
+            std::this_thread::sleep_for(std::chrono::seconds(30));
+            std::cout << "Hello from External Thread" << std::endl;
+            // call the waiting task to be enqueued to the arena
+            edm::WaitingTaskWithArenaHolder newh = std::move(holder);
+            std::exception_ptr exc;
+            newh.doneWaiting(exc);
+        }
+    ).detach();
 }
 
 // ------------ method called to produce the data  ------------
 void DummyExternalWorker::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
+    std::cout << "DummyExtenralWorker::produce is called" << std::endl;
 }
 
 //define this as a plug-in
