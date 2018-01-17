@@ -4,6 +4,8 @@ import os
 numEvents = 20
 size = 1000000
 isPinned = True
+numberOfThreads = 8
+numberOfStreams = 8
 
 #
 # define a new process
@@ -52,8 +54,8 @@ process.p = cms.Path(process.testGPU)
 #
 process.out = cms.OutputModule(
     "PoolOutputModule",
-    fileName = cms.untracked.string("test_streamproducer_ext_work_%d_%d_%d.root" % (
-        numEvents, size, isPinned))
+    fileName = cms.untracked.string("test_streamproducer_ext_work_%d_%d_%d_%d.root" % (
+        numEvents, size, isPinned, numberOfThreads))
 )
 
 #
@@ -65,6 +67,6 @@ process.finalize = cms.EndPath(process.out)
 # Set the number of threads and CMSSW streams
 #
 process.options = cms.untracked.PSet(
-    numberOfThreads = cms.untracked.uint32(4),
-    numberOfStreams = cms.untracked.uint32(4)
+    numberOfThreads = cms.untracked.uint32(numberOfThreads),
+    numberOfStreams = cms.untracked.uint32(numberOfStreams)
 )

@@ -156,8 +156,6 @@ void DummyStreamProducerExtWorker::acquire(edm::Event const& iEvent,
                                            edm::WaitingTaskWithArenaHolder holder) {
     std::thread(
         // capture list
-//        [holder, &m_stream, &m_estart, &m_estop, m_size, &m_ha, &m_hb, &m_hc, &m_da, 
-//         &m_db, &m_dc]{
           [holder, this]{
             // do the work in this thread
             std::cout << "starting the work in external thread" << std::endl;
