@@ -62,11 +62,12 @@ DummyExternalWorker::~DummyExternalWorker()
 
 // acquire
 void DummyExternalWorker::acquire(edm::Event const& iEvent, edm::EventSetup const& iSetup,
-                                  edm::WaitingTaskWithArenaHolder)
+                                  edm::WaitingTaskWithArenaHolder) {
+
+}
 
 // ------------ method called to produce the data  ------------
-void DummyExternalWorker::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
-{
+void DummyExternalWorker::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
 }
 
 //define this as a plug-in
