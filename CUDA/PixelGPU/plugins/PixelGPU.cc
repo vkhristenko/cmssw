@@ -71,7 +71,14 @@ PixelGPU::PixelGPU(const edm::ParameterSet& iConfig)
         iConfig.getParameter<edm::InputTag>("InputLabel"));
 
     // initialize for now...
-    for (auto i = 0; i<FEDNumbering::MAXFEDID; i++)
+    for (int i = FEDNumbering::MINSiPixelFEDID; 
+         i <= FEDNumbering::MAXSiPixelFEDID; i++)
+        m_fedIds.push_back(i);
+    for (int i = FEDNumbering::MINSiPixeluTCAFEDID; 
+         i <= FEDNumbering::MAXSiPixeluTCAFEDID; i++)
+        m_fedIds.push_back(i);
+    for (int i = FEDNumbering::MINSiPixel2nduTCAFEDID; 
+         i <= FEDNumbering::MAXSiPixel2nduTCAFEDID; i++)
         m_fedIds.push_back(i);
 
    //register your products
@@ -118,6 +125,14 @@ PixelGPU::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
 
        std::cout << "fed = " << fid << "  "
            << "buffer length = " << rawData.size() << std::endl;
+       printf("dump the buffer:\n");
+       unsigned char const *data = rawData.data();
+       for (size_t ic=0; ic<rawData.size(); ic++) {
+           if (ic % 20 == 0)
+               printf("\n");
+           printf("%#x ", data[ic]);
+       }
+       printf("\n");
    }
 }
 
