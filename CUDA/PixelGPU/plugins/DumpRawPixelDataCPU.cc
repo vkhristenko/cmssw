@@ -206,7 +206,7 @@ DumpRawPixelDataCPU::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
            int pixel = (*dataWord >> SHIFT_PIXEL) & MASK_PIXEL;
            int adc = (*dataWord) & MASK_ADC;
            printf("\tunpacked data:\n");
-           printf("\t\tlink = %d roc = %d dcol = %d pixel = %d adc = %d", 
+           printf("\t\tlink = %d roc = %d dcol = %d pixel = %d adc = %d\n", 
                   link, roc, dcol, pixel, adc);
 
            // just to keep track
