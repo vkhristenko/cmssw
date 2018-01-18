@@ -2,4 +2,8 @@
 <use name="FWCore/PluginManager"/>
 <use name="FWCore/ParameterSet"/>
 <use name="DataFormats/FEDRawData"/>
-<flags EDM_PLUGIN="1"/>
+<use name="CUDA/PixelGPU"/>
+
+<library file="*.cc" name="CUDAPixelGPUPlugins">
+    <flags EDM_PLUGIN="1"/>
+</library>

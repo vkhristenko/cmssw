@@ -1,0 +1,5 @@
+<lcgdict>
+    <class name="testpixel::DigiFrame"/>
+    <class name="std::vector<testpixel::DigiFrame>"/>
+    <class name="edm::Wrapper<std::vector<testpixel::DigiFrame> >"/>
+</lcgdict>
