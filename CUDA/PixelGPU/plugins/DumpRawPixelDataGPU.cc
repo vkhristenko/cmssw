@@ -58,6 +58,9 @@ constexpr int MASK_DCOL = MASK_ROC;
 constexpr int MASK_PIXEL = 0x000000FF;
 constexpr int MASK_ADC = MASK_PIXEL;
 
+// just a safe observation
+constexpr int NUM_PIXELS_PER_FED = 2000;
+
 //
 // DUmmy Producer to dump the RAW Data for the Pixel FEDs
 //
@@ -67,7 +70,8 @@ class DumpRawPixelDataGPU : public edm::stream::EDProducer<edm::ExternalWork> {
       using Word64 = unsigned long;
       using Word32 = unsigned int;
       using DataWord = Word32;
-      using Product = std::vector<testpixel::DigiFrame>;
+      using DataType = testpixel::DigiFrame;
+      using Product = std::vector<DataType>;
 
       explicit DumpRawPixelDataGPU(const edm::ParameterSet&);
       ~DumpRawPixelDataGPU();
@@ -80,6 +84,8 @@ class DumpRawPixelDataGPU : public edm::stream::EDProducer<edm::ExternalWork> {
    private:
       edm::EDGetTokenT<FEDRawDataCollection> m_tRawCollection;
       std::vector<unsigned int> m_fedIds;
+
+      cudaStream_t m_stream;
 };
 
 //
@@ -111,6 +117,21 @@ DumpRawPixelDataGPU::DumpRawPixelDataGPU(const edm::ParameterSet& iConfig)
          i <= FEDNumbering::MAXSiPixel2nduTCAFEDID; i++)
         m_fedIds.push_back(i);
 
+    // number of feds
+    int size = FEDNumbering::MAXSiPixelFEDID - FEDNumbering::MINSiPixelFEDID + 1 + 
+        FEDNumbering::MAXSiPixeluTCAFEDID - FEDNumbering::MINSiPixeluTCAFEDID + 1 + 
+        FEDNumbering::MAXSiPixel2nduTCAFEDI - FEDNumbering::MINSiPixel2nduTCAFEDID + 1;
+
+    // allocate memory for the future digis
+    cudaHostAlloc((void**)&m_hdigis, size * sizeof(DataType) * NUM_PIXELS_PER_FED,
+        cudaHostAllocDefault);
+    // allocate memory for the data words
+    cudaHostAlloc((void**)&m_hwords, size * sizeof(Word32) * NUM_PIXELS_PER_FED,
+        cudaHostAllocDefault);
+
+    // create a stream
+    cudaStreamCreate(&m_stream);
+
    //register your products
 /* Examples
    produces<ExampleData2>();
@@ -135,104 +156,97 @@ DumpRawPixelDataGPU::~DumpRawPixelDataGPU()
 }
 
 //
-// acquire
+// produce
 //
-void DumpRawPixelDataGPU::acquire(edm::Event const& iEvent,
-                                  edm::EventSetup const& iSetup,
-                                  edm::WaitingTaskWithArenaHolder holder) {
+void DumpRawPixelDataGPU::produce(edm::Event& iEvent,
+                                  edm::EventSetup const& iSetup) {
     
 }
 
 //
-// produce
+// acquire
 //
 void
-DumpRawPixelDataGPU::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
-{
-   using namespace edm;
+DumpRawPixelDataGPU::acquire(edm::Event const& iEvent, const edm::EventSetup& iSetup,
+                             edm::WaitingTaskWithArenaHolder holder) {
+    std::thread(
+        [holder, this] {
+            // get the collection
+            edm::Handle<FEDRawDataCollection> hRawCollection;
+            iEvent.getByToken(m_tRawCollection, hRawCollection);
 
-   // extract the fed raw collection from the event
-   edm::Handle<FEDRawDataCollection> hRawCollection;
-   iEvent.getByToken(m_tRawCollection, hRawCollection);
+            // some initialization
+            int totalNumWords = 0;
+            std::vector<std::tuple<DataWord*, DataType*, int>> dataRecords;
 
-   // initialize the collection to be put into iEvent
-   Product digis;
+            // enqueue a kernel and input/output data transfers for each fed
+            for (auto fid : m_fedIds) {
+                // get he RAW Data for the given FED
+                FEDRawData const& rawData = hRawCollection->FEDData(fed);
 
-   for (auto fid : m_fedIds) {
-       // get the RAW Data for the given FED
-       FEDRawData const& rawData = hRawCollection->FEDData(fid);
+                // skip if no data
+                if (rawData.size() == 0) continue;
 
-       // skip FEDs without any raw buffers
-       if (rawData.size()==0) continue;
-       
-       int nWord64s = rawData.size() / sizeof(Word64);
-       printf("----------------------------fed: %d byte length: %lu Word64 length: %d--------------------------\n",
-              fid, reinterpret_cast<long unsigned int>(rawData.size()), nWord64s);
+                // get the number of 64 bit words and a pointer to the beginning
+                int nWords64 = rawData.size() / sizeof(Word64);
+                unsigned char const *data = rawData.data();
 
-       // dump the whole buffer without any interpretation
-       printf("dump the whole buffer:\n");
-       unsigned char const *data = rawData.data();
-       for (size_t ic=0; ic<rawData.size(); ic++) {
-           if (ic % 20 == 0)
-               printf("\n");
-           printf("%#x ", data[ic]);
-       }
-       printf("\n\n");
-       
-       // let's try to interpret the buffer
-       printf("interpreting the raw byte buffer:\n");
+                // get the header
+                Word64 const* header = reinterpret_cast<Word64 const*>(data);
+                FEDHeader fedHeader(data);
+                
+                // get the trailer 
+                Word64 const *trailer = reinterpret_cast<Word64 const*>(data) + nWords64 - 1;
+                FEDTrailer fedTrailer(reinterpret_cast<unsigned char const*>(trailer));
 
-       // header
-       printf("header:\n");
-       Word64 const *header = reinterpret_cast<Word64 const*>(data);
-       FEDHeader fedHeader(reinterpret_cast<unsigned char const *>(header));
-       printf("\tsourceId = %d\n", fedHeader.sourceID());
-       fedh_t const * test = reinterpret_cast<fedh_t const*>(data);
-       printf("\ttest sourceId = %d\n", test->sourceid >> 8);
-       printf("\tmoreHeaders = %s\n", fedHeader.moreHeaders() ? "yes" : "no");
+                // get data buffer and size
+                int numData = 2*(nWords64 - 1);
+                DataWord const* firstWord = (DataWord const*)(header+1);
 
-       // trailer words
-       printf("trailer:\n");
-       Word64 const *trailerWord = reinterpret_cast<Word64 const*>(data) + 
-           nWord64s - 1;
-       FEDTrailer fedTrailer(reinterpret_cast<unsigned char const*>(trailerWord));
-       printf("\tfragmentLength = %d\n", fedTrailer.fragmentLength());
-       printf("\tmoreTrailers = %s\n", fedTrailer.moreTrailers() ? "yes" : "no");
+                // allocate memory on the GPU for input/output
+                DataWord *d_data;
+                DataType *d_digis;
+                cudaMalloc(&d_data, numData * sizeof(DataWord));
+                cudaMalloc(&d_digis, numData * sizeof(DataType));
 
-       // data
-       printf("data:\n");
-       int numData32Words = 2*(nWord64s - 2); // - 4 32-bit (2 64-bit) h/t words
-       DataWord const* firstWord = (DataWord const*)(header+1);
-       DataWord const* lastWord = ((DataWord const*)(trailerWord-1))+1;
-       // the last word might be 0 in case of number of pixels being odd
-       if (*lastWord == 0) 
-           lastWord--;
-       int iWord = 0;
-       for (auto dataWord = firstWord; dataWord <= lastWord; dataWord++) {
-           printf("\tword %d raw data: %#x\n", iWord, *dataWord);
-           if (*dataWord == 0) continue;
+                // transfer input data
+                cudaMemcpyAsync(d_data, firstWord, numData * sizeof(DataWord),
+                    cudaMemcpyHostToDevice, m_stream);
 
-           // unpack 1 pixel data/coordinates
-           int link = (*dataWord >> SHIFT_LINK) & MASK_LINK;
-           int roc = (*dataWord >> SHIFT_ROC) & MASK_ROC;
-           int dcol = (*dataWord >> SHIFT_DCOL) & MASK_DCOL;
-           int pixel = (*dataWord >> SHIFT_PIXEL) & MASK_PIXEL;
-           int adc = (*dataWord) & MASK_ADC;
-//           DigiFrame frame {link, roc, dcol, pixel, adc};
-           digis.emplace_back(link, roc, dcol, pixel, adc);
-           printf("\tunpacked data:\n");
-           printf("\t\tlink = %d roc = %d dcol = %d pixel = %d adc = %d\n", 
-                  link, roc, dcol, pixel, adc);
+                // enqueue the kernel
 
-           // just to keep track
-           iWord++;
-       }
-   }
+                // remember pointers
+                dataRecords.push_back(std::make_tuple(d_data, d_digis, numData));
 
-   //
-   // put the unpacked digis into the collection
-   //
-   iEvent.put(std::make_unique<Product>(digis), "PixelDigisGPU");
+                totalNumWords += numData;
+            }
+            
+            // synch that everyone is finished
+            cudaStreamSynchronize(m_stream);
+
+            // transfer the results back and free defice memory
+            Product digis(totalNumWords);
+            DataType *currentDigi = digis.begin();
+            for (auto const& t : dataRecords) {
+                // extract the saved pointers
+                DataWord *d_data; 
+                DataType *d_digis;
+                int size;
+                std::tie(d_data, d_digis, size) = t;
+
+                // transfer the data from device back to the host
+                cudaMemcpyAsync(currentDigi, d_digis, sizeof(DataType) * size,
+                        cudaMemcpyDeviceToHost, m_stream);
+                
+                // move the pointer further
+                currentDigi += size;
+
+                // release memory on the device
+                cudaFree(d_data);
+                cudaFree(d_digis);
+            }
+        }
+    ).detach();
 }
 
 // ------------ method called once each stream before processing any runs, lumis or events  ------------
