@@ -1,22 +1,28 @@
 #ifndef CUDA_DataFormats_DigiFrame_h
 #define CUDA_DataFormats_DigiFrame_h
 
+#ifdef __CUDACC__
+#define CUDA_CALLABLE_MEMBER __host__ __device__
+#else
+#define CUDA_CALLABLE_MEMBER
+#endif 
+
 #include <vector>
 
 namespace testpixel {
 
 class DigiFrame {
 public:
-    DigiFrame(int link, int roc, int dcol, int pixel, int adc) :
+    CUDA_CALLABLE_MEMBER DigiFrame(int link, int roc, int dcol, int pixel, int adc) :
         m_link(link), m_roc(roc), m_dcol(dcol), m_pixel(pixel), m_adc(adc) 
     {}
 
-    DigiFrame() = default;
+    CUDA_CALLABLE_MEMBER DigiFrame() = default;
 
     // copy ctor
-    DigiFrame(DigiFrame const&) = default;
+    CUDA_CALLABLE_MEMBER DigiFrame(DigiFrame const&) = default;
     // move ctor
-    DigiFrame(DigiFrame&& rhs) :
+    CUDA_CALLABLE_MEMBER DigiFrame(DigiFrame&& rhs) :
         m_link(std::move(rhs.m_link)),
         m_roc(std::move(rhs.m_roc)),
         m_dcol(std::move(rhs.m_dcol)),

@@ -40,6 +40,7 @@
 #include "DataFormats/FEDRawData/src/fed_header.h"
 
 #include "CUDA/DataFormats/interface/DigiFrame.h"
+#include "CUDA/PixelGPU/interface/kernels.h"
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -68,7 +69,7 @@ constexpr int NUM_PIXELS_PER_FED = 2000;
 //
 // DUmmy Producer to dump the RAW Data for the Pixel FEDs
 //
-class DumpRawPixelDataGPU : public edm::stream::EDProducer<edm::ExternalWork> {
+class DumpRawPixelDataGPU : public edm::stream::EDProducer<> {
    public:
       // some type aliasing
       using Word64 = unsigned long;
@@ -83,8 +84,8 @@ class DumpRawPixelDataGPU : public edm::stream::EDProducer<edm::ExternalWork> {
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
 
       virtual void produce(edm::Event&, const edm::EventSetup&) override;
-      virtual void acquire(edm::Event const&, edm::EventSetup const&, 
-                           edm::WaitingTaskWithArenaHolder) override; 
+ //     virtual void acquire(edm::Event const&, edm::EventSetup const&, 
+ //                          edm::WaitingTaskWithArenaHolder) override; 
    private:
       edm::EDGetTokenT<FEDRawDataCollection> m_tRawCollection;
       std::vector<unsigned int> m_fedIds;
@@ -155,22 +156,24 @@ DumpRawPixelDataGPU::~DumpRawPixelDataGPU()
 //
 // produce
 //
-void DumpRawPixelDataGPU::produce(edm::Event& iEvent,
-                                  edm::EventSetup const& iSetup) {
-    
-}
+//void DumpRawPixelDataGPU::produce(edm::Event& iEvent,
+//                                  edm::EventSetup const& iSetup) {
+// iEvent.put(std::make_unique<Product>(), "PixelDigisGPU");
+//}
 
 //
 // acquire
 //
 void
-DumpRawPixelDataGPU::acquire(edm::Event const& iEvent, const edm::EventSetup& iSetup,
-                             edm::WaitingTaskWithArenaHolder holder) {
-    std::thread(
-        [holder, &iEvent, this] {
-            // get the collection
-            edm::Handle<FEDRawDataCollection> hRawCollection;
-            iEvent.getByToken(m_tRawCollection, hRawCollection);
+DumpRawPixelDataGPU::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
+ //                            edm::WaitingTaskWithArenaHolder holder) {
+    // get the collection
+    edm::Handle<FEDRawDataCollection> hRawCollection;
+    iEvent.getByToken(m_tRawCollection, hRawCollection);
+
+    // launch the thread
+//    std::thread(
+//        [holder, &hRawCollection, this] {
 
             // some initialization
             int totalNumWords = 0;
@@ -180,6 +183,7 @@ DumpRawPixelDataGPU::acquire(edm::Event const& iEvent, const edm::EventSetup& iS
             for (auto fid : m_fedIds) {
                 // get he RAW Data for the given FED
                 FEDRawData const& rawData = hRawCollection->FEDData(fid);
+
 
                 // skip if no data
                 if (rawData.size() == 0) continue;
@@ -211,19 +215,20 @@ DumpRawPixelDataGPU::acquire(edm::Event const& iEvent, const edm::EventSetup& iS
                     cudaMemcpyHostToDevice, m_stream);
 
                 // enqueue the kernel
+                testpixel::wrap_raw2digi_simple(m_stream, d_data, d_digis, numData);
 
                 // remember pointers
                 dataRecords.push_back(std::make_tuple(d_data, d_digis, numData));
 
                 totalNumWords += numData;
             }
-            
+
             // synch that everyone is finished
             cudaStreamSynchronize(m_stream);
 
             // transfer the results back and free defice memory
             Product digis(totalNumWords);
-            DataType *currentDigi = digis.begin();
+            Product::iterator currentDigi = digis.begin();
             for (auto const& t : dataRecords) {
                 // extract the saved pointers
                 DataWord *d_data; 
@@ -232,7 +237,7 @@ DumpRawPixelDataGPU::acquire(edm::Event const& iEvent, const edm::EventSetup& iS
                 std::tie(d_data, d_digis, size) = t;
 
                 // transfer the data from device back to the host
-                cudaMemcpyAsync(currentDigi, d_digis, sizeof(DataType) * size,
+                cudaMemcpyAsync(&(*currentDigi), d_digis, sizeof(DataType) * size,
                         cudaMemcpyDeviceToHost, m_stream);
                 
                 // move the pointer further
@@ -242,8 +247,18 @@ DumpRawPixelDataGPU::acquire(edm::Event const& iEvent, const edm::EventSetup& iS
                 cudaFree(d_data);
                 cudaFree(d_digis);
             }
-        }
-    ).detach();
+
+            // sync that the copy is finished
+            cudaStreamSynchronize(m_stream);
+
+    iEvent.put(std::make_unique<Product>(digis), "PixelDigisGPU");
+
+            // signal to tbb that we are done with offloading
+//            edm::WaitingTaskWithArenaHolder newh = std::move(holder);
+//            std::exception_ptr exc;
+//            newh.doneWaiting(exc);
+ //       }
+//    ).detach();
 }
 
 // ------------ method called once each stream before processing any runs, lumis or events  ------------

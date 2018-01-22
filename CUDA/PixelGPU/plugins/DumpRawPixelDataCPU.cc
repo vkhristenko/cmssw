@@ -39,6 +39,8 @@
 
 #include "CUDA/DataFormats/interface/DigiFrame.h"
 
+#define DONOTPRINT
+
 // some constants
 constexpr int BITS_LINK = 6;
 constexpr int BITS_ROC = 5;
@@ -157,12 +159,15 @@ DumpRawPixelDataCPU::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
        if (rawData.size()==0) continue;
        
        int nWord64s = rawData.size() / sizeof(Word64);
+#ifndef DONOTPRINT
        printf("----------------------------fed: %d byte length: %lu Word64 length: %d--------------------------\n",
               fid, reinterpret_cast<long unsigned int>(rawData.size()), nWord64s);
+#endif
 
        // dump the whole buffer without any interpretation
-       printf("dump the whole buffer:\n");
        unsigned char const *data = rawData.data();
+#ifndef DONOTPRINT
+       printf("dump the whole buffer:\n");
        for (size_t ic=0; ic<rawData.size(); ic++) {
            if (ic % 20 == 0)
                printf("\n");
@@ -170,28 +175,43 @@ DumpRawPixelDataCPU::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
        }
        printf("\n\n");
        
+#endif
        // let's try to interpret the buffer
+#ifndef DONOTPRINT
        printf("interpreting the raw byte buffer:\n");
+#endif
 
        // header
+#ifndef DONOTPRINT
        printf("header:\n");
+#endif
        Word64 const *header = reinterpret_cast<Word64 const*>(data);
        FEDHeader fedHeader(reinterpret_cast<unsigned char const *>(header));
+#ifndef DONOTPRINT
        printf("\tsourceId = %d\n", fedHeader.sourceID());
+#endif
        fedh_t const * test = reinterpret_cast<fedh_t const*>(data);
+#ifndef DONOTPRINT
        printf("\ttest sourceId = %d\n", test->sourceid >> 8);
        printf("\tmoreHeaders = %s\n", fedHeader.moreHeaders() ? "yes" : "no");
+#endif
 
        // trailer words
+#ifndef DONOTPRINT
        printf("trailer:\n");
+#endif
        Word64 const *trailerWord = reinterpret_cast<Word64 const*>(data) + 
            nWord64s - 1;
        FEDTrailer fedTrailer(reinterpret_cast<unsigned char const*>(trailerWord));
+#ifndef DONOTPRINT
        printf("\tfragmentLength = %d\n", fedTrailer.fragmentLength());
        printf("\tmoreTrailers = %s\n", fedTrailer.moreTrailers() ? "yes" : "no");
+#endif
 
        // data
+#ifndef DONOTPRINT
        printf("data:\n");
+#endif
        int numData32Words = 2*(nWord64s - 2); // - 4 32-bit (2 64-bit) h/t words
        DataWord const* firstWord = (DataWord const*)(header+1);
        DataWord const* lastWord = ((DataWord const*)(trailerWord-1))+1;
@@ -200,7 +220,9 @@ DumpRawPixelDataCPU::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
            lastWord--;
        int iWord = 0;
        for (auto dataWord = firstWord; dataWord <= lastWord; dataWord++) {
+#ifndef DONOTPRINT
            printf("\tword %d raw data: %#x\n", iWord, *dataWord);
+#endif
            if (*dataWord == 0) continue;
 
            // unpack 1 pixel data/coordinates
@@ -211,9 +233,11 @@ DumpRawPixelDataCPU::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
            int adc = (*dataWord) & MASK_ADC;
 //           DigiFrame frame {link, roc, dcol, pixel, adc};
            digis.emplace_back(link, roc, dcol, pixel, adc);
+#ifndef DONOTPRINT
            printf("\tunpacked data:\n");
            printf("\t\tlink = %d roc = %d dcol = %d pixel = %d adc = %d\n", 
                   link, roc, dcol, pixel, adc);
+#endif
 
            // just to keep track
            iWord++;
