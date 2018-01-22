@@ -19,6 +19,7 @@
 
 // system include files
 #include <memory>
+#include <thread>
 #include <iostream>
 
 // user include files
@@ -39,6 +40,9 @@
 #include "DataFormats/FEDRawData/src/fed_header.h"
 
 #include "CUDA/DataFormats/interface/DigiFrame.h"
+
+#include <cuda.h>
+#include <cuda_runtime.h>
 
 // some constants
 constexpr int BITS_LINK = 6;
@@ -120,14 +124,7 @@ DumpRawPixelDataGPU::DumpRawPixelDataGPU(const edm::ParameterSet& iConfig)
     // number of feds
     int size = FEDNumbering::MAXSiPixelFEDID - FEDNumbering::MINSiPixelFEDID + 1 + 
         FEDNumbering::MAXSiPixeluTCAFEDID - FEDNumbering::MINSiPixeluTCAFEDID + 1 + 
-        FEDNumbering::MAXSiPixel2nduTCAFEDI - FEDNumbering::MINSiPixel2nduTCAFEDID + 1;
-
-    // allocate memory for the future digis
-    cudaHostAlloc((void**)&m_hdigis, size * sizeof(DataType) * NUM_PIXELS_PER_FED,
-        cudaHostAllocDefault);
-    // allocate memory for the data words
-    cudaHostAlloc((void**)&m_hwords, size * sizeof(Word32) * NUM_PIXELS_PER_FED,
-        cudaHostAllocDefault);
+        FEDNumbering::MAXSiPixel2nduTCAFEDID - FEDNumbering::MINSiPixel2nduTCAFEDID + 1;
 
     // create a stream
     cudaStreamCreate(&m_stream);
@@ -170,7 +167,7 @@ void
 DumpRawPixelDataGPU::acquire(edm::Event const& iEvent, const edm::EventSetup& iSetup,
                              edm::WaitingTaskWithArenaHolder holder) {
     std::thread(
-        [holder, this] {
+        [holder, &iEvent, this] {
             // get the collection
             edm::Handle<FEDRawDataCollection> hRawCollection;
             iEvent.getByToken(m_tRawCollection, hRawCollection);
@@ -182,7 +179,7 @@ DumpRawPixelDataGPU::acquire(edm::Event const& iEvent, const edm::EventSetup& iS
             // enqueue a kernel and input/output data transfers for each fed
             for (auto fid : m_fedIds) {
                 // get he RAW Data for the given FED
-                FEDRawData const& rawData = hRawCollection->FEDData(fed);
+                FEDRawData const& rawData = hRawCollection->FEDData(fid);
 
                 // skip if no data
                 if (rawData.size() == 0) continue;
@@ -251,7 +248,8 @@ DumpRawPixelDataGPU::acquire(edm::Event const& iEvent, const edm::EventSetup& iS
 
 // ------------ method called once each stream before processing any runs, lumis or events  ------------
 /*void
-DumpRawPixelDataGPU::beginStream(edm::StreamID)
+DumpRawPixelDataGPU::beginStream(edm::StreamID
+
 {
 }*/
 
