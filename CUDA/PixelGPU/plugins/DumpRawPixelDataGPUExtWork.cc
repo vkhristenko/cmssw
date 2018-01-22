@@ -1,9 +1,9 @@
 // -*- C++ -*-
 //
-// Package:    CUDA/DumpRawPixelDataGPU
-// Class:      DumpRawPixelDataGPU
+// Package:    CUDA/DumpRawPixelDataGPUExtWork
+// Class:      DumpRawPixelDataGPUExtWork
 // 
-/**\class DumpRawPixelDataGPU DumpRawPixelDataGPU.cc CUDA/DumpRawPixelDataGPU/plugins/DumpRawPixelDataGPU.cc
+/**\class DumpRawPixelDataGPUExtWork DumpRawPixelDataGPUExtWork.cc CUDA/DumpRawPixelDataGPUExtWork/plugins/DumpRawPixelDataGPUExtWork.cc
 
  Description: [one line class summary]
 
@@ -69,7 +69,7 @@ constexpr int NUM_PIXELS_PER_FED = 2000;
 //
 // DUmmy Producer to dump the RAW Data for the Pixel FEDs
 //
-class DumpRawPixelDataGPU : public edm::stream::EDProducer<> {
+class DumpRawPixelDataGPUExtWork : public edm::stream::EDProducer<> {
    public:
       // some type aliasing
       using Word64 = unsigned long;
@@ -78,8 +78,8 @@ class DumpRawPixelDataGPU : public edm::stream::EDProducer<> {
       using DataType = testpixel::DigiFrame;
       using Product = std::vector<DataType>;
 
-      explicit DumpRawPixelDataGPU(const edm::ParameterSet&);
-      ~DumpRawPixelDataGPU();
+      explicit DumpRawPixelDataGPUExtWork(const edm::ParameterSet&);
+      ~DumpRawPixelDataGPUExtWork();
 
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
 
@@ -89,7 +89,6 @@ class DumpRawPixelDataGPU : public edm::stream::EDProducer<> {
    private:
       edm::EDGetTokenT<FEDRawDataCollection> m_tRawCollection;
       std::vector<unsigned int> m_fedIds;
-      std::string m_label;
 
       cudaStream_t m_stream;
 };
@@ -106,12 +105,11 @@ class DumpRawPixelDataGPU : public edm::stream::EDProducer<> {
 //
 // constructors and destructor
 //
-DumpRawPixelDataGPU::DumpRawPixelDataGPU(const edm::ParameterSet& iConfig)
+DumpRawPixelDataGPUExtWork::DumpRawPixelDataGPUExtWork(const edm::ParameterSet& iConfig)
 {
     // get the input label for the raw colletion
     m_tRawCollection = consumes<FEDRawDataCollection>(
         iConfig.getParameter<edm::InputTag>("InputLabel"));
-    m_label = iConfig.getParameter<std::string>("label");
 
     // initialize for now...
     for (int i = FEDNumbering::MINSiPixelFEDID; 
@@ -143,11 +141,11 @@ DumpRawPixelDataGPU::DumpRawPixelDataGPU(const edm::ParameterSet& iConfig)
    produces<ExampleData2,InRun>();
 */
    //now do what ever other initialization is needed
-    produces<std::vector<testpixel::DigiFrame> >("PixelDigisGPU" + m_label) ; 
+    produces<std::vector<testpixel::DigiFrame> >("PixelDigisGPUExtWork") ; 
 }
 
 
-DumpRawPixelDataGPU::~DumpRawPixelDataGPU()
+DumpRawPixelDataGPUExtWork::~DumpRawPixelDataGPUExtWork()
 {
  
    // do anything here that needs to be done at destruction time
@@ -158,16 +156,16 @@ DumpRawPixelDataGPU::~DumpRawPixelDataGPU()
 //
 // produce
 //
-//void DumpRawPixelDataGPU::produce(edm::Event& iEvent,
+//void DumpRawPixelDataGPUExtWork::produce(edm::Event& iEvent,
 //                                  edm::EventSetup const& iSetup) {
-// iEvent.put(std::make_unique<Product>(), "PixelDigisGPU");
+// iEvent.put(std::make_unique<Product>(), "PixelDigisGPUExtWork");
 //}
 
 //
 // acquire
 //
 void
-DumpRawPixelDataGPU::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
+DumpRawPixelDataGPUExtWork::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
  //                            edm::WaitingTaskWithArenaHolder holder) {
     // get the collection
     edm::Handle<FEDRawDataCollection> hRawCollection;
@@ -203,10 +201,10 @@ DumpRawPixelDataGPU::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
                 FEDTrailer fedTrailer(reinterpret_cast<unsigned char const*>(trailer));
 
                 // get data buffer and size
-                int numData = 2*(nWords64 - 2);
+                int numData = 2*(nWords64 - 1);
                 DataWord const* firstWord = (DataWord const*)(header+1);
 
-                // allocate memory on the GPU for input/output
+                // allocate memory on the GPUExtWork for input/output
                 DataWord *d_data;
                 DataType *d_digis;
                 cudaMalloc(&d_data, numData * sizeof(DataWord));
@@ -253,7 +251,7 @@ DumpRawPixelDataGPU::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
             // sync that the copy is finished
             cudaStreamSynchronize(m_stream);
 
-    iEvent.put(std::make_unique<Product>(digis), "PixelDigisGPU" + m_label);
+    iEvent.put(std::make_unique<Product>(digis), "PixelDigisGPUExtWork");
 
             // signal to tbb that we are done with offloading
 //            edm::WaitingTaskWithArenaHolder newh = std::move(holder);
@@ -265,20 +263,20 @@ DumpRawPixelDataGPU::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) 
 
 // ------------ method called once each stream before processing any runs, lumis or events  ------------
 /*void
-DumpRawPixelDataGPU::beginStream(edm::StreamID
+DumpRawPixelDataGPUExtWork::beginStream(edm::StreamID
 
 {
 }*/
 
 // ------------ method called once each stream after processing all runs, lumis and events  ------------
 /*void
-DumpRawPixelDataGPU::endStream() {
+DumpRawPixelDataGPUExtWork::endStream() {
 }*/
 
 // ------------ method called when starting to processes a run  ------------
 /*
 void
-DumpRawPixelDataGPU::beginRun(edm::Run const&, edm::EventSetup const&)
+DumpRawPixelDataGPUExtWork::beginRun(edm::Run const&, edm::EventSetup const&)
 {
 }
 */
@@ -286,7 +284,7 @@ DumpRawPixelDataGPU::beginRun(edm::Run const&, edm::EventSetup const&)
 // ------------ method called when ending the processing of a run  ------------
 /*
 void
-DumpRawPixelDataGPU::endRun(edm::Run const&, edm::EventSetup const&)
+DumpRawPixelDataGPUExtWork::endRun(edm::Run const&, edm::EventSetup const&)
 {
 }
 */
@@ -294,7 +292,7 @@ DumpRawPixelDataGPU::endRun(edm::Run const&, edm::EventSetup const&)
 // ------------ method called when starting to processes a luminosity block  ------------
 /*
 void
-DumpRawPixelDataGPU::beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&)
+DumpRawPixelDataGPUExtWork::beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&)
 {
 }
 */
@@ -302,14 +300,14 @@ DumpRawPixelDataGPU::beginLuminosityBlock(edm::LuminosityBlock const&, edm::Even
 // ------------ method called when ending the processing of a luminosity block  ------------
 /*
 void
-DumpRawPixelDataGPU::endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&)
+DumpRawPixelDataGPUExtWork::endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&)
 {
 }
 */
  
 // ------------ method fills 'descriptions' with the allowed parameters for the module  ------------
 void
-DumpRawPixelDataGPU::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
+DumpRawPixelDataGPUExtWork::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
   //The following says we do not know what parameters are allowed so do no validation
   // Please change this to state exactly what you do use, even if it is no parameters
   edm::ParameterSetDescription desc;
@@ -318,4 +316,4 @@ DumpRawPixelDataGPU::fillDescriptions(edm::ConfigurationDescriptions& descriptio
 }
 
 //define this as a plug-in
-DEFINE_FWK_MODULE(DumpRawPixelDataGPU);
+DEFINE_FWK_MODULE(DumpRawPixelDataGPUExtWork);

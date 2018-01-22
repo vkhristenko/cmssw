@@ -24,9 +24,10 @@ process.source = cms.Source("PoolSource",
 #
 # Here is our GPU Producer
 #
-process.dump = cms.EDProducer(
+process.dump1 = cms.EDProducer(
     'DumpRawPixelDataGPU',
-    InputLabel = cms.InputTag("rawDataCollector")
+    InputLabel = cms.InputTag("rawDataCollector"),
+    label = cms.string("1")
 )
 
 #
@@ -36,8 +37,7 @@ process.out = cms.OutputModule("PoolOutputModule",
     fileName = cms.untracked.string("raw2digi_test_gpu.root")
 )
 
-  
-process.p = cms.Path(process.dump)
+process.p = cms.Path(process.dump1)  
 
 process.e = cms.EndPath(process.out)
 

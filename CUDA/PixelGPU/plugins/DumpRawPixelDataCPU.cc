@@ -216,14 +216,14 @@ DumpRawPixelDataCPU::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
        DataWord const* firstWord = (DataWord const*)(header+1);
        DataWord const* lastWord = ((DataWord const*)(trailerWord-1))+1;
        // the last word might be 0 in case of number of pixels being odd
-       if (*lastWord == 0) 
-           lastWord--;
+//       if (*lastWord == 0) 
+//           lastWord--;
        int iWord = 0;
        for (auto dataWord = firstWord; dataWord <= lastWord; dataWord++) {
 #ifndef DONOTPRINT
            printf("\tword %d raw data: %#x\n", iWord, *dataWord);
 #endif
-           if (*dataWord == 0) continue;
+ //          if (*dataWord == 0) continue;
 
            // unpack 1 pixel data/coordinates
            int link = (*dataWord >> SHIFT_LINK) & MASK_LINK;
