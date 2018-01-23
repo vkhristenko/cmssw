@@ -37,6 +37,13 @@
 #include "DataFormats/FEDRawData/interface/FEDTrailer.h"
 #include "DataFormats/FEDRawData/src/fed_header.h"
 
+#include "CondFormats/SiPixelObjects/interface/SiPixelFedCablingTree.h"
+#include "CondFormats/DataRecord/interface/SiPixelFedCablingMapRcd.h"
+#include "CondFormats/SiPixelObjects/interface/SiPixelFedCablingMap.h"
+
+#include "FWCore/Framework/interface/ESTransientHandle.h"
+#include "FWCore/Framework/interface/ESWatcher.h"
+
 #include "CUDA/DataFormats/interface/DigiFrame.h"
 
 #define DONOTPRINT
@@ -79,6 +86,11 @@ class DumpRawPixelDataCPU : public edm::stream::EDProducer<> {
    private:
       edm::EDGetTokenT<FEDRawDataCollection> m_tRawCollection;
       std::vector<unsigned int> m_fedIds;
+
+      // to watch for the changes in conditions
+      edm::ESWatcher<SiPixelFedCablingMapRcd> m_mapWatcher;
+      std::string m_cablingMapLabel;
+      std::unique_ptr<SiPixelFedCablingTree> m_cablingTree;
 };
 
 //
@@ -143,6 +155,14 @@ void
 DumpRawPixelDataCPU::produce(edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
    using namespace edm;
+
+   // check the changes in conditions
+   if (m_mapWatcher.check(iSetup)) {
+       edm::ESTransientHandle<SiPixelFedCablingMap> eshCablingMap;
+       iSetup.get<SiPixelFedCablingMapRcd>().get(m_cablingMapLabel, eshCablingMap);
+       m_fedIds = eshCablingMap->fedIds();
+       m_cablingTree = eshCablingMap->cablingTree();
+   }
 
    // extract the fed raw collection from the event
    edm::Handle<FEDRawDataCollection> hRawCollection;
