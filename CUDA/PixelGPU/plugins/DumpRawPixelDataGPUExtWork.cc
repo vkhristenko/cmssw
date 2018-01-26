@@ -69,7 +69,7 @@ constexpr int NUM_PIXELS_PER_FED = 2000;
 //
 // DUmmy Producer to dump the RAW Data for the Pixel FEDs
 //
-class DumpRawPixelDataGPUExtWork : public edm::stream::EDProducer<> {
+class DumpRawPixelDataGPUExtWork : public edm::stream::EDProducer<edm::ExternalWork> {
    public:
       // some type aliasing
       using Word64 = unsigned long;
@@ -84,8 +84,8 @@ class DumpRawPixelDataGPUExtWork : public edm::stream::EDProducer<> {
       static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
 
       virtual void produce(edm::Event&, const edm::EventSetup&) override;
- //     virtual void acquire(edm::Event const&, edm::EventSetup const&, 
- //                          edm::WaitingTaskWithArenaHolder) override; 
+      virtual void acquire(edm::Event const&, edm::EventSetup const&, 
+                           edm::WaitingTaskWithArenaHolder) override; 
    private:
       edm::EDGetTokenT<FEDRawDataCollection> m_tRawCollection;
       std::vector<unsigned int> m_fedIds;
@@ -156,24 +156,24 @@ DumpRawPixelDataGPUExtWork::~DumpRawPixelDataGPUExtWork()
 //
 // produce
 //
-//void DumpRawPixelDataGPUExtWork::produce(edm::Event& iEvent,
-//                                  edm::EventSetup const& iSetup) {
-// iEvent.put(std::make_unique<Product>(), "PixelDigisGPUExtWork");
-//}
+void DumpRawPixelDataGPUExtWork::produce(edm::Event& iEvent,
+                                  edm::EventSetup const& iSetup) {
+ iEvent.put(std::make_unique<Product>(), "PixelDigisGPUExtWork");
+}
 
 //
 // acquire
 //
 void
-DumpRawPixelDataGPUExtWork::produce(edm::Event& iEvent, const edm::EventSetup& iSetup) {
- //                            edm::WaitingTaskWithArenaHolder holder) {
-    // get the collection
-    edm::Handle<FEDRawDataCollection> hRawCollection;
-    iEvent.getByToken(m_tRawCollection, hRawCollection);
-
+DumpRawPixelDataGPUExtWork::acquire(edm::Event const& iEvent, 
+                                    const edm::EventSetup& iSetup,
+                                    edm::WaitingTaskWithArenaHolder holder) {
     // launch the thread
-//    std::thread(
-//        [holder, &hRawCollection, this] {
+    std::thread(
+        [holder, &iEvent, this] {
+            // get the collection
+            edm::Handle<FEDRawDataCollection> hRawCollection;
+            iEvent.getByToken(m_tRawCollection, hRawCollection);
 
             // some initialization
             int totalNumWords = 0;
@@ -250,15 +250,13 @@ DumpRawPixelDataGPUExtWork::produce(edm::Event& iEvent, const edm::EventSetup& i
 
             // sync that the copy is finished
             cudaStreamSynchronize(m_stream);
-
-    iEvent.put(std::make_unique<Product>(digis), "PixelDigisGPUExtWork");
-
+           
             // signal to tbb that we are done with offloading
-//            edm::WaitingTaskWithArenaHolder newh = std::move(holder);
-//            std::exception_ptr exc;
-//            newh.doneWaiting(exc);
- //       }
-//    ).detach();
+            edm::WaitingTaskWithArenaHolder newh = std::move(holder);
+            std::exception_ptr exc;
+            newh.doneWaiting(exc);
+       }
+    ).detach();
 }
 
 // ------------ method called once each stream before processing any runs, lumis or events  ------------
