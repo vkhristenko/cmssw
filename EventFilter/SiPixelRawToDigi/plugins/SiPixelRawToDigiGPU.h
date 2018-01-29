@@ -17,6 +17,7 @@
 #include "FWCore/Framework/interface/ConsumesCollector.h"
 #include "FWCore/Utilities/interface/CPUTimer.h"
 #include "FWCore/Concurrency/interface/WaitingTaskWithArenaHolder.h"
+#include "EventFilter/SiPixelRawToDigi/interface/PixelDataFormatter.h"
 #include "RawToDigiGPU.h"
 
 class SiPixelFedCablingTree;
@@ -70,6 +71,7 @@ private:
   unsigned int *fedIndex;    // to hold fed index inside word[] array for rawtodigi on GPU
   unsigned int m_wordCounterGPU;
   int m_theWordCounter;
+  PixelDataFormatter::Errors m_errors;
 
   // to store the output
   uint32_t *xx_h, *yy_h, *adc_h, *rawIdArr_h;                   // host copy of output

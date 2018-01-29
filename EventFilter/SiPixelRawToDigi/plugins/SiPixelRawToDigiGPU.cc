@@ -13,6 +13,7 @@
 #include <chrono>
 #include <iostream>
 #include <fstream>
+#include <thread>
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -32,7 +33,6 @@
 #include "DataFormats/SiPixelDetId/interface/PixelFEDChannel.h"
 #include "DataFormats/SiPixelDigi/interface/PixelDigi.h"
 #include "DataFormats/SiPixelRawData/interface/SiPixelRawDataError.h"
-#include "EventFilter/SiPixelRawToDigi/interface/PixelDataFormatter.h"
 #include "EventFilter/SiPixelRawToDigi/interface/PixelUnpackingRegions.h"
 #include "FWCore/Framework/interface/ConsumesCollector.h"
 #include "FWCore/Framework/interface/ESHandle.h"
@@ -242,6 +242,8 @@ void SiPixelRawToDigiGPU::produce(edm::Event & ev,
     auto tkerror_detidcollection = std::make_unique<DetIdCollection>();
     auto usererror_detidcollection = std::make_unique<DetIdCollection>();
     auto disabled_channelcollection = std::make_unique<edmNew::DetSetVector<PixelFEDChannel> >();
+    PixelDataFormatter::DetErrors nodeterrors;
+    PixelDataFormatter formatter(cabling_.get(), usePhase1); // for phase 1 & 0
   
     //
     edm::DetSet<PixelDigi> * detDigis=nullptr;
@@ -274,7 +276,7 @@ void SiPixelRawToDigiGPU::produce(edm::Event & ev,
 
         if (errType_h[i] != 0) {
             SiPixelRawDataError error(errWord_h[i], errType_h[i], errFedID_h[i]);
-            errors[errRawID_h[i]].push_back(error);
+            m_errors[errRawID_h[i]].push_back(error);
         }
 
     }
@@ -295,11 +297,11 @@ void SiPixelRawToDigiGPU::produce(edm::Event & ev,
   if (includeErrors) {
 
     typedef PixelDataFormatter::Errors::iterator IE;
-    for (IE is = errors.begin(); is != errors.end(); is++) {
+    for (IE is = m_errors.begin(); is != m_errors.end(); is++) {
 
       uint32_t errordetid = is->first;
       if (errordetid == dummydetid) {// errors given dummy detId must be sorted by Fed
-        nodeterrors.insert( nodeterrors.end(), errors[errordetid].begin(), errors[errordetid].end() );
+        nodeterrors.insert( nodeterrors.end(), m_errors[errordetid].begin(), m_errors[errordetid].end() );
       }
       else {
         edm::DetSet<SiPixelRawDataError>& errorDetSet = errorcollection->find_or_insert(errordetid);
@@ -379,10 +381,15 @@ void SiPixelRawToDigiGPU::produce(edm::Event & ev,
 //
 // acquire
 //
-void SiPixelRawToDigiGPU::acquire(edm::Event& ev, 
+void SiPixelRawToDigiGPU::acquire(edm::Event const& ev, 
                                   const edm::EventSetup& es,
                                   edm::WaitingTaskWithArenaHolder holder) {
-  m_theWordCounter = 0;
+    //
+    // some initializations
+    //
+    m_theWordCounter = 0;
+    m_errors.clear();
+
   //debug = edm::MessageDrop::instance()->debugEnabled;
   debug = false;
 
@@ -423,9 +430,6 @@ void SiPixelRawToDigiGPU::acquire(edm::Event& ev,
   //PixelDataFormatter formatter(cabling_.get()); // phase 0 only
   PixelDataFormatter formatter(cabling_.get(), usePhase1); // for phase 1 & 0
 
-  PixelDataFormatter::DetErrors nodeterrors;
-  PixelDataFormatter::Errors errors;
-
   if (theTimer) theTimer->start();
 
   // GPU specific: Data extraction for RawToDigi GPU
@@ -464,7 +468,7 @@ void SiPixelRawToDigiGPU::acquire(edm::Event& ev,
 
     // check CRC bit
     const cms_uint64_t* trailer = reinterpret_cast<const cms_uint64_t* >(rawData.data())+(nWords-1);
-    if (!errorcheck.checkCRC(errorsInEvent, fedId, trailer, errors)) {
+    if (!errorcheck.checkCRC(errorsInEvent, fedId, trailer, m_errors)) {
       word[m_wordCounterGPU++] = 0;
       continue;
     }
@@ -475,7 +479,7 @@ void SiPixelRawToDigiGPU::acquire(edm::Event& ev,
     while (moreHeaders) {
       header++;
       //LogTrace("") << "HEADER:  " <<  print(*header);
-      bool headerStatus = errorcheck.checkHeader(errorsInEvent, fedId, header, errors);
+      bool headerStatus = errorcheck.checkHeader(errorsInEvent, fedId, header, m_errors);
       moreHeaders = headerStatus;
     }
 
@@ -485,7 +489,8 @@ void SiPixelRawToDigiGPU::acquire(edm::Event& ev,
     while (moreTrailers) {
       trailer--;
       //LogTrace("") << "TRAILER: " <<  print(*trailer);
-      bool trailerStatus = errorcheck.checkTrailer(errorsInEvent, fedId, nWords, trailer, errors);
+      bool trailerStatus = errorcheck.checkTrailer(errorsInEvent, fedId, nWords, trailer, 
+              m_errors);
       moreTrailers = trailerStatus;
     }
 
