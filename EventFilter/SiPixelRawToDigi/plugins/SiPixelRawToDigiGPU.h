@@ -16,6 +16,7 @@
 #include "DataFormats/FEDRawData/interface/FEDRawDataCollection.h"
 #include "FWCore/Framework/interface/ConsumesCollector.h"
 #include "FWCore/Utilities/interface/CPUTimer.h"
+#include "FWCore/Concurrency/interface/WaitingTaskWithArenaHolder.h"
 #include "RawToDigiGPU.h"
 
 class SiPixelFedCablingTree;
@@ -24,7 +25,7 @@ class SiPixelQuality;
 class TH1D;
 class PixelUnpackingRegions;
 
-class SiPixelRawToDigiGPU : public edm::stream::EDProducer<> {
+class SiPixelRawToDigiGPU : public edm::stream::EDProducer<edm::ExternalWork> {
 public:
 
   /// ctor
@@ -36,7 +37,9 @@ public:
   static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
 
   /// get data, convert to digis attach againe to Event
-  void produce( edm::Event&, const edm::EventSetup& ) override;
+  virtual void produce( edm::Event&, const edm::EventSetup& ) override;
+  virtual void acquire(edm::Event const&, edm::EventSetup const&,
+                       edm::WaitingTaskWithArenaHolder) override;
 
 private:
   edm::ParameterSet config_;
