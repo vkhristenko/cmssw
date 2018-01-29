@@ -68,6 +68,8 @@ private:
   bool convertADCtoElectrons;
   unsigned int *word;        // to hold input for rawtodigi
   unsigned int *fedIndex;    // to hold fed index inside word[] array for rawtodigi on GPU
+  unsigned int m_wordCounterGPU;
+  int m_theWordCounter;
 
   // to store the output
   uint32_t *xx_h, *yy_h, *adc_h, *rawIdArr_h;                   // host copy of output
