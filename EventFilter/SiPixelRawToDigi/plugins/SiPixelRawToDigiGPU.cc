@@ -222,7 +222,7 @@ SiPixelRawToDigiGPU::fillDescriptions(edm::ConfigurationDescriptions& descriptio
   descriptions.add("siPixelRawToDigiGPU",desc);
 }
 
-void SiPixelRawToDigiGPU::acquire(edm::Event const& iEvent
+void SiPixelRawToDigiGPU::acquire(edm::Event const& iEvent,
                                   edm::EventSetup const& iSetup,
                                   edm::WaitingTaskWithArenaHolder holder) {
 }
