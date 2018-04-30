@@ -1,0 +1,30 @@
+digraph TestModules {
+graph [
+label="process TestModules", labelloc=top];
+0[color=black, fillcolor=white, label=source, shape=oval, style=filled, tooltip=EmptySource];
+1[color=black, fillcolor=lightgrey, label=TriggerResults, shape=note, style=filled, tooltip=TriggerResultInserter];
+2[color=black, fillcolor=lightgrey, label=p1, shape=box, style=filled, tooltip=PathStatusInserter];
+3[color=black, fillcolor=lightgrey, label=p2, shape=box, style=filled, tooltip=PathStatusInserter];
+4[color=black, fillcolor=lightgrey, label=p3, shape=box, style=filled, tooltip=PathStatusInserter];
+5[color=black, fillcolor=lightgrey, label=p4, shape=box, style=filled, tooltip=PathStatusInserter];
+6[color=black, fillcolor=lightgrey, label=e, shape=box, style=filled, tooltip=EndPathStatusInserter];
+7[color=black, fillcolor=white, label=prod1, shape=box, style=filled, tooltip=TestProducer1];
+8[color=black, fillcolor=white, label=filter1, shape=diamond, style=filled, tooltip=TestFilter1];
+9[color=black, fillcolor=white, label=analyzer1, shape=oval, style=filled, tooltip=TestAnalyzer1];
+10[color=black, fillcolor=white, label=prod2, shape=box, style=filled, tooltip=TestProducer2];
+11[color=black, fillcolor=white, label=filter2, shape=diamond, style=filled, tooltip=TestFilter2];
+12[color=black, fillcolor=white, label=analyzer3, shape=oval, style=filled, tooltip=TestAnalyzer3];
+13[color=black, fillcolor=white, label=prod3, shape=box, style=filled, tooltip=TestProducer3];
+14[color=black, fillcolor=white, label=filter3, shape=diamond, style=filled, tooltip=TestFilter3];
+15[color=black, fillcolor=white, label=out, shape=oval, style=filled, tooltip=PoolOutputModule];
+8 -> 7[style=dashed];
+9 -> 8[style=dashed];
+10 -> 7[style=dashed];
+11 -> 10[style=dashed];
+12 -> 11[style=dashed];
+12 -> 14[style=dashed];
+12 -> 13[style=dashed];
+13 -> 10[style=dashed];
+14 -> 13[style=dashed];
+15 -> 1;
+}

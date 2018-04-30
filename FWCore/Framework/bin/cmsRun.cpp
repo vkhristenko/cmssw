@@ -122,7 +122,10 @@ namespace {
 }
 
 int main(int argc, char* argv[]) {
-
+    // 
+    // entry point to any cms data processing
+    //
+  edm::LogAbsolute ("cmsRun") << "starting up";
   edm::TimingServiceBase::jobStarted();
   
   int returnCode = 0;
@@ -157,6 +160,7 @@ int main(int argc, char* argv[]) {
 #endif
 
       context = "Initializing plug-in manager";
+      edm::LogAbsolute ("cmsRun") << context;
       edmplugin::PluginManager::configure(edmplugin::standard::config());
 
       // Decide whether to use the multi-thread or single-thread message logger
@@ -164,6 +168,7 @@ int main(int argc, char* argv[]) {
       //    be run below and can lead to error messages which should be sent via
       //    the message logger)
       context = "Initializing either multi-threaded or single-threaded message logger";
+      edm::LogAbsolute("cmsRun") << context;
       bool multiThreadML = false;
       for(int i = 0; i < argc; ++i) {
         if((std::strncmp (argv[i], "-t", 20) == 0) ||
@@ -185,6 +190,7 @@ int main(int argc, char* argv[]) {
       }
 
       context = "Processing command line arguments";
+      edm::LogAbsolute("cmsRun") << context;
       std::string descString(argv[0]);
       descString += " [options] [--";
       descString += kParameterSetOpt;
@@ -242,6 +248,7 @@ int main(int argc, char* argv[]) {
         return 0;
       }
       
+      edm::LogAbsolute("cmsRun") << "init tbb";
       unsigned int nThreadsOnCommandLine{0};
       if(vm.count(kNumberOfThreadsOpt)) {
         setNThreadsOnCommandLine=true;
@@ -271,6 +278,7 @@ int main(int argc, char* argv[]) {
       }
 
       context = "Creating the JobReport Service";
+      edm::LogAbsolute("cmsRun") << context;
       // Decide whether to enable creation of job report xml file
       //  We do this first so any errors will be reported
       std::string jobReportFile;
@@ -290,6 +298,7 @@ int main(int argc, char* argv[]) {
 
       context = "Processing the python configuration file named ";
       context += fileName;
+      edm::LogAbsolute("cmsRun") << context;
       std::shared_ptr<edm::ProcessDesc> processDesc;
       try {
         std::shared_ptr<edm::ParameterSet> parameterSet = edm::readConfig(fileName, argc, argv);
@@ -299,10 +308,11 @@ int main(int argc, char* argv[]) {
         edm::Exception e(edm::errors::ConfigFileReadError, "", iException);
         throw e;
       }
-      
+
       //See if we were told how many threads to use. If so then inform TBB only if
       // we haven't already been told how many threads to use in the command line
       context = "Setting up number of threads";
+      edm::LogAbsolute("cmsRun") << context;
       {
         if(not setNThreadsOnCommandLine) {
           std::shared_ptr<edm::ParameterSet> pset = processDesc->getProcessPSet();
@@ -333,14 +343,17 @@ int main(int argc, char* argv[]) {
           pset->insertParameterSet(true,"options",edm::ParameterSetEntry(newOp,false));
         }
       }
+      edm::LogAbsolute("cmsRun") << processDesc->getProcessPSet()->dump(2);
 
       context = "Initializing default service configurations";
+      edm::LogAbsolute("cmsRun") << context;
 
       // Default parameters will be used for the default services
       // if they are not overridden from the configuration files.
       processDesc->addServices(edm::defaultCmsRunServices());
 
       context = "Setting MessageLogger defaults";
+      edm::LogAbsolute("cmsRun") << context;
       // Decide what mode of hardcoded MessageLogger defaults to use
       if (vm.count(kJobModeOpt)) {
         std::string jobMode = vm[kJobModeOpt].as<std::string>();
@@ -348,16 +361,19 @@ int main(int argc, char* argv[]) {
       }
 
       context = "Constructing the EventProcessor";
+      edm::LogAbsolute("cmsRun") << context;
       EventProcessorWithSentry procTmp(
         std::make_unique<edm::EventProcessor>(processDesc, jobReportToken, edm::serviceregistry::kTokenOverrides));
       proc = std::move(procTmp);
 
       alwaysAddContext = false;
       context = "Calling beginJob";
+      edm::LogAbsolute("cmsRun") << context;
       proc->beginJob();
 
       alwaysAddContext = false;
       context = "Calling EventProcessor::runToCompletion (which does almost everything after beginJob and before endJob)";
+      edm::LogAbsolute("cmsRun") << context;
       proc.on();
       auto status = proc->runToCompletion();
       if (status == edm::EventProcessor::epSignal) {
@@ -366,6 +382,7 @@ int main(int argc, char* argv[]) {
       proc.off();
 
       context = "Calling endJob";
+      edm::LogAbsolute("cmsRun") << context;
       proc->endJob();
       return returnCode;
     });
@@ -373,6 +390,7 @@ int main(int argc, char* argv[]) {
   // All exceptions which are not handled before propagating
   // into main will get caught here.
   catch (cms::Exception& ex) {
+    edm::LogAbsolute("1111111111111111") << "1111111111111";
     returnCode = ex.returnCode();
     if (!context.empty()) {
       if (alwaysAddContext) {

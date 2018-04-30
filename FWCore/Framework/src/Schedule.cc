@@ -43,6 +43,7 @@
 #include <set>
 #include <exception>
 #include <sstream>
+#include <iostream>
 
 namespace edm {
 
@@ -453,6 +454,8 @@ namespace edm {
     wantSummary_(tns.wantSummary()),
     endpathsAreActive_(true)
   {
+      edm::LogAbsolute("Framework") << "Schedule::Schedule";
+      edm::LogAbsolute("Framework") << "makePathStatusInserters";
     makePathStatusInserters(pathStatusInserters_,
                             *pathNames_,
                             prealloc,
@@ -460,6 +463,8 @@ namespace edm {
                             areg,
                             processConfiguration,
                             std::string("PathStatusInserter"));
+
+    edm::LogAbsolute("Framework") << "makePathStatusInserters";
 
     makePathStatusInserters(endPathStatusInserters_,
                             *endPathNames_,
@@ -469,9 +474,13 @@ namespace edm {
                             processConfiguration,
                             std::string("EndPathStatusInserter"));
 
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __LINE__ <<  " stream schedules initialization";
+    edm::LogAbsolute("Framework") << "streamSchedules init...";
     assert(0<prealloc.numberOfStreams());
     streamSchedules_.reserve(prealloc.numberOfStreams());
     for(unsigned int i=0; i<prealloc.numberOfStreams();++i) {
+        edm::LogAbsolute("Framework") << __FILE__ << ":" << __LINE__ <<  " stream i =" 
+            << i << " initialization";
       streamSchedules_.emplace_back(std::make_shared<StreamSchedule>(
         resultsInserter(),
         pathStatusInserters_,
@@ -490,12 +499,15 @@ namespace edm {
     const std::string kTriggerResults("TriggerResults");
     std::vector<std::string> modulesToUse;
     modulesToUse.reserve(streamSchedules_[0]->allWorkers().size());
+    edm::LogAbsolute("Framework") << "module labels for stream scheduler workers";
     for(auto const& worker : streamSchedules_[0]->allWorkers()) {
       if(worker->description().moduleLabel() != kTriggerResults) {
         modulesToUse.push_back(worker->description().moduleLabel());
+        edm::LogAbsolute("Framework") << "moduleLabel = " << worker->description().moduleLabel();
       }
     }
     //The unscheduled modules are at the end of the list, but we want them at the front
+    edm::LogAbsolute("Framework") << "stream schedule unscheduled modules";
     unsigned int n = streamSchedules_[0]->numberOfUnscheduledModules();
     if(n>0) {
       std::vector<std::string> temp;
@@ -508,6 +520,7 @@ namespace edm {
     }
 
     // propagate_const<T> has no reset() function
+    edm::LogAbsolute("Framework") << "global schedule init...";
     globalSchedule_ = std::make_unique<GlobalSchedule>(
       resultsInserter(),
       pathStatusInserters_,
@@ -520,11 +533,17 @@ namespace edm {
     //TriggerResults is not in the top level ParameterSet so the call to
     // reduceParameterSet would fail to find it. Just remove it up front.
     std::set<std::string> usedModuleLabels;
+    edm::LogAbsolute("Framework") << "usedModuleLabels";
     for(auto const& worker: allWorkers()) {
       if(worker->description().moduleLabel() != kTriggerResults) {
         usedModuleLabels.insert(worker->description().moduleLabel());
       }
     }
+
+    //
+    // to start from
+    //
+    std::cout << __FILE__ << ":"<<  __LINE__ << std::endl;
     std::vector<std::string> modulesInConfig(proc_pset.getParameter<std::vector<std::string> >("@all_modules"));
     std::map<std::string, std::vector<std::pair<std::string, int> > > outputModulePathPositions;
     reduceParameterSet(proc_pset, tns.getEndPaths(), modulesInConfig, usedModuleLabels,

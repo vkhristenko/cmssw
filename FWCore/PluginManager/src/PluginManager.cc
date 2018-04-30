@@ -16,6 +16,7 @@
 #include <fstream>
 #include <functional>
 #include <set>
+#include <iostream>
 
 // TEMPORARY
 #include "TInterpreter.h"
@@ -60,6 +61,9 @@ static bool readCacheFile(const boost::filesystem::path &cacheFile,
 PluginManager::PluginManager(const PluginManager::Config& iConfig) :
   searchPath_( iConfig.searchPath() )
 {
+    std::cout << __FILE__ << ":" << __LINE__ 
+        << " initializing plugin manager";
+
     using std::placeholders::_1;
     const boost::filesystem::path& kCacheFile(standard::cachefileName());
     // This is the filename of a file which contains plugins which exist in the

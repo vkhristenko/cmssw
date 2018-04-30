@@ -84,6 +84,11 @@
 #include <sched.h>
 #endif
 
+#define MY_DEBUG(msg) \
+    LogDebug ("Framework") << msg
+#define MY_DEBUG_ABS(msg) \
+    LogAbsolute ("Framework") << msg
+
 namespace {
   //Sentry class to only send a signal if an
   // exception occurs. An exception is identified
@@ -377,6 +382,7 @@ namespace edm {
                        ServiceToken const& iToken,
                        serviceregistry::ServiceLegacy iLegacy) {
 
+      edm::LogAbsolute ("Framework") << "init the event processor";
     //std::cerr << processDesc->dump() << std::endl;
 
     // register the empty parentage vector , once and for all
@@ -386,6 +392,8 @@ namespace edm {
     ParameterSet().registerIt();
 
     std::shared_ptr<ParameterSet> parameterSet = processDesc->getProcessPSet();
+    std::string str = parameterSet->dump();
+    LogDebug ("Framework") << str;
 
     // If there are subprocesses, pop the subprocess parameter sets out of the process parameter set
     auto subProcessVParameterSet = popSubProcessVParameterSet(*parameterSet);
@@ -458,15 +466,22 @@ namespace edm {
     printDependencies_ =  optionsPset.getUntrackedParameter("printDependencies", false);
 
     // Now do general initialization
+    LogDebug("Framework") << "now do the general initialization";
     ScheduleItems items;
 
     //initialize the services
+    LogDebug("Framework") << "now do the general initialization";
     auto& serviceSets = processDesc->getServicesPSets();
     ServiceToken token = items.initServices(serviceSets, *parameterSet, iToken, iLegacy, true);
+    edm::LogAbsolute("Framework") << "services are inited";
     serviceToken_ = items.addCPRandTNS(*parameterSet, token);
+    LogDebug("Framework") << "now do the general initialization";
+    LogAbsolute("Framework") << "now do the general initialization";
 
     //make the services available
     ServiceRegistry::Operate operate(serviceToken_);
+    LogDebug("Framework") << "now do the general initialization";
+    LogAbsolute("Framework") << "now do the general initialization";
 
     if(nStreams>1) {
       edm::Service<RootHandlers> handler;
@@ -474,14 +489,21 @@ namespace edm {
     }
 
     // intialize miscellaneous items
+    LogDebug ("Framework") << "initialize miscellaneous items";
+    LogAbsolute ("Framework") << "initialize miscellaneous items";
     std::shared_ptr<CommonParams> common(items.initMisc(*parameterSet));
 
     // intialize the event setup provider
+    LogDebug ("Framework") << "initialize the ven setup provider";
+    LogAbsolute ("Framework") << "initialize the ven setup provider";
     esp_ = espController_->makeProvider(*parameterSet);
 
     // initialize the looper, if any
+    LogDebug ("Framework") << "initialize loopers";
+    LogAbsolute ("Framework") << "initialize loopers";
     looper_ = fillLooper(*espController_, *esp_, *parameterSet);
     if(looper_) {
+        LogAbsolute("Framework") << "we have loopers";
       looper_->setActionTable(items.act_table_.get());
       looper_->attachTo(*items.actReg_);
 
@@ -491,9 +513,12 @@ namespace edm {
       nConcurrentRuns=1;
     }
 
+    MY_DEBUG("preallocations");
+    MY_DEBUG_ABS("preallocations");
     preallocations_ = PreallocationConfiguration{nThreads,nStreams,nConcurrentLumis,nConcurrentRuns};
 
-    // initialize the input source
+    MY_DEBUG("initialize the input source");
+    MY_DEBUG_ABS("initialize the input source");
     input_ = makeInput(*parameterSet,
                        *common,
                        items.preg(),
@@ -504,6 +529,8 @@ namespace edm {
                        preallocations_);
 
     // intialize the Schedule
+    MY_DEBUG("initialize the schedule");
+    MY_DEBUG_ABS("initialize the schedule");
     schedule_ = items.initSchedule(*parameterSet,hasSubProcesses,preallocations_,&processContext_);
 
     // set the data members

@@ -161,14 +161,25 @@ namespace edm {
     endpathsAreActive_(true),
     skippingEvent_(false){
 
+    
     ParameterSet const& opts = proc_pset.getUntrackedParameterSet("options", ParameterSet());
     bool hasPath = false;
     std::vector<std::string> const& pathNames = tns.getTrigPaths();
     std::vector<std::string> const& endPathNames = tns.getEndPaths();
 
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __LINE__;
+    for (auto& tmp : pathNames) {
+        edm::LogAbsolute("Framework") << __FILE__ << ":" << __LINE__ << "tmp = " << tmp;
+    }
+    for (auto& tmp : endPathNames) {
+        edm::LogAbsolute("Framework") << __FILE__ << ":" << __LINE__ << "tmp = " << tmp;
+    }
+
     int trig_bitpos = 0;
     trig_paths_.reserve(pathNames.size());
     for (auto const& trig_name : pathNames) {
+        edm::LogAbsolute("Framework") << __FILE__ << ":" << __LINE__ 
+            << " fill Trigger Path for trig_name = " << trig_name;
       fillTrigPath(proc_pset, preg, &prealloc, processConfiguration, trig_bitpos, trig_name, results(), endPathNames);
       ++trig_bitpos;
       hasPath = true;
@@ -409,9 +420,14 @@ namespace edm {
                                    std::vector<std::string> const& endPathNames) {
     vstring modnames = proc_pset.getParameter<vstring>(pathName);
     PathWorkers tmpworkers;
+      edm::LogAbsolute("Framework") << __FILE__ << ":" << __LINE__
+          << " filling worker for pathName = " << pathName;
 
     unsigned int placeInPath = 0;
     for (auto const& name : modnames) {
+
+        edm::LogAbsolute("Framework") << __FILE__ << ":" << __LINE__
+            << "  module name = " << name;
 
       WorkerInPath::FilterAction filterAction = WorkerInPath::Normal;
       if (name[0] == '!')       filterAction = WorkerInPath::Veto;
@@ -463,6 +479,8 @@ namespace edm {
                                     int bitpos, std::string const& name, TrigResPtr trptr,
                                     std::vector<std::string> const& endPathNames) {
     PathWorkers tmpworkers;
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __LINE__
+        << " filling workers";
     fillWorkers(proc_pset, preg, prealloc, processConfiguration, name, false, tmpworkers, endPathNames);
 
     // an empty path will cause an extra bit that is not used

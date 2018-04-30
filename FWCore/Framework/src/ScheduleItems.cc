@@ -80,6 +80,7 @@ namespace edm {
                              serviceregistry::ServiceLegacy iLegacy,
                              bool associate) {
 
+      LogDebug ("Framework") << "initServices";
     //create the services
     ServiceToken token(ServiceRegistry::createSet(pServiceSets, iToken, iLegacy, associate));
 
@@ -138,7 +139,8 @@ namespace edm {
                               bool hasSubprocesses,
                               PreallocationConfiguration const& config,
                               ProcessContext const* processContext) {
-    return std::make_unique<Schedule>(
+    edm::LogAbsolute("Framework") << "ScheduleItems::initSchedule";
+    auto ptr2schedule = std::make_unique<Schedule>(
                      parameterSet,
                      ServiceRegistry::instance().get<service::TriggerNamesService>(),
                      *preg_,
@@ -151,6 +153,8 @@ namespace edm {
                      hasSubprocesses,
                      config,
                      processContext);
+    edm::LogAbsolute("Framework") << "ScheduleItems::initSchedule";
+    return std::move(ptr2schedule);
   }
 
   void
