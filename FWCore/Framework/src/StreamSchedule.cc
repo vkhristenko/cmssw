@@ -85,6 +85,10 @@ namespace edm {
                                     ProductRegistry const& preg,
                                     std::multimap<std::string,Worker*>& branchToReadingWorker)
     {
+        
+        edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__
+            << "  init";
+
       // See if any data has been marked to be deleted early (removing any duplicates)
       auto vBranchesToDeleteEarly = opts.getUntrackedParameter<std::vector<std::string>>("canDeleteEarly",std::vector<std::string>());
       if(not vBranchesToDeleteEarly.empty()) {
@@ -257,6 +261,9 @@ namespace edm {
   void StreamSchedule::initializeEarlyDelete(ModuleRegistry & modReg,
                                              edm::ParameterSet const& opts, edm::ProductRegistry const& preg,
                                        bool allowEarlyDelete) {
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__
+        << "  starting up initialize early delete ";
+
     //for now, if have a subProcess, don't allow early delete
     // In the future we should use the SubProcess's 'keep list' to decide what can be kept
     if(not allowEarlyDelete)  return;

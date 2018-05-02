@@ -80,7 +80,9 @@ TestProducer3::TestProducer3(const edm::ParameterSet& iConfig)
    produces<ExampleData2,InRun>();
 */
    //now do what ever other initialization is needed
-  
+
+    std::cout << "calling constructor" << __FILE__ << ":" << __FUNCTION__ << ":" 
+        << __LINE__ << std::endl;
 }
 
 

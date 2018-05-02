@@ -23,6 +23,9 @@ namespace edm {
                             std::string const& moduleLabel,
                             signalslot::Signal<void(ModuleDescription const&)>& iPre,
                             signalslot::Signal<void(ModuleDescription const&)>& iPost) {
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__
+        << "  getting a module from ModuleRegsitry with moduleLabel = " << moduleLabel;
+
     auto modItr = labelToModule_.find(moduleLabel);
     if(modItr == labelToModule_.end()) {
       auto modPtr=

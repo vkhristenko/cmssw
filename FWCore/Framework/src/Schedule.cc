@@ -481,6 +481,7 @@ namespace edm {
     for(unsigned int i=0; i<prealloc.numberOfStreams();++i) {
         edm::LogAbsolute("Framework") << __FILE__ << ":" << __LINE__ <<  " stream i =" 
             << i << " initialization";
+        edm::LogAbsolute("Framework") << "*********************************\n";
       streamSchedules_.emplace_back(std::make_shared<StreamSchedule>(
         resultsInserter(),
         pathStatusInserters_,

@@ -69,6 +69,8 @@ namespace edm {
                                             signalslot::Signal<void(const ModuleDescription&)>& pre,
                                             signalslot::Signal<void(const ModuleDescription&)>& post) const
   {
+      std::cout << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__
+        << "  making a module" << std::endl;
     auto maker = findMaker(p);
     auto mod(maker->makeModule(p,pre,post));
     return mod;

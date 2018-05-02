@@ -40,6 +40,8 @@ namespace edm {
                                    PreallocationConfiguration const* prealloc,
                                    std::shared_ptr<ProcessConfiguration const> processConfiguration,
                                    std::string const & label) {
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__
+        << "  getting a worker for label = " << label;
     WorkerParams params(&pset, preg, prealloc, processConfiguration, *actionTable_);
     return workerReg_.getWorker(params, label);
   }

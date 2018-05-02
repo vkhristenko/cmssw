@@ -73,6 +73,8 @@ TestAnalyzer1::TestAnalyzer1(const edm::ParameterSet& iConfig)
    //now do what ever initialization is needed
    usesResource("TFileService");
 
+    std::cout << "calling constructor" << __FILE__ << ":" << __FUNCTION__ << ":" 
+        << __LINE__ << std::endl;
 }
 
 

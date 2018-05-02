@@ -70,6 +70,8 @@ TestFilter3::TestFilter3(const edm::ParameterSet& iConfig)
 {
    //now do what ever initialization is needed
 
+    std::cout << "calling constructor" << __FILE__ << ":" << __FUNCTION__ << ":" 
+        << __LINE__ << std::endl;
 }
 
 

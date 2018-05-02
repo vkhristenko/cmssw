@@ -40,6 +40,9 @@ namespace edm {
   Worker* WorkerRegistry::getWorker(WorkerParams const& p, std::string const& moduleLabel) {
 
     WorkerMap::iterator workerIt = m_workerMap.find(moduleLabel);
+
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__
+        << "  getting worker from the registry by moduleLabel = " << moduleLabel;
   
     // if the worker is not there, make it
     if (workerIt == m_workerMap.end()){
