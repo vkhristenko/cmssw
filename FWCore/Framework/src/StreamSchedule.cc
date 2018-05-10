@@ -564,6 +564,8 @@ namespace edm {
                                             std::vector<edm::propagate_const<std::shared_ptr<PathStatusInserter>>>& pathStatusInserters) {
     this->resetAll();
 
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__;
+
     using Traits = OccurrenceTraits<EventPrincipal, BranchActionStreamBegin>;
     
     Traits::setStreamContext(streamContext_, ep);
@@ -581,6 +583,9 @@ namespace edm {
         return;
       }
     }
+
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__;
+
     for (int empty_end_path : empty_end_paths_) {
       std::exception_ptr iException = endPathStatusInserterWorkers_[empty_end_path]->runModuleDirectly<OccurrenceTraits<EventPrincipal, BranchActionStreamBegin>>(
           ep, es, streamID_, ParentContext(&streamContext_), &streamContext_
@@ -590,6 +595,8 @@ namespace edm {
         return;
       }
     }
+
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__;
     
     // This call takes care of the unscheduled processing.
     workerManager_.setupOnDemandSystem(ep,es);
@@ -630,11 +637,15 @@ namespace edm {
     // run under that condition.
     WaitingTaskHolder taskHolder(pathsDone);
 
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__;
+
     //start end paths first so on single threaded the paths will run first
     for(auto it = end_paths_.rbegin(), itEnd = end_paths_.rend();
         it != itEnd; ++it) {
       it->processOneOccurrenceAsync(allPathsDone,ep, es, streamID_, &streamContext_);
     }
+
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__;
 
     for(auto it = trig_paths_.rbegin(), itEnd = trig_paths_.rend();
         it != itEnd; ++ it) {

@@ -23,6 +23,7 @@
 #include <exception>
 #include <memory>
 #include "tbb/task.h"
+#include <iostream>
 
 // user include files
 
@@ -90,6 +91,7 @@ namespace edm {
   
   template< typename ALLOC, typename F>
   FunctorWaitingTask<F>* make_waiting_task( ALLOC&& iAlloc, F f) {
+      std::cout << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__ << std::endl;
     return new (iAlloc) FunctorWaitingTask<F>(f);
   }
   

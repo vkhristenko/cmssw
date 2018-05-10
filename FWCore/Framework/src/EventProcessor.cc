@@ -771,6 +771,9 @@ namespace edm {
   EventProcessor::StatusCode
   EventProcessor::runToCompletion() {
     
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__
+        << "  starting to process events";
+
     StatusCode returnCode=epSuccess;
     asyncStopStatusCodeFromProcessingEvents_=epSuccess;
     {
@@ -1425,6 +1428,8 @@ namespace edm {
   }
 
   InputSource::ItemType EventProcessor::readAndProcessEvents() {
+      edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__ 
+          << "  went thru the state machine...";
     nextItemTypeFromProcessingEvents_ = InputSource::IsEvent; //needed for looper
     asyncStopRequestedWhileProcessingEvents_ = false;
 
@@ -1442,6 +1447,8 @@ namespace edm {
     const unsigned int kNumStreams = preallocations_.numberOfStreams();
     unsigned int iStreamIndex = 0;
     for(; iStreamIndex<kNumStreams-1; ++iStreamIndex) {
+        edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__ 
+            << "  stream = " << iStreamIndex << "  is being enqueued";
       tbb::task::enqueue( *make_waiting_task(tbb::task::allocate_root(),
                                              [this,iStreamIndex,finishedProcessingEventsPtr,h=WaitingTaskHolder{eventLoopWaitTask.get()}](std::exception_ptr const*){
         handleNextEventForStreamAsync(h,iStreamIndex,finishedProcessingEventsPtr);
@@ -1453,7 +1460,12 @@ namespace edm {
                                [this,iStreamIndex,finishedProcessingEventsPtr,h=WaitingTaskHolder{eventLoopWaitTask.get()}](std::exception_ptr const*){
       handleNextEventForStreamAsync(h,iStreamIndex,finishedProcessingEventsPtr);
     });
+
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__
+        << "  spawning the eventLoopWaitTask";
     eventLoopWaitTask->spawn_and_wait_for_all( *t);
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__
+        << "  eventLoopWaitTask has finished";
 
     //One of the processing threads saw an exception
     if(deferredExceptionPtrIsSet_) {
@@ -1542,9 +1554,15 @@ namespace edm {
        })
                                            );
     }
-    
+
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__
+        << "  event principal is setup, calling the schedule for stream = " << iStreamIndex;
+
     schedule_->processOneEventAsync(std::move(afterProcessTask),
                                     iStreamIndex,*pep, esp_->eventSetup());
+
+    edm::LogAbsolute("Framework") << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__
+        << "  schedule has finished for stream = " << iStreamIndex;
 
   }
 

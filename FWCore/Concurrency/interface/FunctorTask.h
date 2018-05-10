@@ -21,6 +21,7 @@
 // system include files
 #include <atomic>
 #include <exception>
+#include <iostream>
 #include <memory>
 #include "tbb/task.h"
 
@@ -45,6 +46,7 @@ namespace edm {
   
   template< typename ALLOC, typename F>
   FunctorTask<F>* make_functor_task( ALLOC&& iAlloc, F f) {
+      std::cout << __FILE__ << ":" << __FUNCTION__ << ":" << __LINE__ << std::endl;
     return new (iAlloc) FunctorTask<F>(f);
   }
 }
