@@ -1,9 +1,9 @@
 // -*- C++ -*-
 //
 // Package:    RecoLocalCalo/HcalRecProducers
-// Class:      HBHEPhase1Reconstructor
+// Class:      HBHEPhase1ReconstructorGPU
 // 
-/**\class HBHEPhase1Reconstructor HBHEPhase1Reconstructor.cc RecoLocalCalo/HcalRecProducers/plugins/HBHEPhase1Reconstructor.cc
+/**\class HBHEPhase1ReconstructorGPU HBHEPhase1ReconstructorGPU.cc RecoLocalCalo/HcalRecProducers/plugins/HBHEPhase1ReconstructorGPU.cc
 
  Description: Phase 1 reconstruction module for HB/HE
 
@@ -277,11 +277,11 @@ namespace {
 //
 // class declaration
 //
-class HBHEPhase1Reconstructor : public edm::stream::EDProducer<>
+class HBHEPhase1ReconstructorGPU : public edm::stream::EDProducer<>
 {
 public:
-    explicit HBHEPhase1Reconstructor(const edm::ParameterSet&);
-    ~HBHEPhase1Reconstructor() override;
+    explicit HBHEPhase1ReconstructorGPU(const edm::ParameterSet&);
+    ~HBHEPhase1ReconstructorGPU() override;
 
     static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
 
@@ -354,7 +354,7 @@ private:
 //
 // constructors and destructor
 //
-HBHEPhase1Reconstructor::HBHEPhase1Reconstructor(const edm::ParameterSet& conf)
+HBHEPhase1ReconstructorGPU::HBHEPhase1ReconstructorGPU(const edm::ParameterSet& conf)
     : algoConfigClass_(conf.getParameter<std::string>("algoConfigClass")),
       processQIE8_(conf.getParameter<bool>("processQIE8")),
       processQIE11_(conf.getParameter<bool>("processQIE11")),
@@ -418,7 +418,7 @@ HBHEPhase1Reconstructor::HBHEPhase1Reconstructor(const edm::ParameterSet& conf)
 }
 
 
-HBHEPhase1Reconstructor::~HBHEPhase1Reconstructor()
+HBHEPhase1ReconstructorGPU::~HBHEPhase1ReconstructorGPU()
 {
    // do anything here that needs to be done at destruction time
    // (e.g. close files, deallocate resources etc.)
@@ -429,7 +429,7 @@ HBHEPhase1Reconstructor::~HBHEPhase1Reconstructor()
 // member functions
 //
 template<class DFrame, class Collection>
-void HBHEPhase1Reconstructor::processData(const Collection& coll,
+void HBHEPhase1ReconstructorGPU::processData(const Collection& coll,
                                           const HcalDbService& cond,
                                           const HcalChannelQuality& qual,
                                           const HcalSeverityLevelComputer& severity,
@@ -566,13 +566,13 @@ void HBHEPhase1Reconstructor::processData(const Collection& coll,
     }
 }
 
-void HBHEPhase1Reconstructor::setCommonStatusBits(
+void HBHEPhase1ReconstructorGPU::setCommonStatusBits(
     const HBHEChannelInfo& /* info */, const HcalCalibrations& /* calib */,
     HBHERecHit* /* rh */)
 {
 }
 
-void HBHEPhase1Reconstructor::setAsicSpecificBits(
+void HBHEPhase1ReconstructorGPU::setAsicSpecificBits(
     const HBHEDataFrame& frame, const HcalCoder& coder,
     const HBHEChannelInfo& info, const HcalCalibrations& calib,
     HBHERecHit* rh)
@@ -587,7 +587,7 @@ void HBHEPhase1Reconstructor::setAsicSpecificBits(
         runHBHENegativeEFilter(info, rh);
 }
 
-void HBHEPhase1Reconstructor::setAsicSpecificBits(
+void HBHEPhase1ReconstructorGPU::setAsicSpecificBits(
     const QIE11DataFrame& frame, const HcalCoder& coder,
     const HBHEChannelInfo& info, const HcalCalibrations& calib,
     HBHERecHit* rh)
@@ -602,7 +602,7 @@ void HBHEPhase1Reconstructor::setAsicSpecificBits(
         runHBHENegativeEFilter(info, rh);
 }
 
-void HBHEPhase1Reconstructor::runHBHENegativeEFilter(const HBHEChannelInfo& info,
+void HBHEPhase1ReconstructorGPU::runHBHENegativeEFilter(const HBHEChannelInfo& info,
                                                      HBHERecHit* rh)
 {
     double ts[HBHEChannelInfo::MAXSAMPLES];
@@ -616,7 +616,7 @@ void HBHEPhase1Reconstructor::runHBHENegativeEFilter(const HBHEChannelInfo& info
 
 // ------------ method called to produce the data  ------------
 void
-HBHEPhase1Reconstructor::produce(edm::Event& e, const edm::EventSetup& eventSetup)
+HBHEPhase1ReconstructorGPU::produce(edm::Event& e, const edm::EventSetup& eventSetup)
 {
     using namespace edm;
 
@@ -717,7 +717,7 @@ HBHEPhase1Reconstructor::produce(edm::Event& e, const edm::EventSetup& eventSetu
 
 // ------------ method called when starting to processes a run  ------------
 void
-HBHEPhase1Reconstructor::beginRun(edm::Run const& r, edm::EventSetup const& es)
+HBHEPhase1ReconstructorGPU::beginRun(edm::Run const& r, edm::EventSetup const& es)
 {
     edm::ESHandle<HcalRecoParams> p;
     es.get<HcalRecoParamsRcd>().get(p);
@@ -728,7 +728,7 @@ HBHEPhase1Reconstructor::beginRun(edm::Run const& r, edm::EventSetup const& es)
         recoConfig_ = fetchHcalAlgoData(algoConfigClass_, es);
         if (!recoConfig_.get())
             throw cms::Exception("HBHEPhase1BadConfig")
-                << "Invalid HBHEPhase1Reconstructor \"algoConfigClass\" parameter value \""
+                << "Invalid HBHEPhase1ReconstructorGPU \"algoConfigClass\" parameter value \""
                 << algoConfigClass_ << '"' << std::endl;
         if (!reco_->configure(recoConfig_.get()))
             throw cms::Exception("HBHEPhase1BadConfig")
@@ -749,14 +749,14 @@ HBHEPhase1Reconstructor::beginRun(edm::Run const& r, edm::EventSetup const& es)
         }
         else
             edm::LogWarning("EventSetup") <<
-                "HBHEPhase1Reconstructor failed to get HcalFrontEndMap!" << std::endl;
+                "HBHEPhase1ReconstructorGPU failed to get HcalFrontEndMap!" << std::endl;
     }
 
     reco_->beginRun(r, es);
 }
 
 void
-HBHEPhase1Reconstructor::endRun(edm::Run const&, edm::EventSetup const&)
+HBHEPhase1ReconstructorGPU::endRun(edm::Run const&, edm::EventSetup const&)
 {
     reco_->endRun();
 }
@@ -768,7 +768,7 @@ HBHEPhase1Reconstructor::endRun(edm::Run const&, edm::EventSetup const&)
 
 // ------------ method fills 'descriptions' with the allowed parameters for the module  ------------
 void
-HBHEPhase1Reconstructor::fillDescriptions(edm::ConfigurationDescriptions& descriptions)
+HBHEPhase1ReconstructorGPU::fillDescriptions(edm::ConfigurationDescriptions& descriptions)
 {
     edm::ParameterSetDescription desc;
 
@@ -805,4 +805,4 @@ HBHEPhase1Reconstructor::fillDescriptions(edm::ConfigurationDescriptions& descri
 }
 
 //define this as a plug-in
-DEFINE_FWK_MODULE(HBHEPhase1Reconstructor);
+DEFINE_FWK_MODULE(HBHEPhase1ReconstructorGPU);

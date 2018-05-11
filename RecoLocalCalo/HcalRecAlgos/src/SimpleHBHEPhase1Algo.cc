@@ -12,6 +12,7 @@
 #include "CondFormats/DataRecord/interface/HcalTimeSlewRecord.h"
 #include "FWCore/Framework/interface/EventSetup.h"
 #include "FWCore/Framework/interface/ESHandle.h"
+#include "FWCore/MessageLogger/interface/MessageLogger.h"
 
 // Maximum fractional error for calculating Method 0
 // pulse containment correction
@@ -63,6 +64,8 @@ HBHERecHit SimpleHBHEPhase1Algo::reconstruct(const HBHEChannelInfo& info,
 {
     HBHERecHit rh;
 
+    LogDebug ("Hcal") << "starting the Simple Reconstruction";
+
     const HcalDetId channelId(info.id());
 
     // Calculate "Method 0" quantities
@@ -71,6 +74,7 @@ HBHERecHit SimpleHBHEPhase1Algo::reconstruct(const HBHEChannelInfo& info,
         int ibeg = static_cast<int>(info.soi()) + firstSampleShift_;
         if (ibeg < 0)
             ibeg = 0;
+        LogDebug ("Hcal") << "running method 0";
         const int nSamplesToAdd = params ? params->samplesToAdd() : samplesToAdd_;
         const double fc_ampl = info.chargeInWindow(ibeg, ibeg + nSamplesToAdd);
         const bool applyContainment = params ? params->correctForPhaseContainment() : corrFPC_;
@@ -86,6 +90,7 @@ HBHERecHit SimpleHBHEPhase1Algo::reconstruct(const HBHEChannelInfo& info,
     const PulseShapeFitOOTPileupCorrection* method2 = psFitOOTpuCorr_.get();
     if (method2)
     {
+        LogDebug ("Hcal") << "runnning method 2";
         psFitOOTpuCorr_->setPulseShapeTemplate(theHcalPulseShapes_.getShape(info.recoShape()),
                                                !info.hasTimeInfo(),info.nSamples(),hcalTimeSlew_delay_);
         // "phase1Apply" call below sets m2E, m2t, useTriple, and chi2.
@@ -99,6 +104,8 @@ HBHERecHit SimpleHBHEPhase1Algo::reconstruct(const HBHEChannelInfo& info,
     const HcalDeterministicFit* method3 = hltOOTpuCorr_.get();
     if (method3)
     {
+        LogDebug ("Hcal") << "running method 3";
+
         // "phase1Apply" sets m3E and m3t (pased by non-const reference)
         method3->phase1Apply(info, m3E, m3t, hcalTimeSlew_delay_);
         m3E *= hbminusCorrectionFactor(channelId, m3E, isData);
@@ -112,6 +119,8 @@ HBHERecHit SimpleHBHEPhase1Algo::reconstruct(const HBHEChannelInfo& info,
     const MahiFit* mahi = mahiOOTpuCorr_.get();
 
     if (mahi) {
+        LogDebug ("Hcal") << "runnign mahi";
+
       mahiOOTpuCorr_->setPulseShapeTemplate(theHcalPulseShapes_.getShape(info.recoShape()),hcalTimeSlew_delay_);
       mahi->phase1Apply(info,m4E,m4T,m4UseTriple,m4chi2);
       m4E *= hbminusCorrectionFactor(channelId, m4E, isData);
@@ -121,6 +130,7 @@ HBHERecHit SimpleHBHEPhase1Algo::reconstruct(const HBHEChannelInfo& info,
     float rhE = m0E;
     float rht = m0t;
     float rhX = -1.f;
+    LogDebug ("Hcal") << "construct a rec hit";
     if (mahi) 
     {
       rhE = m4E;
@@ -152,6 +162,8 @@ HBHERecHit SimpleHBHEPhase1Algo::reconstruct(const HBHEChannelInfo& info,
     // Set some rechit flags (here, for Method 2/Mahi)
     if (useTriple || m4UseTriple)
        rh.setFlagField(1, HcalPhase1FlagLabels::HBHEPulseFitBit);
+
+    LogDebug ("Hcal") << "finished sipmle reconstruction";
 
     return rh;
 }

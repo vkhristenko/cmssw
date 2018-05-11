@@ -47,6 +47,8 @@ void MahiFit::phase1Apply(const HBHEChannelInfo& channelData,
 
   resetWorkspace();
 
+  LogDebug ("Hcal") << "starting mahi";
+
   nnlsWork_.tsSize = channelData.nSamples();
   nnlsWork_.tsOffset = channelData.soi();
   nnlsWork_.fullTSOffset = fullTSofInterest_ - nnlsWork_.tsOffset;
@@ -55,7 +57,7 @@ void MahiFit::phase1Apply(const HBHEChannelInfo& channelData,
   if (channelData.hasTimeInfo()) nnlsWork_.dt=timeSigmaSiPM_;
   else nnlsWork_.dt=timeSigmaHPD_;
 
-
+    LogDebug ("Hcal") << "average pedestal value out";
   //Average pedestal width (for covariance matrix constraint)
   float pedVal = 0.25*( channelData.tsPedestalWidth(0)*channelData.tsPedestalWidth(0)+
 			channelData.tsPedestalWidth(1)*channelData.tsPedestalWidth(1)+
@@ -67,7 +69,8 @@ void MahiFit::phase1Apply(const HBHEChannelInfo& channelData,
   nnlsWork_.noiseTerms.resize(nnlsWork_.tsSize);
 
   std::array<float,3> reconstructedVals {{ 0.0, -9999, -9999 }};
-  
+ 
+    LogDebug ("Hcal") << "go over each ts and set all the values in matrices and vectors";
   double tsTOT = 0, tstrig = 0; // in GeV
   for(unsigned int iTS=0; iTS<nnlsWork_.tsSize; ++iTS){
     double charge = channelData.tsRawCharge(iTS);
@@ -96,19 +99,24 @@ void MahiFit::phase1Apply(const HBHEChannelInfo& channelData,
     }
   }
 
+  LogDebug ("Hcal") << "finished setting per ts values";
+
   if(tstrig >= ts4Thresh_ && tsTOT > 0) {
 
     useTriple=false;
 
     // only do pre-fit with 1 pulse if chiSq threshold is positive
     if (chiSqSwitch_>0) {
+        LogDebug ("Hcal") << "doFit with only do pre-fit with 1 pulse if chiSq threshold is positive";
       doFit(reconstructedVals,1);
       if (reconstructedVals[2]>chiSqSwitch_) {
+          LogDebug ("Hcal") << "doFit with nbx=0 means use configured BXs";
 	doFit(reconstructedVals,0); //nbx=0 means use configured BXs
 	useTriple=true;
       }
     }
     else {
+        LogDebug ("Hcal") << "doFit with chiSqSwitch < 0";
       doFit(reconstructedVals,0);
       useTriple=true;
     }
@@ -123,9 +131,12 @@ void MahiFit::phase1Apply(const HBHEChannelInfo& channelData,
   reconstructedTime = reconstructedVals[1];
   chi2 = reconstructedVals[2];
 
+  LogDebug ("Hcal") << "finished mahi";
 }
 
 void MahiFit::doFit(std::array<float,3> &correctedOutput, int nbx) const {
+
+    LogDebug ("Hcal") << "starting doFit with nbx = " << nbx;
 
   unsigned int bxSize=1;
 
@@ -161,6 +172,7 @@ void MahiFit::doFit(std::array<float,3> &correctedOutput, int nbx) const {
   nnlsWork_.errVec = PulseVector::Zero(nnlsWork_.nPulseTot);
 
   int offset=0;
+  LogDebug ("Hcal") << "for each bx initialize and set the shape matrices";
   for (unsigned int iBX=0; iBX<nnlsWork_.nPulseTot; ++iBX) {
     offset=nnlsWork_.bxs.coeff(iBX);
 
@@ -185,13 +197,16 @@ void MahiFit::doFit(std::array<float,3> &correctedOutput, int nbx) const {
     }
   }
 
+  LogDebug ("Hcal") << "matrix manips";
   nnlsWork_.pulseMat.col(nnlsWork_.nPulseTot-1) = SampleVector::Ones(nnlsWork_.tsSize);
 
   nnlsWork_.aTaMat.resize(nnlsWork_.nPulseTot, nnlsWork_.nPulseTot);
   nnlsWork_.aTbVec.resize(nnlsWork_.nPulseTot);
 
+  LogDebug ("Hcal") << "call minimize";
   double chiSq = minimize(); 
 
+  LogDebug ("Hcal") << "compute residuals";
   nnlsWork_.residuals = nnlsWork_.pulseMat*nnlsWork_.ampVec - nnlsWork_.amplitudes;
 
   bool foundintime = false;
@@ -220,11 +235,14 @@ void MahiFit::doFit(std::array<float,3> &correctedOutput, int nbx) const {
 
 double MahiFit::minimize() const {
 
+    LogDebug ("Hcal") << "start minimize with max iterations = " << nMaxItersMin_;
+
   double oldChiSq=9999;
   double chiSq=oldChiSq;
 
   for( int iter=1; iter<nMaxItersMin_ ; ++iter) {
 
+      // checked
     updateCov();
 
     if (nnlsWork_.nPulseTot>1) {
@@ -242,6 +260,8 @@ double MahiFit::minimize() const {
     }
     oldChiSq=chiSq;
     chiSq = newChiSq;
+
+    LogDebug ("Hcal") << "iteration = " << iter << "  chiSq = " << chiSq;
 
     if (std::abs(deltaChiSq)<deltaChiSqThresh_) break;
 
@@ -307,6 +327,7 @@ void MahiFit::updatePulseShape(double itQ, FullSampleVector &pulseShape, FullSam
 
 void MahiFit::updateCov() const {
 
+    LogDebug ("Hcal") << "update covariance matrix";
   nnlsWork_.invCovMat.resize(nnlsWork_.tsSize, nnlsWork_.tsSize);
 
   nnlsWork_.invCovMat = nnlsWork_.noiseTerms.asDiagonal();
@@ -357,7 +378,10 @@ double MahiFit::calculateArrivalTime() const {
 
 void MahiFit::nnls() const {
   const unsigned int npulse = nnlsWork_.nPulseTot;
-  
+
+  LogDebug ("hcal") << "starting nnls";
+ 
+  LogDebug ("hcal") << "for each bx do matrix manips";
   for (unsigned int iBX=0; iBX<npulse; ++iBX) {
     int offset=nnlsWork_.bxs.coeff(iBX);
     if (offset==pedestalBX_) {
@@ -368,6 +392,7 @@ void MahiFit::nnls() const {
     }
   }
 
+  LogDebug ("hcal") << "matrix manips: decompositions/transpositions";
   nnlsWork_.invcovp = nnlsWork_.covDecomp.matrixL().solve(nnlsWork_.pulseMat);
   nnlsWork_.aTaMat = nnlsWork_.invcovp.transpose().lazyProduct(nnlsWork_.invcovp);
   nnlsWork_.aTbVec = nnlsWork_.invcovp.transpose().lazyProduct(nnlsWork_.covDecomp.matrixL().solve(nnlsWork_.amplitudes));
@@ -379,7 +404,9 @@ void MahiFit::nnls() const {
 
   nnlsWork_.nP=0;
   
-  while (true) {    
+  while (true) {   
+        LogDebug ("hcal") << "starting infinite while loop -> only break statement interrupts it";
+
     if (iter>0 || nnlsWork_.nP==0) {
       if ( nnlsWork_.nP==std::min(npulse, nnlsWork_.tsSize)) break;
       
