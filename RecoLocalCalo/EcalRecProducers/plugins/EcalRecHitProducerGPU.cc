@@ -391,7 +391,7 @@ void EcalRecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& des
   desc.add<double>("logWarningEtThreshold_EB_FE",50);
   desc.add<bool>("recoverEEIsolatedChannels",false);
   desc.add<bool>("skipTimeCalib",false);
-  descriptions.add("ecalRecHit",desc);
+  descriptions.add("ecalRecHitGPU",desc);
 }
 
 #include "FWCore/Framework/interface/MakerMacros.h"
