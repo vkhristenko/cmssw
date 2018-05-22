@@ -2,6 +2,7 @@
 <use   name="CalibCalorimetry/HcalAlgos"/>
 <use   name="CalibFormats/HcalObjects"/>
 <use   name="RecoLocalCalo/HcalRecAlgos"/>
+<use   name="RecoLocalCalo/HcalRecProducers"/>
 <use   name="FWCore/Framework"/>
 <use   name="DataFormats/Common"/>
 <use   name="DataFormats/Math"/>
@@ -10,3 +11,4 @@
 <use   name="Geometry/CaloGeometry"/>
 <use   name="CondFormats/EcalObjects"/>
 <use   name="boost"/>
+<use   name="cuda"/>

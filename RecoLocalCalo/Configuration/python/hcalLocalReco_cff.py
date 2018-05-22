@@ -4,7 +4,15 @@ from RecoLocalCalo.HcalRecAlgos.hcalRecAlgoESProd_cfi import *
 hcalOOTPileupESProducer = cms.ESProducer('OOTPileupDBCompatibilityESProducer')
 
 from RecoLocalCalo.HcalRecProducers.HBHEPhase1Reconstructor_cfi import hbheprereco as _phase1_hbheprereco
+from RecoLocalCalo.HcalRecProducers.HBHEPhase1ReconstructorGPU_cfi import hbheprerecogpu as _phase1_hbheprerecogpu
 hbheprereco = _phase1_hbheprereco.clone(
+    processQIE11 = cms.bool(False),
+    tsFromDB = cms.bool(True),
+    pulseShapeParametersQIE8 = dict(
+        TrianglePeakTS = cms.uint32(4),
+    )
+)
+hbheprerecogpu = _phase1_hbheprerecogpu.clone(
     processQIE11 = cms.bool(False),
     tsFromDB = cms.bool(True),
     pulseShapeParametersQIE8 = dict(
