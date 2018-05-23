@@ -341,8 +341,7 @@ private:
                      HBHEChannelInfo* info,
                      HBHEChannelInfoCollection* infoColl,
                      HBHERecHitCollection* rechits);
-    template<class DataFrame, class Collection>
-    void processDataGPU_qie8(const Collection& coll,
+    void processDataGPU_qie8(const HBHEDigiCollection& coll,
                      const HcalDbService& cond,
                      const HcalChannelQuality& qual,
                      const HcalSeverityLevelComputer& severity,
@@ -350,8 +349,7 @@ private:
                      HBHEChannelInfo* info,
                      HBHEChannelInfoCollection* infoColl,
                      HBHERecHitCollection* rechits);
-    template<typename DataFrame, typename Collection>
-    void processDataGPU_qie11(const Collection& coll,
+    void processDataGPU_qie11(const QIE11DigiCollection& coll,
                      const HcalDbService& cond,
                      const HcalChannelQuality& qual,
                      const HcalSeverityLevelComputer& severity,
@@ -503,8 +501,7 @@ void HBHEPhase1ReconstructorGPU::test_gpu() {
 }
 
 
-template<typename Digi, typename Collection>
-void HBHEPhase1ReconstructorGPU::processDataGPU_qie8(Collection const& coll,
+void HBHEPhase1ReconstructorGPU::processDataGPU_qie8(HBHEDigiCollection const& coll,
                                                 HcalDbService const& cond,
                                                 HcalChannelQuality const& qual,
                                                 HcalSeverityLevelComputer const& severity,
@@ -515,10 +512,15 @@ void HBHEPhase1ReconstructorGPU::processDataGPU_qie8(Collection const& coll,
     //
     // 
     //
+    auto start = coll.begin();
+    auto size = coll.size();
+//    int constexpr N = 10000;
+
+    // allocate digis on the device
+    cudaMalloc((void**)&*start, size*sizeof(decltype(*start)));
 }
 
-template<typename Digi, typename Collection>
-void HBHEPhase1ReconstructorGPU::processDataGPU_qie11(Collection const& coll,
+void HBHEPhase1ReconstructorGPU::processDataGPU_qie11(QIE11DigiCollection const& coll,
                                                 HcalDbService const& cond,
                                                 HcalChannelQuality const& qual,
                                                 HcalSeverityLevelComputer const& severity,
@@ -796,7 +798,7 @@ HBHEPhase1ReconstructorGPU::produce(edm::Event& e, const edm::EventSetup& eventS
         HBHEChannelInfo channelInfo(false,false);
 
 #ifdef GPU_REFACTOR
-        processDataGPU_qie8<HBHEDataFrame>(*hbDigis, *conditions, *p, *mycomputer,
+        processDataGPU_qie8(*hbDigis, *conditions, *p, *mycomputer,
                                    isData, &channelInfo, infos.get(), out.get());
 #else
         processData<HBHEDataFrame>(*hbDigis, *conditions, *p, *mycomputer,
@@ -816,7 +818,7 @@ HBHEPhase1ReconstructorGPU::produce(edm::Event& e, const edm::EventSetup& eventS
         HBHEChannelInfo channelInfo(true,saveEffectivePedestal_);
 
 #ifdef GPU_REFACTOR
-        processDataGPU_qie11<QIE11DataFrame>(*heDigis, *conditions, *p, *mycomputer,
+        processDataGPU_qie11(*heDigis, *conditions, *p, *mycomputer,
                                     isData, &channelInfo, infos.get(), out.get());
 #else
         processData<QIE11DataFrame>(*heDigis, *conditions, *p, *mycomputer,

@@ -1,12 +1,6 @@
 #include "DataFormats/HcalDigi/interface/HBHEDataFrame.h"
 
 
-HBHEDataFrame::HBHEDataFrame() : id_(0), 
-				 size_(0),
-				 hcalPresamples_(0)
-{
-}
-
 HBHEDataFrame::HBHEDataFrame(const HcalDetId& id) : 
   id_(id), 
   size_(0),
