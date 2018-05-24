@@ -5,7 +5,7 @@
 #include <assert.h>
 #include "DataFormats/DetId/interface/DetId.h"
 #include "DataFormats/HcalDetId/interface/HcalDetId.h"
-#include "DataFormats/HcalDigi/interface/HcalQIESample.h"
+#include "DataFormats/HcalDigi/interface/HBHEDataFrame.h"
 
 __global__ void test_hcal_qiesample() {
     printf("hello\n");
