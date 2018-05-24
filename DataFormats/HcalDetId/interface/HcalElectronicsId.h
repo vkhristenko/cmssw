@@ -32,15 +32,32 @@
 class HcalElectronicsId {
 public:
   /** Default constructor -- invalid value */
-  HcalElectronicsId();
+  HcalElectronicsId() {
+    hcalElectronicsId_=0xffffffffu;
+  }
   /** from raw */
-  HcalElectronicsId(uint32_t);
+  HcalElectronicsId(uint32_t id) {
+    hcalElectronicsId_=id;
+  }
   /** VME Constructor from fiberchan,fiber index,spigot,dccid */
-  HcalElectronicsId(int fiberChan, int fiberIndex, int spigot, int dccid);
+  HcalElectronicsId(int fiberChan, int fiberIndex, int spigot, int dccid) {
+    hcalElectronicsId_=(fiberChan&0x3) | (((fiberIndex-1)&0x7)<<2) |
+      ((spigot&0xF)<<5) | ((dccid&0x1F)<<9);
+  }
   /** VME Constructor from slb channel,slb site,spigot,dccid */
-  HcalElectronicsId(int slbChan, int slbSite, int spigot, int dccid, int crate, int slot, int tb);
+  HcalElectronicsId(int slbChan, int slbSite, int spigot, int dccid, int crate, int slot, int tb) {
+    hcalElectronicsId_=(slbChan&0x3) | (((slbSite)&0x7)<<2) |
+      ((spigot&0xF)<<5) | ((dccid&0x1F)<<9);
+    hcalElectronicsId_|=((tb&0x1)<<19) | ((slot&0x1f)<<14) | ((crate&0x3f)<<20);
+    hcalElectronicsId_|=0x02000000;
+  }
   /** uTCA constructor */
-  HcalElectronicsId(int crate, int slot, int fiber, int fiberchan, bool isTrigger);
+  HcalElectronicsId(int crate, int slot, int fiber, int fc, bool isTrigger) {
+    hcalElectronicsId_=(fc&0xF) | (((fiber)&0x1F)<<4) |
+      ((slot&0xF)<<9) | ((crate&0x3F)<<13);
+    if (isTrigger)   hcalElectronicsId_|=0x02000000;
+    hcalElectronicsId_|=0x04000000;
+  }
 
   uint32_t operator()() { return hcalElectronicsId_; }
 
@@ -51,7 +68,11 @@ public:
   bool isTriggerChainId() const { return (hcalElectronicsId_&0x02000000)!=0; }
 
   /** Set the VME htr-related information 1=top, 0=bottom*/
-  void setHTR(int crate, int slot, int tb);
+  void setHTR(int crate, int slot, int tb) {
+    if (isUTCAid()) return; // cannot do this for uTCA
+    hcalElectronicsId_&=0x3FFF; // keep the readout chain info
+    hcalElectronicsId_|=((tb&0x1)<<19) | ((slot&0x1f)<<14) | ((crate&0x3f)<<20);
+  }
 
   /// get subtype for this channel (valid for uTCA only)
   int subtype() const { return (isUTCAid())?((hcalElectronicsId_>>21)&0x1F):(-1); }
