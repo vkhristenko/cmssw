@@ -32,10 +32,10 @@ public:
 
 public:
   /** Create a null cellid*/
-  HcalDetId() : DetId() {
+  constexpr HcalDetId() : DetId() {
   }
   /** Create cellid from raw id (0=invalid tower id) */
-  HcalDetId(uint32_t rawid) {
+  constexpr HcalDetId(uint32_t rawid) {
     if ((DetId::Detector(rawid>>DetId::kDetOffset)&DetId::kDetMask) != Hcal) {
       id_ = rawid;
     } else  {
@@ -50,14 +50,14 @@ public:
   }
 
   /** Constructor from subdetector, signed tower ieta,iphi,and depth */
-  HcalDetId(HcalSubdetector subdet, int tower_ieta, int tower_iphi, int depth) : DetId(Hcal,subdet) {
+  constexpr HcalDetId(HcalSubdetector subdet, int tower_ieta, int tower_iphi, int depth) : DetId(Hcal,subdet) {
     // (no checking at this point!)
     id_ |= (kHcalIdFormat2) | ((depth&kHcalDepthMask2)<<kHcalDepthOffset2) |
       ((tower_ieta>0)?(kHcalZsideMask2|(tower_ieta<<kHcalEtaOffset2)):((-tower_ieta)<<kHcalEtaOffset2)) |
       (tower_iphi&kHcalPhiMask2);
   }
   /** Constructor from a generic cell id */
-  HcalDetId(const DetId& gen) {
+  constexpr HcalDetId(const DetId& gen) {
     if (!gen.null()) {
       HcalSubdetector subdet=(HcalSubdetector(gen.subdetId()));
       if (gen.det()!=Hcal ||
@@ -77,7 +77,7 @@ public:
     }
   }
   /** Assignment from a generic cell id */
-  HcalDetId& operator=(const DetId& gen) {
+  constexpr HcalDetId& operator=(const DetId& gen) {
     if (!gen.null()) {
       HcalSubdetector subdet=(HcalSubdetector(gen.subdetId()));
       if (gen.det()!=Hcal ||
@@ -99,30 +99,30 @@ public:
   }
 
   /** Comparison operator */
-  bool operator==(DetId gen) const {
+  constexpr bool operator==(DetId gen) const {
     uint32_t rawid = gen.rawId();
     if (rawid == id_) return true;
-    int zsid, eta, phi, dep;
+    int zsid{0}, eta{0}, phi{0}, dep{0};
     unpackId(rawid, zsid, eta, phi, dep);
     bool result = (((id_&kHcalIdMask) == (rawid&kHcalIdMask)) && (zsid==zside())
        && (eta==ietaAbs()) && (phi==iphi()) && (dep==depth()));
     return result;
   }
-  bool operator!=(DetId gen) const {
+  constexpr bool operator!=(DetId gen) const {
     uint32_t rawid = gen.rawId();
     if (rawid == id_) return false;
-    int zsid, eta, phi, dep;
+    int zsid{0}, eta{0}, phi{0}, dep{0};
     unpackId(rawid, zsid, eta, phi, dep);
     bool result = (((id_&kHcalIdMask)!=(rawid&kHcalIdMask)) || (zsid!=zside())
       || (eta!=ietaAbs()) || (phi!=iphi()) || (dep!=depth()));
     return result;
   }
-  bool operator<(DetId gen) const {
+  constexpr bool operator<(DetId gen) const {
     uint32_t rawid = gen.rawId();
     if ((rawid&kHcalIdFormat2)==(id_&kHcalIdFormat2)) {
       return id_<rawid;
     } else {
-      int zsid, eta, phi, dep;
+      int zsid{0}, eta{0}, phi{0}, dep{0};
       unpackId(rawid, zsid, eta, phi, dep);
       rawid &= kHcalIdMask;
       if (oldFormat()) {
@@ -139,32 +139,32 @@ public:
   }
 
   /// get the subdetector
-  HcalSubdetector subdet() const { return (HcalSubdetector)(subdetId()); }
-  bool oldFormat() const { return ((id_&kHcalIdFormat2)==0)?(true):(false); }
+  constexpr HcalSubdetector subdet() const { return (HcalSubdetector)(subdetId()); }
+  constexpr bool oldFormat() const { return ((id_&kHcalIdFormat2)==0)?(true):(false); }
   /// get the z-side of the cell (1/-1)
-  int zside() const {
+  constexpr int zside() const {
     if (oldFormat()) return (id_&kHcalZsideMask1)?(1):(-1);
     else             return (id_&kHcalZsideMask2)?(1):(-1);
   }
   /// get the absolute value of the cell ieta
-  int ietaAbs() const {
+  constexpr int ietaAbs() const {
     if (oldFormat()) return (id_>>kHcalEtaOffset1)&kHcalEtaMask1;
     else             return (id_>>kHcalEtaOffset2)&kHcalEtaMask2;
   }
   /// get the cell ieta
-  int ieta() const { return zside()*ietaAbs(); }
+  constexpr int ieta() const { return zside()*ietaAbs(); }
   /// get the cell iphi
-  int iphi() const {
+  constexpr int iphi() const {
     if (oldFormat()) return id_&kHcalPhiMask1;
     else             return id_&kHcalPhiMask2;
   }
   /// get the tower depth
-  int depth() const {
+  constexpr int depth() const {
     if (oldFormat())  return (id_>>kHcalDepthOffset1)&kHcalDepthMask1;
     else              return (id_>>kHcalDepthOffset2)&kHcalDepthMask2;
   }
   /// get full depth information for HF
-  int hfdepth() const {
+  constexpr int hfdepth() const {
     int dep = depth();
     if (subdet() == HcalForward) {
       if (dep > 2) dep -= 2;
@@ -172,12 +172,12 @@ public:
     return dep;
   }
   /// get the tower depth
-  uint32_t maskDepth() const {
+  constexpr uint32_t maskDepth() const {
     if (oldFormat())  return (id_|kHcalDepthSet1);
     else              return (id_|kHcalDepthSet2);
   }
   /// change format
-  uint32_t otherForm() const {
+  constexpr uint32_t otherForm() const {
     uint32_t rawid = (id_&kHcalIdMask);
     if (oldFormat()) {
       rawid = newForm(id_);
@@ -188,16 +188,16 @@ public:
     }
     return rawid;
   }
-  void changeForm() {
+  constexpr void changeForm() {
     id_ = otherForm();
   }
-  uint32_t newForm() const {
+  constexpr uint32_t newForm() const {
     return newForm(id_);
   }
-  static int32_t newForm(const uint32_t& inpid) {
+  constexpr static int32_t newForm(const uint32_t& inpid) {
     uint32_t rawid(inpid);
     if ((rawid&kHcalIdFormat2)==0) {
-      int zsid, eta, phi, dep;
+      int zsid{0}, eta{0}, phi{0}, dep{0};
       unpackId(rawid, zsid, eta, phi, dep);
       rawid    = inpid&kHcalIdMask;
       rawid   |= (kHcalIdFormat2) | ((dep&kHcalDepthMask2)<<kHcalDepthOffset2) |
@@ -207,10 +207,10 @@ public:
     return rawid;
   }
   /// base detId for HF dual channels
-  bool sameBaseDetId(const DetId& gen) const {
+  constexpr bool sameBaseDetId(const DetId& gen) const {
     uint32_t rawid = gen.rawId();
     if (rawid == id_) return true;
-    int zsid, eta, phi, dep;
+    int zsid{0}, eta{0}, phi{0}, dep{0};
     if ((id_&kHcalIdMask) != (rawid&kHcalIdMask)) return false;
     unpackId(rawid, zsid, eta, phi, dep);
     if (subdet() == HcalForward && dep > 2) dep -= 2;
@@ -218,11 +218,11 @@ public:
        (dep==hfdepth()));
     return result;
   }
-  HcalDetId baseDetId() const {
+  constexpr HcalDetId baseDetId() const {
     if (subdet() != HcalForward || depth() <= 2) {
       return HcalDetId(id_);
     } else {
-      int zsid, eta, phi, dep;
+      int zsid{0}, eta{0}, phi{0}, dep{0};
       unpackId(id_, zsid, eta, phi, dep);
       dep     -= 2;
       uint32_t rawid    = id_&kHcalIdMask;
@@ -233,11 +233,11 @@ public:
     }
   }
   /// second PMT anode detId for HF dual channels
-  HcalDetId secondAnodeId() const {
+  constexpr HcalDetId secondAnodeId() const {
     if (subdet() != HcalForward || depth() > 2) {
       return HcalDetId(id_);
     } else {
-      int zsid, eta, phi, dep;
+      int zsid{0}, eta{0}, phi{0}, dep{0};
       unpackId(id_, zsid, eta, phi, dep);
       dep     += 2;
       uint32_t rawid    = id_&kHcalIdMask;
@@ -249,17 +249,17 @@ public:
   }
 
   /// get the smallest crystal_ieta of the crystal in front of this tower (HB and HE tower 17 only)
-  int crystal_ieta_low() const { return ((ieta()-zside())*5)+zside(); }
+  constexpr int crystal_ieta_low() const { return ((ieta()-zside())*5)+zside(); }
   /// get the largest crystal_ieta of the crystal in front of this tower (HB and HE tower 17 only)
-  int crystal_ieta_high() const { return ((ieta()-zside())*5)+5*zside(); }
+  constexpr int crystal_ieta_high() const { return ((ieta()-zside())*5)+5*zside(); }
   /// get the smallest crystal_iphi of the crystal in front of this tower (HB and HE tower 17 only)
-  int crystal_iphi_low() const {
+  constexpr int crystal_iphi_low() const {
     int simple_iphi=((iphi()-1)*5)+1;
     simple_iphi+=10;
     return ((simple_iphi>360)?(simple_iphi-360):(simple_iphi));
   }
   /// get the largest crystal_iphi of the crystal in front of this tower (HB and HE tower 17 only)
-  int crystal_iphi_high() const {
+  constexpr int crystal_iphi_high() const {
     int simple_iphi=((iphi()-1)*5)+5;
     simple_iphi+=10;
     return ((simple_iphi>360)?(simple_iphi-360):(simple_iphi));
@@ -269,11 +269,11 @@ public:
 
 private:
 
-  void newFromOld(const uint32_t& rawid) {
+  constexpr void newFromOld(const uint32_t& rawid) {
    id_ = newForm(rawid);
   }
 
-  static void unpackId(const uint32_t& rawid, int& zsid, int& eta, int& phi,
+  constexpr static void unpackId(const uint32_t& rawid, int& zsid, int& eta, int& phi,
        int& dep) {
     if ((rawid&kHcalIdFormat2)==0) {
       zsid = (rawid&kHcalZsideMask1)?(1):(-1);
