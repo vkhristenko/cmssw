@@ -4,7 +4,14 @@
 #include <ostream>
 #include <boost/cstdint.hpp>
 
-static const float nominal_adc2fc[128] = {-0.5f,0.5f,1.5f,2.5f,3.5f,4.5f,5.5f,6.5f,7.5f,8.5f,9.5f,10.5f,11.5f,12.5f,13.5f,
+static
+#ifdef __CUDACC__
+  __constant__
+#else
+constexpr
+#endif
+float 
+nominal_adc2fc[128] = {-0.5f,0.5f,1.5f,2.5f,3.5f,4.5f,5.5f,6.5f,7.5f,8.5f,9.5f,10.5f,11.5f,12.5f,13.5f,
 					    15.0f,17.0f,19.0f,21.0f,23.0f,25.0f,27.0f,
 					    29.5f,32.5f,35.5f,38.5f,
 					    42.0f,46.0f,50.0f,
@@ -33,37 +40,42 @@ static const float nominal_adc2fc[128] = {-0.5f,0.5f,1.5f,2.5f,3.5f,4.5f,5.5f,6.
  */
 class HcalQIESample {
 public:
-  HcalQIESample() { theSample=0; }
-  HcalQIESample(uint16_t data) { theSample=data; }
-  HcalQIESample(int adc, int capid, int fiber, int fiberchan, bool dv, bool er) {
-    theSample=(adc&0x7f) | ((capid&0x3)<<7) |
+  constexpr HcalQIESample() 
+    : theSample{0}
+  {}
+  constexpr HcalQIESample(uint16_t data) 
+    : theSample{data}
+  {}
+  constexpr HcalQIESample(int adc, int capid, int fiber, 
+                          int fiberchan, bool dv, bool er) 
+    : theSample((uint16_t)((adc&0x7f) | ((capid&0x3)<<7) |
       (((fiber-1)&0x7)<<13) | ((fiberchan&0x3)<<11) |
-      ((dv)?(0x0200):(0)) | ((er)?(0x0400):(0));
-  }
+      ((dv)?(0x0200):(0)) | ((er)?(0x0400):(0))))
+  {}
   
   /// get the raw word
-  uint16_t raw() const { return theSample; }
+  constexpr uint16_t raw() const { return theSample; }
   /// get the ADC sample
-  int adc() const { return theSample&0x7F; }
+  constexpr int adc() const { return theSample&0x7F; }
   /// get the nominal FC (no calibrations applied)
-  double nominal_fC() const {
+  constexpr double nominal_fC() const {
     return nominal_adc2fc[adc()];
   }
   /// get the Capacitor id
-  int capid() const { return (theSample>>7)&0x3; }
+  constexpr int capid() const { return (theSample>>7)&0x3; }
   /// is the Data Valid bit set?
-  bool dv() const { return (theSample&0x0200)!=0; }
+  constexpr bool dv() const { return (theSample&0x0200)!=0; }
   /// is the error bit set?
-  bool er() const { return (theSample&0x0400)!=0; }
+  constexpr bool er() const { return (theSample&0x0400)!=0; }
   /// get the fiber number
-  int fiber() const { return ((theSample>>13)&0x7)+1; }
+  constexpr int fiber() const { return ((theSample>>13)&0x7)+1; }
   /// get the fiber channel number
-  int fiberChan() const { return (theSample>>11)&0x3; }
+  constexpr int fiberChan() const { return (theSample>>11)&0x3; }
   /// get the id channel
-  int fiberAndChan() const { return (theSample>>11)&0x1F; }
+  constexpr int fiberAndChan() const { return (theSample>>11)&0x1F; }
   
   /// for streaming
-  uint16_t operator()() { return theSample; }
+  constexpr uint16_t operator()() { return theSample; }
   
 private:
   uint16_t theSample;
