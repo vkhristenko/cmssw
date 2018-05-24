@@ -12,6 +12,10 @@ __global__ void test_hcal_qiesample() {
     printf("%f %f %f\n", nominal_adc2fc[0], nominal_adc2fc[1], nominal_adc2fc[2]);
 }
 
+__global__ void test_hcal_hbhedf() {
+
+}
+
 int main(int argc, char** argv) {
     test_hcal_qiesample<<<1,1>>>();
     cudaDeviceSynchronize();
