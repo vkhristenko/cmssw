@@ -4,7 +4,6 @@
 #include "DataFormats/HcalDetId/interface/HcalDetId.h"
 #include "DataFormats/HcalDetId/interface/HcalElectronicsId.h"
 #include "DataFormats/HcalDigi/interface/HcalQIESample.h"
-#include <vector>
 #include <ostream>
 
 /** \class HFDataFrame
