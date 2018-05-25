@@ -78,7 +78,7 @@ public:
     hcalPresamples_|=(crossingMask&0x3FF)<<12; 
   }
   constexpr void setSample(int i, const HcalQIESample& sam) { data_[i]=sam; }
-  void setReadoutIds(const HcalElectronicsId& eid) {
+  constexpr void setReadoutIds(const HcalElectronicsId& eid) {
     electronicsId_=eid;
   }
   constexpr void setFiberIdleOffset(int offset) {
