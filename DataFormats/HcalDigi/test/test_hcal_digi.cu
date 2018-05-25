@@ -6,6 +6,7 @@
 #include "DataFormats/DetId/interface/DetId.h"
 #include "DataFormats/HcalDetId/interface/HcalDetId.h"
 #include "DataFormats/HcalDigi/interface/HBHEDataFrame.h"
+#include "DataFormats/HcalDigi/interface/HcalDigiCollections.h"
 
 __global__ void kernel_test_hcal_qiesample(HcalQIESample* sample, uint16_t value) {
     printf("kernel: testing hcal qie sampel\n");
@@ -36,6 +37,50 @@ void test_hcal_qiesample() {
     assert(h_sample() != h_test_sample1());
 }
 
+template<typename TDF>
+__global__ void kernel_test_hcal_digis(TDF *pdfs, uint32_t* out) {
+    int id = threadIdx.x;
+    uint32_t sum = 0;
+    for (auto i=0; i<10; i++)
+        sum += pdfs[id].sample(i).raw();
+    out[id] = sum;
+}
+
+template<typename TDF>
+void test_hcal_digis() {
+    constexpr int n = 10;
+    edm::SortedCollection<TDF> coll{n};
+    TDF *d_dfs;
+    uint32_t *d_out;
+    uint32_t h_out[n], h_test_out[n];
+    for (auto i=0; i<n; i++) {
+        TDF &df = coll[i];
+        df.setSize(10);
+        h_test_out[i] = 0;
+        uint32_t test = 0;
+        for (auto j=0; j<10; j++) {
+            df.setSample(j, HcalQIESample(100));
+            h_test_out[i] += df.sample(j).raw();
+            test += df.sample(j).raw();
+        }
+    }
+
+    cudaMalloc((void**)&d_dfs, n * sizeof(TDF));
+    cudaMalloc((void**)&d_out, n * sizeof(uint32_t));
+    cudaMemcpy(d_dfs, &(*coll.begin()), n * sizeof(TDF), 
+        cudaMemcpyHostToDevice);
+    kernel_test_hcal_digis<<<1, n>>>(d_dfs, d_out);
+    cudaMemcpy(&h_out, d_out, n * sizeof(uint32_t), cudaMemcpyDeviceToHost);
+
+    std::cout << "collection size = " << coll.size() << std::endl;
+
+    // comparison
+    for (auto i=0; i<n; i++) {
+        std::cout << h_out[i] << " == " << h_test_out[i] << std::endl;
+        assert(h_out[i] == h_test_out[i]);
+    }
+}
+
 void test_hcal_hbhedf() {
     HBHEDataFrame h_df, h_test_df;
     HBHEDataFrame *d_df;
@@ -59,4 +104,7 @@ void test_hcal_hbhedf() {
 int main(int argc, char** argv) {
     test_hcal_qiesample();
     test_hcal_hbhedf();
+    test_hcal_digis<HBHEDataFrame>();
+    test_hcal_digis<HFDataFrame>();
+    test_hcal_digis<HODataFrame>();
 }
