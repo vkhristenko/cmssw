@@ -40,3 +40,6 @@
 </bin>
 <bin   name="testMultiAssociation" file="testRunner.cpp,testMultiAssociation.cc">
 </bin>
+<bin name="test_dataframe_cuda" file="test_dataframe_cuda.cu">
+    <use name="cuda"/>
+</bin>
