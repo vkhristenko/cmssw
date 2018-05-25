@@ -32,7 +32,7 @@ public:
   constexpr DetId(uint32_t id) : id_(id) { }
   /// Create an id, filling the detector and subdetector fields as specified
   constexpr DetId(Detector det, int subdet) 
-    : id_((int)(((det&kDetMask)<<kDetOffset) | ((subdet&kSubdetMask)<<kSubdetOffset)))
+    : id_(((det&kDetMask)<<kDetOffset)|((subdet&kSubdetMask)<<kSubdetOffset))
   {}
 
   /// get the detector field from this detid
