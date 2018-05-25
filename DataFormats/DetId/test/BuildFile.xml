@@ -1,0 +1,3 @@
+<bin name="test_detid" file="test_detid.cu">
+    <use name="DataFormats/DetId"/>
+</bin>
