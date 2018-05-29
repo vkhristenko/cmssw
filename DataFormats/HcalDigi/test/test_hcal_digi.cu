@@ -7,6 +7,7 @@
 #include "DataFormats/HcalDetId/interface/HcalDetId.h"
 #include "DataFormats/HcalDigi/interface/HBHEDataFrame.h"
 #include "DataFormats/HcalDigi/interface/QIE10DataFrame.h"
+#include "DataFormats/HcalDigi/interface/QIE11DataFrame.h"
 #include "DataFormats/HcalDigi/interface/HcalDigiCollections.h"
 #include "DataFormats/Common/interface/DataFrame.h"
 
@@ -50,13 +51,13 @@ __global__ void kernel_test_hcal_qie8_digis(TDF *pdfs, uint32_t* out) {
 
 template<typename TDF>
 __global__ void kernel_test_hcal_qie1011_digis(uint16_t* pdfs, uint32_t* out, int samples) {
-    printf("kernel: testing hcal qie10 df\n");
+    printf("kernel: testing hcal qie1011 df\n");
     int id = threadIdx.x;
     uint32_t sum=0;
     int nwords = TDF::WORDS_PER_SAMPLE*samples + TDF::HEADER_WORDS + TDF::FLAG_WORDS;
     TDF df(edm::DataFrame(0, pdfs + id*nwords, nwords));
     for (auto i=0; i< df.samples(); i++) {
-        sum += df[i].raw(0) + df[i].raw(1);
+        sum += df[i].adc();
     }
 
     out[id] = sum;
@@ -81,7 +82,7 @@ void test_hcal_qie1011_digis() {
         }
         TDF df(edm::DataFrame(0, tmp, TDF::WORDS_PER_SAMPLE * samples + TDF::HEADER_WORDS + TDF::FLAG_WORDS));
         for (auto j=0; j<df.samples(); j++)
-            h_test_out[i] += df[j].raw(0) + df[j].raw(1);
+            h_test_out[i] += df[j].adc();
         coll.addDataFrame(DetId{(uint32_t)i}, (uint16_t*)&tmp);
     }
 
@@ -91,12 +92,14 @@ void test_hcal_qie1011_digis() {
     cudaMemcpy(d_data, coll.frame(0), size * (TDF::WORDS_PER_SAMPLE * 
         samples + TDF::HEADER_WORDS + TDF::FLAG_WORDS) * sizeof(uint16_t), 
             cudaMemcpyHostToDevice);
-    kernel_test_hcal_qie1011_digis<QIE10DataFrame><<<1, size>>>(d_data, d_out, 10);
+    kernel_test_hcal_qie1011_digis<QIE10DataFrame><<<1, size>>>(d_data, d_out, samples);
     cudaMemcpy(&h_out, d_out, size * sizeof(uint32_t), cudaMemcpyDeviceToHost);
 
     // comparison
     for (auto i=0; i<size; i++) {
-        assert(h_out[i] == h_test_out[i]);
+        std::cout << h_out[i] << " == " << h_test_out[i] << std::endl;
+        std::cout << TDF(coll[i]);
+    //    assert(h_out[i] == h_test_out[i]);
     }
 }
 
@@ -172,5 +175,6 @@ int main(int argc, char** argv) {
 
         // qie1011
         test_hcal_qie1011_digis<QIE10DataFrame>();
+        test_hcal_qie1011_digis<QIE11DataFrame>();
     }
 }
