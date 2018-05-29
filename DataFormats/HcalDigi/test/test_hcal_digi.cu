@@ -102,9 +102,15 @@ void test_hcal_hbhedf() {
 }
 
 int main(int argc, char** argv) {
-    test_hcal_qiesample();
-    test_hcal_hbhedf();
-    test_hcal_digis<HBHEDataFrame>();
-    test_hcal_digis<HFDataFrame>();
-    test_hcal_digis<HODataFrame>();
+    int nDevices;
+    cudaGetDeviceCount(&nDevices);
+    std::cout << "nDevices = " << nDevices << std::endl;
+
+    if (nDevices > 0) {
+        test_hcal_qiesample();
+        test_hcal_hbhedf();
+        test_hcal_digis<HBHEDataFrame>();
+        test_hcal_digis<HFDataFrame>();
+        test_hcal_digis<HODataFrame>();
+    }
 }
