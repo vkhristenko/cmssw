@@ -24,7 +24,7 @@ namespace edm {
     
     constexpr inline
     DataFrame() : m_id(0), m_data(nullptr), m_size(0){}
-    inline
+    constexpr inline
     DataFrame(id_type i, data_type const * idata, size_type isize) :
       m_id(i), m_data(idata), m_size(isize) {}
     

@@ -24,7 +24,15 @@ public:
 
     constexpr Sample(const edm::DataFrame& frame, edm::DataFrame::size_type i) : word1_(frame[i]), word2_(frame[i+1]) { }
     constexpr Sample(const edm::DataFrame::data_type& word1, const edm::DataFrame::data_type& word2) : word1_(word1), word2_(word2) {}
-    constexpr explicit Sample(wide_type wide);
+    explicit Sample(const wide_type wide) 
+      : word1_{0}, word2_{0} {
+      static_assert(sizeof(wide) == 2*sizeof(word1_),
+                "The wide input type must be able to contain two words");
+      const edm::DataFrame::data_type* ptr =
+        reinterpret_cast<const edm::DataFrame::data_type*>(&wide);
+      word1_ = ptr[0];
+      word2_ = ptr[1];
+    }
 
     static const int MASK_ADC = 0xFF;
     static const int MASK_LE_TDC = 0x3F;
@@ -43,14 +51,28 @@ public:
     constexpr inline int capid() const { return (word2_>>OFFSET_CAPID)&MASK_CAPID; }
     constexpr inline edm::DataFrame::data_type raw(edm::DataFrame::size_type i) const
         { return (i > WORDS_PER_SAMPLE) ? 0 : ( (i==1) ? word2_ : word1_ ); }
-    constexpr wide_type wideRaw() const;
+    QIE10DataFrame::Sample::wide_type wideRaw() const {
+      static_assert(sizeof(QIE10DataFrame::Sample::wide_type) == 2*sizeof(word1_),
+                "The wide result type must be able to contain two words");
+      wide_type result = 0;
+      edm::DataFrame::data_type* ptr =
+        reinterpret_cast<edm::DataFrame::data_type*>(&result);
+      ptr[0] = word1_;
+      ptr[1] = word2_;
+      return result;
+    }
 
   private:
     edm::DataFrame::data_type word1_;
     edm::DataFrame::data_type word2_;
   };
 
-  constexpr void copyContent(const QIE10DataFrame& src);
+  constexpr void copyContent(const QIE10DataFrame& digi) {
+    for (edm::DataFrame::size_type i=0; i<size() && i<digi.size();i++){
+      Sample sam = digi[i];
+      setSample(i, sam.adc(), sam.le_tdc(), sam.te_tdc(), sam.capid(), sam.soi(), sam.ok());
+    }
+  }
 
   /// Get the detector id
   constexpr DetId detid() const { return DetId(m_data.id()); }
@@ -65,7 +87,12 @@ public:
   /// total number of samples in the digi
   constexpr int samples() const { return (size()-HEADER_WORDS-FLAG_WORDS)/WORDS_PER_SAMPLE; }
   /// for backward compatibility
-  constexpr int presamples() const;
+  constexpr int presamples() const {
+    for (int i=0; i<samples(); i++) {
+      if ((*this)[i].soi()) return i;
+    }
+    return -1;
+  }
   /// get the flavor of the frame
   static const int OFFSET_FLAVOR = 12;
   static const int MASK_FLAVOR = 0x7;
@@ -77,15 +104,25 @@ public:
   static const int MASK_MARKPASS = 0x100;
   constexpr bool zsMarkAndPass() const {return m_data[0]&MASK_MARKPASS; }
   /// set ZS params
-  constexpr void setZSInfo(bool markAndPass);
+  constexpr void setZSInfo(bool markAndPass) {
+    if(markAndPass) m_data[0] |= MASK_MARKPASS;
+  }
   /// get the sample
   constexpr inline Sample operator[](edm::DataFrame::size_type i) const { return Sample(m_data,i*WORDS_PER_SAMPLE+HEADER_WORDS); }
   /// set the sample contents
-  constexpr void setSample(edm::DataFrame::size_type isample, int adc, int le_tdc, int te_tdc, int capid, bool soi=false, bool ok=true);
+  constexpr void setSample(edm::DataFrame::size_type isample, int adc, 
+                           int le_tdc, int te_tdc, int capid, bool soi=false, 
+                           bool ok=true) {
+    if (isample>=size()) return;
+    m_data[isample*WORDS_PER_SAMPLE+HEADER_WORDS]=(adc&Sample::MASK_ADC)|(soi?(Sample::MASK_SOI):(0))|(ok?(Sample::MASK_OK):(0));
+    m_data[isample*WORDS_PER_SAMPLE+HEADER_WORDS+1]=(le_tdc&Sample::MASK_LE_TDC)|((te_tdc&Sample::MASK_TE_TDC)<<Sample::OFFSET_TE_TDC)|((capid&Sample::MASK_CAPID)<<Sample::OFFSET_CAPID)|0x4000; // 0x4000 marks this as second word of a pair
+  }
   /// get the flag word
   constexpr uint16_t flags() const { return m_data[size()-1]; }
   /// set the flag word
-  constexpr void setFlags(uint16_t v);
+  constexpr void setFlags(uint16_t v) {
+    m_data[size()-1]=v;
+  }
   
   private:
    edm::DataFrame m_data;
