@@ -3,35 +3,36 @@
 #include "DataFormats/HcalDigi/interface/QIE10DataFrame.h"
 #include "DataFormats/HcalDetId/interface/HcalGenericDetId.h"
 
-void QIE10DataFrame::setSample(edm::DataFrame::size_type isample, int adc, int le_tdc, int te_tdc, int capid, bool soi, bool ok) {
+constexpr void QIE10DataFrame::setSample(edm::DataFrame::size_type isample, int adc, int le_tdc, int te_tdc, int capid, bool soi, bool ok) {
   if (isample>=size()) return;
   m_data[isample*WORDS_PER_SAMPLE+HEADER_WORDS]=(adc&Sample::MASK_ADC)|(soi?(Sample::MASK_SOI):(0))|(ok?(Sample::MASK_OK):(0));
   m_data[isample*WORDS_PER_SAMPLE+HEADER_WORDS+1]=(le_tdc&Sample::MASK_LE_TDC)|((te_tdc&Sample::MASK_TE_TDC)<<Sample::OFFSET_TE_TDC)|((capid&Sample::MASK_CAPID)<<Sample::OFFSET_CAPID)|0x4000; // 0x4000 marks this as second word of a pair
 }
 
-void QIE10DataFrame::setFlags(uint16_t v) {
+constexpr void QIE10DataFrame::setFlags(uint16_t v) {
   m_data[size()-1]=v;
 }
 
-void QIE10DataFrame::copyContent(const QIE10DataFrame& digi) {
+constexpr void QIE10DataFrame::copyContent(const QIE10DataFrame& digi) {
   for (edm::DataFrame::size_type i=0; i<size() && i<digi.size();i++){
     Sample sam = digi[i];
     setSample(i, sam.adc(), sam.le_tdc(), sam.te_tdc(), sam.capid(), sam.soi(), sam.ok());
   }
 }
 
-int QIE10DataFrame::presamples() const {
+constexpr int QIE10DataFrame::presamples() const {
   for (int i=0; i<samples(); i++) {
     if ((*this)[i].soi()) return i;
   }
   return -1;
 }
 
-void QIE10DataFrame::setZSInfo(bool markAndPass) {
+constexpr void QIE10DataFrame::setZSInfo(bool markAndPass) {
 	if(markAndPass) m_data[0] |= MASK_MARKPASS;
 }
 
-QIE10DataFrame::Sample::Sample(const wide_type wide) {
+constexpr QIE10DataFrame::Sample::Sample(const wide_type wide) 
+  : word1_{0}, word2_{0} {
   static_assert(sizeof(wide) == 2*sizeof(word1_),
                 "The wide input type must be able to contain two words");
   const edm::DataFrame::data_type* ptr =
@@ -40,7 +41,7 @@ QIE10DataFrame::Sample::Sample(const wide_type wide) {
   word2_ = ptr[1];
 }
 
-QIE10DataFrame::Sample::wide_type QIE10DataFrame::Sample::wideRaw() const {
+constexpr QIE10DataFrame::Sample::wide_type QIE10DataFrame::Sample::wideRaw() const {
   static_assert(sizeof(QIE10DataFrame::Sample::wide_type) == 2*sizeof(word1_),
                 "The wide result type must be able to contain two words");
   wide_type result = 0;
