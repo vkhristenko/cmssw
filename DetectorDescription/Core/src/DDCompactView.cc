@@ -61,11 +61,6 @@ const DDCompactView::graph_type & DDCompactView::graph() const
   return rep_->graph(); 
 }
 
-DDCompactView::graph_type & DDCompactView::writeableGraph() 
-{
-  return const_cast<graph_type&>(rep_->graph());
-}
-
 const DDLogicalPart & DDCompactView::root() const
 {
   return rep_->root(); 
@@ -80,30 +75,6 @@ DDCompactView::walker_type DDCompactView::walker() const
 {
   return rep_->walker();
 }
-
-    
-/** 
-   Example:
-  
-      \code
-      // Fetch a compact-view
-      DDCompactView view;
-      
-      // Fetch the part you want to weigh
-      DDLogicalPart tracker(DDName("Tracker","tracker.xml"));
-      
-      // Weigh it
-      edm::LogInfo ("DDCompactView") << "Tracker weight = " 
-           << view.weight(tracker) / kg 
-	   << " kg" << std::endl;
-      \endcode
-      
-      The weight of all children is calculated as well.
-*/    
-double DDCompactView::weight(const DDLogicalPart & p) const
-{
-  return rep_->weight(p);
-}  
 
 void DDCompactView::position (const DDLogicalPart & self, 
 			      const DDLogicalPart & parent,

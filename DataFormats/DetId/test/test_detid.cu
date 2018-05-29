@@ -32,5 +32,6 @@ int main(int argc, char** argv) {
     std::cout << "nDevices = " << nDevices << std::endl;
 
     // test det id functionality
-    test_detid();
+    if (nDevices > 0)
+        test_detid();
 }

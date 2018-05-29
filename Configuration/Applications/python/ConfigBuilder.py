@@ -479,7 +479,7 @@ class ConfigBuilder(object):
 			self.runsAndWeights = eval(self._options.runsAndWeightsForMC)
 		else:
 			from Configuration.StandardSequences.RunsAndWeights import RunsAndWeights
-			if type(RunsAndWeights[self._options.runsScenarioForMC])==str:
+			if isinstance(RunsAndWeights[self._options.runsScenarioForMC], str):
 				__import__(RunsAndWeights[self._options.runsScenarioForMC])
 				self.runsAndWeights = sys.modules[RunsAndWeights[self._options.runsScenarioForMC]].runProbabilityDistribution
 			else:
@@ -750,9 +750,9 @@ class ConfigBuilder(object):
 			stepName=stepName[2:]
 		if stepSpec=="":
 			getattr(self,"prepare_"+stepName)(sequence = getattr(self,stepName+"DefaultSeq"))
-		elif type(stepSpec)==list:
+		elif isinstance(stepSpec, list):
 			getattr(self,"prepare_"+stepName)(sequence = '+'.join(stepSpec))
-		elif type(stepSpec)==tuple:
+		elif isinstance(stepSpec, tuple):
 			getattr(self,"prepare_"+stepName)(sequence = ','.join([stepSpec[1],'+'.join(stepSpec[0])]))
 		else:
 			raise ValueError("Invalid step definition")
@@ -916,6 +916,8 @@ class ConfigBuilder(object):
 		    self.loadAndRemember('SimGeneral.HepPDTESSource.'+self._options.particleTable+'_cfi')
 
         self.loadAndRemember('FWCore/MessageService/MessageLogger_cfi')
+        # Eventually replace with some more generic file to load
+        self.loadAndRemember('HeterogeneousCore/CUDAServices/CUDAService_cfi')
 
         self.ALCADefaultCFF="Configuration/StandardSequences/AlCaRecoStreams_cff"
         self.GENDefaultCFF="Configuration/StandardSequences/Generator_cff"
@@ -2011,8 +2013,8 @@ class ConfigBuilder(object):
             harvestingstream = getattr(harvestingConfig,name)
             if name in harvestingList and isinstance(harvestingstream,cms.Path):
                self.schedule.append(harvestingstream)
-               if type(getattr(harvestingConfig,"ALCAHARVEST" + name + "_dbOutput")) == cms.VPSet and \
-                  type(getattr(harvestingConfig,"ALCAHARVEST" + name + "_metadata")) == cms.VPSet:
+               if isinstance(getattr(harvestingConfig,"ALCAHARVEST" + name + "_dbOutput"), cms.VPSet) and \
+                  isinstance(getattr(harvestingConfig,"ALCAHARVEST" + name + "_metadata"), cms.VPSet):
                    self.executeAndRemember("process.PoolDBOutputService.toPut.extend(process.ALCAHARVEST" + name + "_dbOutput)")
                    self.executeAndRemember("process.pclMetadataWriter.recordsToMap.extend(process.ALCAHARVEST" + name + "_metadata)")
                else:
@@ -2139,8 +2141,7 @@ class ConfigBuilder(object):
         # dump all additional outputs (e.g. alca or skim streams)
         self.pythonCfgCode += "\n# Additional output definition\n"
         #I do not understand why the keys are not normally ordered.
-        nl=self.additionalOutputs.keys()
-        nl.sort()
+        nl=sorted(self.additionalOutputs.keys())
         for name in nl:
                 output = self.additionalOutputs[name]
                 self.pythonCfgCode += "process.%s = %s" %(name, output.dumpPython())

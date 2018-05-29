@@ -212,6 +212,7 @@ class MatrixInjector(object):
             wmsplit['RECODR2_2017reHLT_skimDoubleEG_Prompt']=1
             wmsplit['RECODR2_2017reHLT_skimMET_Prompt']=1
             wmsplit['RECODR2_2017reHLT_skimMuOnia_Prompt']=1
+            wmsplit['RECODR2_2017reHLT_Prompt_L1TEgDQM']=1
             wmsplit['HLTDR2_50ns']=1
             wmsplit['HLTDR2_25ns']=1
             wmsplit['HLTDR2_2016']=1
@@ -464,7 +465,7 @@ class MatrixInjector(object):
             itask=0
             if self.keep:
                 for i in self.keep:
-                    if type(i)==int and i < len(chainDict['nowmTasklist']):
+                    if isinstance(i, int) and i < len(chainDict['nowmTasklist']):
                         chainDict['nowmTasklist'][i]['KeepOutput']=True
             for (i,t) in enumerate(chainDict['nowmTasklist']):
                 if t['TaskName'].startswith('HARVEST'):
