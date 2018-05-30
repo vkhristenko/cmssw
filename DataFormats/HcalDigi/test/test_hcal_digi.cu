@@ -92,14 +92,17 @@ void test_hcal_qie1011_digis() {
     cudaMemcpy(d_data, coll.frame(0), size * (TDF::WORDS_PER_SAMPLE * 
         samples + TDF::HEADER_WORDS + TDF::FLAG_WORDS) * sizeof(uint16_t), 
             cudaMemcpyHostToDevice);
-    kernel_test_hcal_qie1011_digis<QIE10DataFrame><<<1, size>>>(d_data, d_out, samples);
+    kernel_test_hcal_qie1011_digis<TDF><<<1, size>>>(d_data, d_out, samples);
+    cudaDeviceSynchronize();
+    auto code = cudaGetLastError();
+    if (code != cudaSuccess)
+        std::cout << cudaGetErrorString(code);
     cudaMemcpy(&h_out, d_out, size * sizeof(uint32_t), cudaMemcpyDeviceToHost);
 
     // comparison
     for (auto i=0; i<size; i++) {
         std::cout << h_out[i] << " == " << h_test_out[i] << std::endl;
-        std::cout << TDF(coll[i]);
-    //    assert(h_out[i] == h_test_out[i]);
+        assert(h_out[i] == h_test_out[i]);
     }
 }
 

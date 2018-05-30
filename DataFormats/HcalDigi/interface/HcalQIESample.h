@@ -5,7 +5,7 @@
 #include <boost/cstdint.hpp>
 
 static
-#if __CUDA_ARCH__ > 0
+#ifdef __CUDA_ARCH__
   __constant__
 #else
   constexpr
