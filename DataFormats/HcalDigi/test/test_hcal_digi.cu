@@ -180,4 +180,6 @@ int main(int argc, char** argv) {
         test_hcal_qie1011_digis<QIE10DataFrame>();
         test_hcal_qie1011_digis<QIE11DataFrame>();
     }
+
+    return 0;
 }

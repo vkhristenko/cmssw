@@ -74,4 +74,6 @@ int main(int argc, char** argv) {
     // test hcal det ids
     if (nDevices>0)
         test_hcal_detid();
+
+    return 0;
 }
