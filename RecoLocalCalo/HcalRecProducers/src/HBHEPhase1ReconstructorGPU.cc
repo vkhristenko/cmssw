@@ -548,12 +548,13 @@ void HBHEPhase1ReconstructorGPU::processData(const Collection& coll,
     for (size_t ihit=0; ihit<infos->size(); ihit++) {
         auto *param_ts = &(vparams[ihit]);
         auto &calib = vcalibs[ihit];
+        auto &ch = (*infos)[ihit];
 
         // Reconstruct the rechit
         const HcalRecoParam* pptr = nullptr;
         if (recoParamsFromDB_)
             pptr = param_ts;
-        HBHERecHit rh = reco_->reconstruct(*channelInfo, pptr, calib, isRealData);
+        HBHERecHit rh = reco_->reconstruct(ch, pptr, calib, isRealData);
         if (rh.id().rawId()) {
        //     setAsicSpecificBits(frame, coder, *channelInfo, calib, &rh);
        //     setCommonStatusBits(*channelInfo, calib, &rh);
