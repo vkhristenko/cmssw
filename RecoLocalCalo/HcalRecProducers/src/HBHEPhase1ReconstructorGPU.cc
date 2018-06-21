@@ -1,5 +1,3 @@
-// -*- C++ -*-
-//
 // Package:    RecoLocalCalo/HcalRecProducers
 // Class:      HBHEPhase1ReconstructorGPU
 // 
@@ -60,7 +58,7 @@
 // Fetcher for reco algorithm data
 #include "RecoLocalCalo/HcalRecAlgos/interface/fetchHcalAlgoData.h"
 
-#include "RecoLocalCalo/HcalRecProducers/interface/gpu_reco.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/gpu_reco.h"
 
 // Some helper functions
 namespace {
@@ -547,7 +545,7 @@ void HBHEPhase1ReconstructorGPU::processData(const Collection& coll,
         }
     }
 
-    hcal::m0::reco(*vinfos, *rechits, vparams, vcalibs isRealData);
+    hcal::m0::reco(*infos, *rechits, vparams, vcalibs, isRealData);
 
     /*
     for (size_t ihit=0; ihit<infos->size(); ihit++) {

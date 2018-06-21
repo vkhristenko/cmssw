@@ -3,10 +3,10 @@
 
 #include <vector>
 
-class HBHEChannelInfoCollection;
-class HBHERecHitCollection;
+#include "DataFormats/HcalRecHit/interface/HcalRecHitCollections.h"
+
 class HcalRecoParam;
-class HcalCalibration;
+class HcalCalibrations;
 
 namespace hcal { namespace m0 {
 

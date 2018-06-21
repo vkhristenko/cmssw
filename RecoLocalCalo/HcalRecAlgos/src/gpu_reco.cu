@@ -1,8 +1,12 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/gpu_reco.h"
 
 #include "DataFormats/HcalRecHit/interface/HcalRecHitCollections.h"
+#include "CalibFormats/HcalObjects/interface/HcalCalibrations.h"
+#include "CondFormats/HcalObjects/interface/HcalRecoParam.h"
 
 namespace hcal { namespace m0 {
+
+#define firstSampleShift 0
 
 /*
 __device__ float get_energy(HBHEChannelInfo& info, float fc_ampl,
@@ -25,7 +29,7 @@ __device__ float get_time(HBHEChannelInfo& info, float fc_ampl,
             else if (maxi >= nsamples - 1U) maxi = nsamples - 2U;
 
             float t0 = info.tsEnergy(maxi - 1U);
-            float maxa = info.tsEnergy(maxI);
+            float maxa = info.tsEnergy(maxi);
             float t2 = info.tsEnergy(maxi + 1u);
 
             float mina = t0;
@@ -33,8 +37,9 @@ __device__ float get_time(HBHEChannelInfo& info, float fc_ampl,
             if (t2 < mina) mina = t2;
             if (mina < 0.f) { maxa-=mina; t0-=mina; t2-=mina; }
             float wpksamp = t0 + maxa + t2;
-            if (wpksamp) wpksamp = (maxa + 2.f*t2) / wkpsamp;
-            time = (maxI - soi)*25.f + timeshift_ns_hbheho(wpksamp);
+            if (wpksamp) wpksamp = (maxa + 2.f*t2) / wpksamp;
+            time = (maxi - soi)*25.f;
+            //time = (maxi - soi)*25.f + timeshift_ns_hbheho(wpksamp);
 
             time -= calibs.timecorr();
         }
@@ -45,11 +50,10 @@ __device__ float get_time(HBHEChannelInfo& info, float fc_ampl,
 
 /// method 0 kernel
 __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits, 
-                            HcalRecoParam *vparams, HcalCalibrations *vcalibs, ...) {
+                            HcalRecoParam *vparams, HcalCalibrations *vcalibs) {
     // position in the vector and get the corresponding entries
     int idx = threadIdx.x;
     auto info = vinfos[idx];
-    auto rechit = vrechits[idx];
     auto params = vparams[idx];
     auto calibs = vcalibs[idx];
 
@@ -62,17 +66,21 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
 
     // skip containment correction for now...
     float energy = info.energyInWindow(ibeg, ibeg+nsamples_to_add);
-    float time = get_time(info, fc_ampl, calibs, nSamplesToAdd);
+    float time = get_time(info, fc_ampl, calibs, nsamples_to_add);
 
     // set the values for the rec hit
-    rechit = HBHERecHit(info.id(), energy, time, info.soiRiseTime());
+    auto rechit = HBHERecHit(info.id(), energy, time, info.soiRiseTime());
+    
+    // set the correct rec hit
+    vrechits[idx] = rechit;
 }
 
 /// method 0 reconstruction
 void reco(HBHEChannelInfoCollection& vinfos, HBHERecHitCollection& vrechits, 
-          std::vector<HcalRecoParam> const&, std::vector<HcalCalibrations> const&, bool) {
+          std::vector<HcalRecoParam> const& vparams, 
+          std::vector<HcalCalibrations> const& vcalibs, bool) {
     // resize the output vector
-    vrechits.resize(vinfos.size());
+    vrechits.reserve(vinfos.size());
 
     // allocate memory on the device
     HBHEChannelInfo* d_vinfos;
@@ -85,20 +93,21 @@ void reco(HBHEChannelInfoCollection& vinfos, HBHERecHitCollection& vrechits,
     cudaMalloc((void**)&d_vcalibs, vinfos.size() * sizeof(HcalCalibrations));
     
     // transfer to the device
-    cudaMemcpy(d_vinfos, &(*vinfos.begin()), n*sizeof(HBHEChannelInfo),
+    cudaMemcpy(d_vinfos, &(*vinfos.begin()), vinfos.size() * sizeof(HBHEChannelInfo),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_vparams, &(*vparams.begin()), n*sizeof(HcalRecoParam),
+    cudaMemcpy(d_vparams, &(*vparams.begin()), vinfos.size() * sizeof(HcalRecoParam),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_vcalibs, &(*vcalibs.begin()), n*sizeof(HcalCalibrations),
+    cudaMemcpy(d_vcalibs, &(*vcalibs.begin()), vinfos.size() * sizeof(HcalCalibrations),
         cudaMemcpyHostToDevice);
 
     // call the kernel
     int nblocks = 1;
     int nthreadsPerBlock = vinfos.size();
-    kernel_reco<<<nblocks, nthreadsPerBlock>>>();
+    kernel_reco<<<nblocks, nthreadsPerBlock>>>(d_vinfos, d_vrechits, d_vparams,
+        d_vcalibs);
 
     // transfer back
-    cudaMemcpy(&(*vrechits.begin()), d_vrechits, n*sizeof(HBHERecHit),
+    cudaMemcpy(&(*vrechits.begin()), d_vrechits, vinfos.size() * sizeof(HBHERecHit),
         cudaMemcpyDeviceToHost);
 }
 

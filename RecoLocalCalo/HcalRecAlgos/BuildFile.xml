@@ -14,6 +14,8 @@
 <use   name="CondFormats/DataRecord"/>
 <use   name="vdt_headers"/>
 <use   name="rootminuit2"/> 
+
+<use name="cuda"/>
 <export>
   <lib   name="1"/>
 </export>
