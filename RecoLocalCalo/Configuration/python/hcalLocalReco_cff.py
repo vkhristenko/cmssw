@@ -11,6 +11,14 @@ hbheprereco = _phase1_hbheprereco.clone(
         TrianglePeakTS = cms.uint32(4),
     )
 )
+from RecoLocalCalo.HcalRecProducers.HBHEPhase1ReconstructorGPU_cfi import hbheprerecogpu as _phase1_hbheprerecogpu
+hbheprerecogpu = _phase1_hbheprerecogpu.clone(
+    processQIE11 = cms.bool(False),
+    tsFromDB = cms.bool(True),
+    pulseShapeParametersQIE8 = dict(
+        TrianglePeakTS = cms.uint32(4),
+    )
+)
 
 from RecoLocalCalo.HcalRecProducers.HcalHitReconstructor_ho_cfi import *
 from RecoLocalCalo.HcalRecProducers.HcalHitReconstructor_hf_cfi import *
