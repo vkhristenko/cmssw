@@ -60,6 +60,8 @@
 // Fetcher for reco algorithm data
 #include "RecoLocalCalo/HcalRecAlgos/interface/fetchHcalAlgoData.h"
 
+#include "RecoLocalCalo/HcalRecProducers/interface/gpu_reco.h"
+
 // Some helper functions
 namespace {
     // Class for making SiPM/QIE11 look like HPD/QIE8. HPD/QIE8
@@ -545,6 +547,9 @@ void HBHEPhase1ReconstructorGPU::processData(const Collection& coll,
         }
     }
 
+    hcal::m0::reco(*vinfos, *rechits, vparams, vcalibs isRealData);
+
+    /*
     for (size_t ihit=0; ihit<infos->size(); ihit++) {
         auto *param_ts = &(vparams[ihit]);
         auto &calib = vcalibs[ihit];
@@ -560,7 +565,7 @@ void HBHEPhase1ReconstructorGPU::processData(const Collection& coll,
        //     setCommonStatusBits(*channelInfo, calib, &rh);
             rechits->push_back(rh);
         }
-    }
+    }*/
 }
 
 void HBHEPhase1ReconstructorGPU::setCommonStatusBits(
