@@ -119,6 +119,7 @@ namespace edm {
     size_type size() const;
     size_type capacity() const;
     void reserve(size_type n);
+    void resize(size_type n);
 
     // Return a reference to the i'th item in the collection.
     // Note that the argument is an *integer*, not an object of
@@ -249,6 +250,13 @@ namespace edm {
   void
   SortedCollection<T, SORT>::reserve(typename SortedCollection<T, SORT>::size_type n) {
     obj.reserve(n);
+  }
+  
+  template<typename T, typename SORT>
+  inline
+  void
+  SortedCollection<T, SORT>::resize(typename SortedCollection<T, SORT>::size_type n) {
+    obj.resize(n);
   }
 
   template<typename T, typename SORT>
