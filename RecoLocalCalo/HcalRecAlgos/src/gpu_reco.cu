@@ -4,6 +4,24 @@
 #include "CalibFormats/HcalObjects/interface/HcalCalibrations.h"
 #include "CondFormats/HcalObjects/interface/HcalRecoParam.h"
 
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+#include <iostream>
+
+namespace hcal { namespace cuda {
+    void assert_if_error() {
+        auto check = [](auto code) {
+            if (code != cudaSuccess) {
+                std::cout << cudaGetErrorString(code) << std::endl;
+                assert(false);
+            }
+        };
+
+        check(cudaGetLastError());
+    }
+}}
+
 namespace hcal { namespace m0 {
 
 #define firstSampleShift 0
@@ -50,29 +68,31 @@ __device__ float get_time(HBHEChannelInfo& info, float fc_ampl,
 
 /// method 0 kernel
 __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits, 
-                            HcalRecoParam *vparams, HcalCalibrations *vcalibs) {
-    // position in the vector and get the corresponding entries
-    int idx = threadIdx.x;
-    auto info = vinfos[idx];
-    auto params = vparams[idx];
-    auto calibs = vcalibs[idx];
+                            HcalRecoParam *vparams, HcalCalibrations *vcalibs, int size) {
+    int idx = threadIdx.x + blockIdx.x*blockDim.x;
 
-    int ibeg = static_cast<int>(info.soi()) + firstSampleShift;
-    if (ibeg<0) ibeg=0;
-    int const nsamples_to_add = params.samplesToAdd();
-    double const fc_ampl = info.chargeInWindow(ibeg, ibeg + nsamples_to_add);
-    bool const applyContainment = params.correctForPhaseContainment();
-    float const phasens = params.correctionPhaseNS();
+    if (idx < size) {
+        auto info = vinfos[idx];
+        auto params = vparams[idx];
+        auto calibs = vcalibs[idx];
 
-    // skip containment correction for now...
-    float energy = info.energyInWindow(ibeg, ibeg+nsamples_to_add);
-    float time = get_time(info, fc_ampl, calibs, nsamples_to_add);
+        int ibeg = static_cast<int>(info.soi()) + firstSampleShift;
+        if (ibeg<0) ibeg=0;
+        int const nsamples_to_add = params.samplesToAdd();
+        double const fc_ampl = info.chargeInWindow(ibeg, ibeg + nsamples_to_add);
+        bool const applyContainment = params.correctForPhaseContainment();
+        float const phasens = params.correctionPhaseNS();
 
-    // set the values for the rec hit
-    auto rechit = HBHERecHit(info.id(), energy, time, info.soiRiseTime());
+        // skip containment correction for now...
+        float energy = info.energyInWindow(ibeg, ibeg+nsamples_to_add);
+        float time = get_time(info, fc_ampl, calibs, nsamples_to_add);
+
+        // set the values for the rec hit
+        auto rechit = HBHERecHit(info.id(), energy, time, info.soiRiseTime());
     
-    // set the correct rec hit
-    vrechits[idx] = rechit;
+        // set the correct rec hit
+        vrechits[idx] = rechit;
+    }
 }
 
 /// method 0 reconstruction
@@ -80,13 +100,18 @@ void reco(HBHEChannelInfoCollection& vinfos, HBHERecHitCollection& vrechits,
           std::vector<HcalRecoParam> const& vparams, 
           std::vector<HcalCalibrations> const& vcalibs, bool) {
     // resize the output vector
-    vrechits.reserve(vinfos.size());
+    vrechits.resize(vinfos.size());
+
+    std::cout << "size = " << vinfos.size() << std::endl;
 
     // allocate memory on the device
     HBHEChannelInfo* d_vinfos;
     HBHERecHit *d_vrechits;
     HcalRecoParam *d_vparams;
     HcalCalibrations *d_vcalibs;
+
+    // allocate memory on the device 
+    // TODO: allocate just once of max size
     cudaMalloc((void**)&d_vinfos, vinfos.size() * sizeof(HBHEChannelInfo));
     cudaMalloc((void**)&d_vrechits, vinfos.size() * sizeof(HBHERecHit));
     cudaMalloc((void**)&d_vparams, vinfos.size() * sizeof(HcalRecoParam));
@@ -101,14 +126,24 @@ void reco(HBHEChannelInfoCollection& vinfos, HBHERecHitCollection& vrechits,
         cudaMemcpyHostToDevice);
 
     // call the kernel
-    int nblocks = 1;
-    int nthreadsPerBlock = vinfos.size();
+    int nthreadsPerBlock = 256;
+    int nblocks = (vinfos.size() + nthreadsPerBlock - 1) / nthreadsPerBlock;
     kernel_reco<<<nblocks, nthreadsPerBlock>>>(d_vinfos, d_vrechits, d_vparams,
-        d_vcalibs);
+        d_vcalibs, vinfos.size());
+    cudaDeviceSynchronize();
+    hcal::cuda::assert_if_error();
 
     // transfer back
     cudaMemcpy(&(*vrechits.begin()), d_vrechits, vinfos.size() * sizeof(HBHERecHit),
         cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize();
+    hcal::cuda::assert_if_error();
+
+    // release the memory
+    cudaFree(d_vinfos);
+    cudaFree(d_vrechits);
+    cudaFree(d_vparams);
+    cudaFree(d_vcalibs);
 }
 
 }} 

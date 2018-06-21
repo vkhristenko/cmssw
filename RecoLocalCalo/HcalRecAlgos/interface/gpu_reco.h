@@ -8,6 +8,10 @@
 class HcalRecoParam;
 class HcalCalibrations;
 
+namespace hcal { namespace cuda {
+    void assert_if_error();
+}}
+
 namespace hcal { namespace m0 {
 
 // reconstruction

@@ -661,11 +661,7 @@ HBHEPhase1ReconstructorGPU::produce(edm::Event& e, const edm::EventSetup& eventS
 
     // Create new output collections
     std::unique_ptr<HBHEChannelInfoCollection> infos;
-    if (saveInfos_)
-    {
-        infos = std::make_unique<HBHEChannelInfoCollection>();
-        infos->reserve(maxOutputSize);
-    }
+    infos = std::make_unique<HBHEChannelInfoCollection>();
 
     std::unique_ptr<HBHERecHitCollection> out;
     if (makeRecHits_)
