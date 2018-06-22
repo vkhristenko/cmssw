@@ -1,12 +1,5 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/gpu_reco.h"
 
-#include "DataFormats/HcalRecHit/interface/HcalRecHitCollections.h"
-#include "CalibFormats/HcalObjects/interface/HcalCalibrations.h"
-#include "CondFormats/HcalObjects/interface/HcalRecoParam.h"
-
-#include <cuda.h>
-#include <cuda_runtime.h>
-
 #include <iostream>
 
 namespace hcal { namespace cuda {
@@ -96,7 +89,8 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
 }
 
 /// method 0 reconstruction
-void reco(HBHEChannelInfoCollection& vinfos, HBHERecHitCollection& vrechits, 
+void reco(DeviceData ddata,
+          HBHEChannelInfoCollection& vinfos, HBHERecHitCollection& vrechits, 
           std::vector<HcalRecoParam> const& vparams, 
           std::vector<HcalCalibrations> const& vcalibs, bool) {
     // resize the output vector
@@ -104,46 +98,27 @@ void reco(HBHEChannelInfoCollection& vinfos, HBHERecHitCollection& vrechits,
 
     std::cout << "size = " << vinfos.size() << std::endl;
 
-    // allocate memory on the device
-    HBHEChannelInfo* d_vinfos;
-    HBHERecHit *d_vrechits;
-    HcalRecoParam *d_vparams;
-    HcalCalibrations *d_vcalibs;
-
-    // allocate memory on the device 
-    // TODO: allocate just once of max size
-    cudaMalloc((void**)&d_vinfos, vinfos.size() * sizeof(HBHEChannelInfo));
-    cudaMalloc((void**)&d_vrechits, vinfos.size() * sizeof(HBHERecHit));
-    cudaMalloc((void**)&d_vparams, vinfos.size() * sizeof(HcalRecoParam));
-    cudaMalloc((void**)&d_vcalibs, vinfos.size() * sizeof(HcalCalibrations));
-    
     // transfer to the device
-    cudaMemcpy(d_vinfos, &(*vinfos.begin()), vinfos.size() * sizeof(HBHEChannelInfo),
+    cudaMemcpy(ddata.vinfos, &(*vinfos.begin()), vinfos.size() * sizeof(HBHEChannelInfo),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_vparams, &(*vparams.begin()), vinfos.size() * sizeof(HcalRecoParam),
+    cudaMemcpy(ddata.vparams, &(*vparams.begin()), vinfos.size() * sizeof(HcalRecoParam),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_vcalibs, &(*vcalibs.begin()), vinfos.size() * sizeof(HcalCalibrations),
+    cudaMemcpy(ddata.vcalibs, &(*vcalibs.begin()), vinfos.size() * sizeof(HcalCalibrations),
         cudaMemcpyHostToDevice);
 
     // call the kernel
     int nthreadsPerBlock = 256;
     int nblocks = (vinfos.size() + nthreadsPerBlock - 1) / nthreadsPerBlock;
-    kernel_reco<<<nblocks, nthreadsPerBlock>>>(d_vinfos, d_vrechits, d_vparams,
-        d_vcalibs, vinfos.size());
+    kernel_reco<<<nblocks, nthreadsPerBlock>>>(ddata.vinfos, ddata.vrechits, 
+        ddata.vparams, ddata.vcalibs, vinfos.size());
     cudaDeviceSynchronize();
     hcal::cuda::assert_if_error();
 
     // transfer back
-    cudaMemcpy(&(*vrechits.begin()), d_vrechits, vinfos.size() * sizeof(HBHERecHit),
+    cudaMemcpy(&(*vrechits.begin()), ddata.vrechits, vinfos.size() * sizeof(HBHERecHit),
         cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize();
     hcal::cuda::assert_if_error();
-
-    // release the memory
-    cudaFree(d_vinfos);
-    cudaFree(d_vrechits);
-    cudaFree(d_vparams);
-    cudaFree(d_vcalibs);
 }
 
 }} 

@@ -60,6 +60,8 @@
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/gpu_reco.h"
 
+#define MAX_SIZE_RECHITS 10000
+
 // Some helper functions
 namespace {
     // Class for making SiPM/QIE11 look like HPD/QIE8. HPD/QIE8
@@ -349,6 +351,9 @@ private:
                              HBHERecHit* rh);
 
     void runHBHENegativeEFilter(const HBHEChannelInfo& info, HBHERecHit* rh);
+
+    // gpu stuff
+    hcal::m0::DeviceData ddata_;
 };
 
 //
@@ -374,7 +379,8 @@ HBHEPhase1ReconstructorGPU::HBHEPhase1ReconstructorGPU(const edm::ParameterSet& 
       setPulseShapeFlagsQIE8_(conf.getParameter<bool>("setPulseShapeFlagsQIE8")),
       setPulseShapeFlagsQIE11_(conf.getParameter<bool>("setPulseShapeFlagsQIE11")),
       reco_(parseHBHEPhase1AlgoDescription(conf.getParameter<edm::ParameterSet>("algorithm"))),
-      negEFilter_(nullptr)
+      negEFilter_(nullptr),
+      ddata_{nullptr, nullptr, nullptr, nullptr}
 {
     // Check that the reco algorithm has been successfully configured
     if (!reco_.get())
@@ -415,6 +421,9 @@ HBHEPhase1ReconstructorGPU::HBHEPhase1ReconstructorGPU(const edm::ParameterSet& 
 
     if (makeRecHits_)
         produces<HBHERecHitCollection>();
+
+    // allocate memory on the gpu device 
+    ddata_.allocate(MAX_SIZE_RECHITS);
 }
 
 
@@ -422,6 +431,9 @@ HBHEPhase1ReconstructorGPU::~HBHEPhase1ReconstructorGPU()
 {
    // do anything here that needs to be done at destruction time
    // (e.g. close files, deallocate resources etc.)
+
+    // deallocate memory on the gpu device
+    ddata_.free();
 }
 
 
@@ -545,7 +557,7 @@ void HBHEPhase1ReconstructorGPU::processData(const Collection& coll,
         }
     }
 
-    hcal::m0::reco(*infos, *rechits, vparams, vcalibs, isRealData);
+    hcal::m0::reco(ddata_, *infos, *rechits, vparams, vcalibs, isRealData);
 
     /*
     for (size_t ihit=0; ihit<infos->size(); ihit++) {
