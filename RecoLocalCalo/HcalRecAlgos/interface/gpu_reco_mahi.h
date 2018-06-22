@@ -1,5 +1,5 @@
-#ifndef RecoLocalCalo_HcalRecAlgos_interface_gpu_reco_h
-#define RecoLocalCalo_HcalRecAlgos_interface_gpu_reco_h
+#ifndef RecoLocalCalo_HcalRecAlgos_interface_gpu_reco_mahi_h
+#define RecoLocalCalo_HcalRecAlgos_interface_gpu_reco_mahi_h
 
 #include <vector>
 
@@ -10,14 +10,7 @@
 #include "CalibFormats/HcalObjects/interface/HcalCalibrations.h"
 #include "CondFormats/HcalObjects/interface/HcalRecoParam.h"
 
-class HcalRecoParam;
-class HcalCalibrations;
-
-namespace hcal { namespace cuda {
-    void assert_if_error();
-}}
-
-namespace hcal { namespace m0 {
+namespace hcal { namespace mahi {
 
 struct DeviceData {
     HBHEChannelInfo         *vinfos;
@@ -48,4 +41,4 @@ void reco(DeviceData,
 
 }}
 
-#endif // RecoLocalCalo_HcalRecAlgos_interface_gpu_reco_h
+#endif // RecoLocalCalo_HcalRecAlgos_interface_gpu_reco_m0_h
