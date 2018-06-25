@@ -53,6 +53,12 @@ struct Workspace {
     // TODO: solvers, etc...
 };
 
+struct RecValues {
+    float energy;
+    float time;
+    float chi2;
+};
+
 struct DeviceData {
     HBHEChannelInfo         *vinfos;
     HBHERecHit              *vrechits;
@@ -82,4 +88,4 @@ void reco(DeviceData,
 
 }}
 
-#endif // RecoLocalCalo_HcalRecAlgos_interface_gpu_reco_m0_h
+#endif // RecoLocalCalo_HcalRecAlgos_interface_gpu_reco_mahi_h

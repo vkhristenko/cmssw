@@ -6,6 +6,8 @@
 #define fullTSofInterest_ 8
 #define timeSigmaSiPM_ 2.5
 #define timeSigmaHPD_ 5.0
+#define ts4Thresh_ 0.0
+#define chiSqSwitch_ 15.0
 
 namespace hcal { namespace mahi {
 
@@ -16,6 +18,11 @@ __device__ float get_energy(HBHEChannelInfo& info, float fc_ampl,
                             double applyContainment, float phasens, int nsamples) {
     
 }*/
+
+__device__ void do_fit(RecValues &values, int ) {
+    // do nothing
+    return;
+}
 
 __device__ float get_time(HBHEChannelInfo& info, float fc_ampl,
                           HcalCalibrations const& calibs, int nsamples_to_add) {
@@ -61,11 +68,16 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
         auto params = vparams[idx];
         auto calibs = vcalibs[idx];
 
+        RecValues recValues;
+
         // workspace
         Workspace ws;
         ws.tsSize = info.nSamples();
         ws.tsOffset = info.soi();
         ws.fullTSOffset = fullTSofInterest_ - ws.tsOffset;
+
+        // TODO: understand why we need this:
+        bool useTriple = false;
 
         // 1 sigma time constraint
         if (info.hasTimeInfo()) ws.dt = timeSigmaSiPM_;
@@ -85,7 +97,7 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
         // per ts
         double tstot = 0, tstrig = 0;
         for (unsigned int iTS=0; iTS<ws.tsSize; ++iTS) {
-            double charge = ifno.tsRawCharge(iTS);
+            double charge = info.tsRawCharge(iTS);
             double ped = info.tsPedestal(iTS);
             ws.amplitudes.coeffRef(iTS) = charge - ped;
 
@@ -94,7 +106,7 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
 
             // photostatistics
             double noisePhoto = 0;
-            auto tmp = charge - tmp
+            auto tmp = charge - ped;
             if (tmp > info.tsPedestalWidth(iTS)) {
                 noisePhoto = sqrt(tmp * info.fcByPE());
             }
@@ -111,11 +123,31 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
                 tstrig += (charge - ped) * info.tsGain(0);
         }
 
-        // 
-
+        //
+        if (tstrig >= ts4Thresh_ and tstot>0) {
+            useTriple = false;
+            
+            // only do the prefit with 1 pulse if ichisq threshold is positive
+            if (chiSqSwitch_>0) {
+                do_fit(recValues, 1);
+                if (recValues.chi2 > chiSqSwitch_) {
+                    do_fit(recValues, 0); // nbx=0 means to use configured bxs
+                    useTriple = true;
+                }
+            } else {
+                do_fit(recValues, 0);
+                useTriple = true;
+            }
+        } else {
+            recValues.energy = 0.;
+            recValues.time = -9999.;
+            recValues.chi2 = -9999.;
+        }
+        
         // TODO  rewrite these guys
-        float energy = 0.f;
-        float time = 0.f;
+        float energy = recValues.energy * info.tsGain(0);
+        float time = recValues.time;
+//        float chi2 = recValues.chi2;
 
         // set the values for the rec hit and put it into the correct array cell
         auto rechit = HBHERecHit(info.id(), energy, time, info.soiRiseTime());
