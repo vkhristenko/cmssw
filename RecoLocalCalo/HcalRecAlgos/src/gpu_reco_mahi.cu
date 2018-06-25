@@ -3,6 +3,10 @@
 
 #include <iostream>
 
+#define fullTSofInterest_ 8
+#define timeSigmaSiPM_ 2.5
+#define timeSigmaHPD_ 5.0
+
 namespace hcal { namespace mahi {
 
 #define firstSampleShift 0
@@ -57,21 +61,64 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
         auto params = vparams[idx];
         auto calibs = vcalibs[idx];
 
-        int ibeg = static_cast<int>(info.soi()) + firstSampleShift;
-        if (ibeg<0) ibeg=0;
-        int const nsamples_to_add = params.samplesToAdd();
-        double const fc_ampl = info.chargeInWindow(ibeg, ibeg + nsamples_to_add);
-        bool const applyContainment = params.correctForPhaseContainment();
-        float const phasens = params.correctionPhaseNS();
+        // workspace
+        Workspace ws;
+        ws.tsSize = info.nSamples();
+        ws.tsOffset = info.soi();
+        ws.fullTSOffset = fullTSofInterest_ - ws.tsOffset;
 
-        // skip containment correction for now...
-        float energy = info.energyInWindow(ibeg, ibeg+nsamples_to_add);
-        float time = get_time(info, fc_ampl, calibs, nsamples_to_add);
+        // 1 sigma time constraint
+        if (info.hasTimeInfo()) ws.dt = timeSigmaSiPM_;
+        else ws.dt = timeSigmaHPD_;
 
-        // set the values for the rec hit
+        // average pedestal width (for covariance matrix constraint)
+        float pedVal = 0.25*( info.tsPedestalWidth(0)*info.tsPedestalWidth(0)+
+            info.tsPedestalWidth(1)*info.tsPedestalWidth(1)+
+            info.tsPedestalWidth(2)*info.tsPedestalWidth(2)+
+            info.tsPedestalWidth(3)*info.tsPedestalWidth(3) );
+
+        // 
+        ws.pedConstraint = pedVal * SampleMatrix::Ones(ws.tsSize, ws.tsSize);
+        ws.amplitudes.resize(ws.tsSize);
+        ws.noiseTerms.resize(ws.tsSize);
+
+        // per ts
+        double tstot = 0, tstrig = 0;
+        for (unsigned int iTS=0; iTS<ws.tsSize; ++iTS) {
+            double charge = ifno.tsRawCharge(iTS);
+            double ped = info.tsPedestal(iTS);
+            ws.amplitudes.coeffRef(iTS) = charge - ped;
+
+            // adc granularity
+            double noiseADC = (1. / sqrt(12)) * info.tsDFcPerADC(iTS);
+
+            // photostatistics
+            double noisePhoto = 0;
+            auto tmp = charge - tmp
+            if (tmp > info.tsPedestalWidth(iTS)) {
+                noisePhoto = sqrt(tmp * info.fcByPE());
+            }
+
+            // electronic pedestal
+            double pedWidth = info.tsPedestalWidth(iTS);
+
+            // total uncertainty from all sources
+            ws.noiseTerms.coeffRef(iTS) = noiseADC*noiseADC + noisePhoto*noisePhoto + 
+                pedWidth*pedWidth;
+
+            tstot += (charge - ped) * info.tsGain(0);
+            if (iTS == ws.tsOffset) 
+                tstrig += (charge - ped) * info.tsGain(0);
+        }
+
+        // 
+
+        // TODO  rewrite these guys
+        float energy = 0.f;
+        float time = 0.f;
+
+        // set the values for the rec hit and put it into the correct array cell
         auto rechit = HBHERecHit(info.id(), energy, time, info.soiRiseTime());
-    
-        // set the correct rec hit
         vrechits[idx] = rechit;
     }
 }

@@ -58,7 +58,7 @@
 // Fetcher for reco algorithm data
 #include "RecoLocalCalo/HcalRecAlgos/interface/fetchHcalAlgoData.h"
 
-#include "RecoLocalCalo/HcalRecAlgos/interface/gpu_reco_m0.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/gpu_reco_mahi.h"
 
 #define MAX_SIZE_RECHITS 10000
 
@@ -353,7 +353,7 @@ private:
     void runHBHENegativeEFilter(const HBHEChannelInfo& info, HBHERecHit* rh);
 
     // gpu stuff
-    hcal::m0::DeviceData ddata_;
+    hcal::mahi::DeviceData ddata_;
 };
 
 //
@@ -558,7 +558,7 @@ void HBHEPhase1ReconstructorGPU::processData(const Collection& coll,
     }
 
     // perform the reconstruction on the whole vector 
-    hcal::m0::reco(ddata_, *infos, *rechits, vparams, vcalibs, isRealData);
+    hcal::mahi::reco(ddata_, *infos, *rechits, vparams, vcalibs, isRealData);
 
     /*
     for (size_t ihit=0; ihit<infos->size(); ihit++) {
