@@ -8,10 +8,9 @@
 #define timeSigmaHPD_ 5.0
 #define ts4Thresh_ 0.0
 #define chiSqSwitch_ 15.0
+#define firstSampleShift 0
 
 namespace hcal { namespace mahi {
-
-#define firstSampleShift 0
 
 /*
 __device__ float get_energy(HBHEChannelInfo& info, float fc_ampl,
@@ -19,9 +18,54 @@ __device__ float get_energy(HBHEChannelInfo& info, float fc_ampl,
     
 }*/
 
-__device__ void do_fit(RecValues &values, int ) {
-    // do nothing
-    return;
+__device__ void update_pulse_shape()
+
+__device__ void do_fit(Workspace &ws, RecValues &values, int nbx) {
+    unsigned int bxSize = 1;
+
+    //
+    if (nbx==1) {
+        ws.bxOffset = 0;
+        ws.bxs.resize(bxSize);
+        ws.bxs.coeffRef(0) = 0;
+    } else {
+        bxSize = bxSizeConf_;
+        ws.bxOffset = bxOffsetConf;
+
+        ws.bxs.resize(bxSize);
+        for (unsigned int ibx=0; ibx<bxSize; ++ibx) 
+            ws.bxs.coeffRef(ibx) = activeBXs_[ibx];
+    }
+
+    //
+    ws.nPulseTot = bxSize;
+    if (dynamicPed_) {
+        ws.nPulseTot++;
+        ws.bxs.resize(ws.nPulseTot);
+        ws.bxs[ws.nPulseTot-1] = pedestalBX_;
+    }
+
+    //
+    ws.pulseMat.resize(ws.tsSize, ws.nPulseTot);
+    ws.ampVec = PulseVector::Zero(ws.nPulseTot);
+    ws.errVec = PulseVector::Zero(ws.nPulseTot);
+    int offset = 0;
+
+    //
+    for (unsigned int ibx=0; ibx<ws.nPulseTot; ++ibx) {
+        offset = ws.bxs.coeff(ibx);
+
+        //
+        ws.pulseShapeArray[ibx] = FullSampleMatrix::Zero(MaxFSVSize);
+        ws.pulseDerivArray[ibx] = FullSampleVector::Zero(MaxFSVSize);
+        ws.pulseCovArray[ibx] = FullSampleMatrix::Constant(0);
+
+        if (offset == pedestalBX_) 
+            ws.ampVec.coeffRef(ibx) = 0;
+        else {
+
+        }
+    }
 }
 
 __device__ float get_time(HBHEChannelInfo& info, float fc_ampl,
