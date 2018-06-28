@@ -36,7 +36,7 @@ __device__ void update_pulse_shape(Workspace &ws, FullSampleVector &pshape,
     //
     float t0 = meanTime_;
 
-    //
+    // TODO: to implement
     /*
     if (applyTimeSlew_) {
         if (itq <= 1.0) 
@@ -60,8 +60,7 @@ __device__ void update_pulse_shape(Workspace &ws, FullSampleVector &pshape,
     */
 
     // 
-    // TODO implement root functions stuff
-    // 
+    // TODO: to implement
     /*(*pfunctor_)(&xx[0]);
     psfPtr_->getPulseShape(ws.pulseN);
     (*pfunctor_)(&xx[0]);
@@ -113,21 +112,20 @@ __device__ void update_covariance(Workspace &ws) {
         }
     }
 
-    // covDecomp compute invCovMat
+    // recompute Cholesky decomposition
+    // TODO
+    //ws.covDecomp.compute(ws.invCovMat);
 }
 
 __device__ void nnls_unconstrain_parameter(Workspace &ws, Eigen::Index idxp) {
     ws.aTaMat.col(ws.nP).swap(ws.aTaMat.col(idxp));
     ws.aTaMat.row(ws.nP).swap(ws.aTaMat.row(idxp));
-    
     ws.pulseMat.col(ws.nP).swap(ws.pulseMat.col(idxp));
     
     // TODO: needs to be implemented!
-    /*
-    std::swap(ws.aTbVec.coeffRef(ws.nP), ws.aTbVec.coeffRef(idxp));
-    std::swap(ws.ampVec.coeffRef(ws.nP), ws.ampVec.coeffRef(idxp));
-    std::swap(ws.bxs.coeffRef(ws.nP), ws.bxs.coeffRef(idxp));
-    */
+    Eigen::numext::swap(ws.aTbVec.coeffRef(ws.nP), ws.aTbVec.coeffRef(idxp));
+    Eigen::numext::swap(ws.ampVec.coeffRef(ws.nP), ws.ampVec.coeffRef(idxp));
+    Eigen::numext::swap(ws.bxs.coeffRef(ws.nP), ws.bxs.coeffRef(idxp));
     ++ws.nP;
 }
 
@@ -137,11 +135,9 @@ __device__ void nnls_constrain_parameter(Workspace &ws, Eigen::Index minratioidx
     ws.pulseMat.col(ws.nP-1).swap(ws.pulseMat.col(minratioidx));
 
     // TODO: to implement
-    /*
-    std::swap(ws.aTbVec.coeffRef(ws.nP-1), ws.aTbVec.coeffRef(minratioidx));
-    std::swap(ws.ampVec.coeffRef(ws.nP-1), ws.ampVec.coeffRef(minratioidx));
-    std::swap(ws.bxs.coeffRef(ws.nP-1), ws.bxs.coeffRef(minratioidx));
-    */
+    Eigen::numext::swap(ws.aTbVec.coeffRef(ws.nP-1), ws.aTbVec.coeffRef(minratioidx));
+    Eigen::numext::swap(ws.ampVec.coeffRef(ws.nP-1), ws.ampVec.coeffRef(minratioidx));
+    Eigen::numext::swap(ws.bxs.coeffRef(ws.nP-1), ws.bxs.coeffRef(minratioidx));
     --ws.nP;
 }
 
@@ -156,7 +152,7 @@ __device__ void nnls(Workspace &ws) {
                 ws.fullTSOffset - offset, ws.tsSize);
     }
 
-    //
+    // TODO
     //ws.invcovp = ws.covDecomp.matrixL().solve(ws.pulseMat);
     ws.aTaMat = ws.invcovp.transpose().lazyProduct(ws.invcovp);
     //auto tmp = ws.covDecomp.matrixL().solve(ws.amplitudes);
@@ -192,7 +188,10 @@ __device__ void nnls(Workspace &ws) {
         while (true) {
             if (ws.nP == 0) break;
             ws.ampvecpermtest = ws.ampVec;
+    
             // solveSubmatrix()
+            // TODO
+            //solve_submatrix(ws.aTaMat, ws.aTbVec, ws.ampvecpermtest, ws.nP);
 
             // check solution
             bool positive = true;
@@ -237,7 +236,7 @@ __device__ void nnls(Workspace &ws) {
 __device__ void one_pulse_minimize(Workspace &ws) {
     //ws.invcovp = ws.covDecomp.matrixL().solve(ws.pulseMat);
 
-    // 
+    // TODO 
     auto aTamatval = ws.invcovp.transpose()*ws.invcovp;
 //    auto tmp = ws.covDecomp.matrixL().solve(ws.amplitudes);
     //auto aTbvecval = ws.invcovp.transpose()*tmp;
@@ -245,6 +244,7 @@ __device__ void one_pulse_minimize(Workspace &ws) {
     ws.ampVec.coeffRef(0) = std::max(0., aTbvecval.coeff(0)/aTamatval.coeff(0));
 }
 
+// TODO
 __device__ double calculate_chi2(Workspace &ws) {
     return 0.001;
 }
@@ -435,6 +435,7 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
         auto params = vparams[idx];
         auto calibs = vcalibs[idx];
 
+        // reconstructed values
         RecValues recValues;
 
         // workspace
