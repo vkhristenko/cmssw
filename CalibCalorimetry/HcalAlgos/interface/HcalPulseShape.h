@@ -13,6 +13,8 @@ public:
   float at(double time) const;
   float integrate(double tmin, double tmax) const;
   int nbins() const {return nbin_;}
+
+  std::vector<float> const& data() const { return shape_; }
 private:
   std::vector<float> shape_;
   int nbin_;

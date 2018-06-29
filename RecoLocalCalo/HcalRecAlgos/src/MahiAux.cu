@@ -4,11 +4,15 @@
 
 namespace FitterFuncs{
 
-  __device__ MahiFunctor::MahiFunctor(float const *pulse,
-				       bool iPedestalConstraint, bool iTimeConstraint,bool iAddPulseJitter,
-				       double iPulseJitter,double iTimeMean,double iPedMean,
-				       unsigned nSamplesToFit) 
-      : cntNANinfit(0) {
+  __device__ MahiFunctor::MahiFunctor()
+      : cntNANinfit(0) 
+  {}
+
+  __device__ void MahiFunctor::assign(float const *pulse,
+				                      bool iPedestalConstraint, bool iTimeConstraint,
+                                      bool iAddPulseJitter,
+				                      double iPulseJitter,double iTimeMean,double iPedMean,
+				                      unsigned nSamplesToFit) {
     
     //The raw pulse
     for(int i=0;i<HcalConst::maxPSshapeBin;++i) 

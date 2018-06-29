@@ -17,7 +17,8 @@ namespace FitterFuncs{
    class MahiFunctor {
       public:
      // assume pulse has the above-assumed number of bins -> maxPSshapeBikn
-     __device__ MahiFunctor(float const * pulse,bool iPedestalConstraint, bool iTimeConstraint,bool iAddPulseJitter,
+     __device__ MahiFunctor();
+     __device__ void assign(float const * pulse,bool iPedestalConstraint, bool iTimeConstraint,bool iAddPulseJitter,
 		       double iPulseJitter,double iTimeMean,double iPedMean,
 		       unsigned int nSamplesToFit);
      

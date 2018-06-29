@@ -10,9 +10,14 @@
 #include "CalibFormats/HcalObjects/interface/HcalCalibrations.h"
 #include "CondFormats/HcalObjects/interface/HcalRecoParam.h"
 
+#include "RecoLocalCalo/HcalRecAlgos/interface/MahiAux.h"
+
 #include "RecoLocalCalo/HcalRecAlgos/interface/EigenMatrixTypes.h"
 
 namespace hcal { namespace mahi {
+
+constexpr int max_pulses = 500;
+constexpr int max_pulse_size = 256;
 
 struct Workspace {
     unsigned int nPulseTot;
@@ -50,6 +55,8 @@ struct Workspace {
     PulseVector aTbVec;
     PulseVector updateWork;
 
+    FitterFuncs::MahiFunctor functor;
+
     // TODO: solvers, etc...
 };
 
@@ -57,6 +64,22 @@ struct RecValues {
     float energy;
     float time;
     float chi2;
+};
+
+struct PulseShapeData {
+    int     *hashes;
+    float   *data;
+    int     npulses;
+
+    void allocate() {
+        cudaMalloc((void**)&hashes, max_pulses * sizeof(int));
+        cudaMalloc((void**)&data, npulses * max_pulse_size * sizeof(float));
+    }
+
+    void free() {
+        cudaFree(hashes);
+        cudaFree(data);
+    }
 };
 
 struct DeviceData {
@@ -84,7 +107,8 @@ struct DeviceData {
 // reconstruction
 void reco(DeviceData,
           HBHEChannelInfoCollection&, HBHERecHitCollection&, 
-          std::vector<HcalRecoParam> const&, std::vector<HcalCalibrations> const&, bool);
+          std::vector<HcalRecoParam> const&, std::vector<HcalCalibrations> const&, 
+          PulseShapeData &, bool);
 
 }}
 

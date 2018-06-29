@@ -1,6 +1,5 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/gpu_reco_mahi.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/gpu_common.h"
-#include "RecoLocalCalo/HcalRecAlgos/interface/MahiAux.h"
 
 #include <iostream>
 
@@ -60,13 +59,12 @@ __device__ void update_pulse_shape(Workspace &ws, FullSampleVector &pshape,
 
     // 
     // TODO: to implement
-    /*(*pfunctor_)(&xx[0]);
-    psfPtr_->getPulseShape(ws.pulseN);
-    (*pfunctor_)(&xx[0]);
-    psfPtr_->getPulseShape(ws.pulseN);
-    (*pfunctor_)(&xx[0]);
-    psfPtr_->getPulseShape(ws.pulseN);
-    */
+    ws.functor.singlePulseShapeFunc(xx);
+    ws.functor.getPulseShape(ws.pulseN);
+    ws.functor.singlePulseShapeFunc(xxm);
+    ws.functor.getPulseShape(ws.pulseM);
+    ws.functor.singlePulseShapeFunc(xxp);
+    ws.functor.getPulseShape(ws.pulseP);
 
     //
     int delta = ws.tsOffset == 3 ? 1 : 0;
@@ -426,7 +424,8 @@ __device__ float get_time(HBHEChannelInfo& info, float fc_ampl,
 
 /// method 0 kernel
 __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits, 
-                            HcalRecoParam *vparams, HcalCalibrations *vcalibs, int size) {
+                            HcalRecoParam *vparams, HcalCalibrations *vcalibs, 
+                            int* hashes, float* psdata, int size) {
     int idx = threadIdx.x + blockIdx.x*blockDim.x;
 
     if (idx < size) {
@@ -438,7 +437,9 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
         RecValues recValues;
 
         // workspace
+        auto *pshape = psdata + hashes[info.recoShape()];
         Workspace ws;
+        ws.functor.assign(pshape, false, false, false, 1, 0, 0, 10);
         ws.tsSize = info.nSamples();
         ws.tsOffset = info.soi();
         ws.fullTSOffset = fullTSofInterest_ - ws.tsOffset;
@@ -526,7 +527,8 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
 void reco(DeviceData ddata,
           HBHEChannelInfoCollection& vinfos, HBHERecHitCollection& vrechits, 
           std::vector<HcalRecoParam> const& vparams, 
-          std::vector<HcalCalibrations> const& vcalibs, bool) {
+          std::vector<HcalCalibrations> const& vcalibs, 
+          PulseShapeData &psdata, bool) {
     // resize the output vector
     vrechits.resize(vinfos.size());
 
@@ -544,7 +546,7 @@ void reco(DeviceData ddata,
     int nthreadsPerBlock = 256;
     int nblocks = (vinfos.size() + nthreadsPerBlock - 1) / nthreadsPerBlock;
     kernel_reco<<<nblocks, nthreadsPerBlock>>>(ddata.vinfos, ddata.vrechits, 
-        ddata.vparams, ddata.vcalibs, vinfos.size());
+        ddata.vparams, ddata.vcalibs, psdata.hashes, psdata.data, vinfos.size());
     cudaDeviceSynchronize();
     hcal::cuda::assert_if_error();
 

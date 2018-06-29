@@ -1,6 +1,7 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/gpu_common.h"
 
 #include <iostream>
+#include <vector>
 
 namespace hcal { namespace cuda {
     void assert_if_error() {

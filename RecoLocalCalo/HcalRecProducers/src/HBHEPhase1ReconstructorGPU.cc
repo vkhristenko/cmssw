@@ -52,6 +52,8 @@
 #include "CondFormats/HcalObjects/interface/HBHENegativeEFilter.h"
 #include "CondFormats/DataRecord/interface/HBHENegativeEFilterRcd.h"
 
+#include "CalibCalorimetry/HcalAlgos/interface/HcalPulseShapes.h"
+
 // Parser for Phase 1 HB/HE reco algorithms
 #include "RecoLocalCalo/HcalRecAlgos/interface/parseHBHEPhase1AlgoDescription.h"
 
@@ -59,6 +61,7 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/fetchHcalAlgoData.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/gpu_reco_mahi.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/gpu_common.h"
 
 #define MAX_SIZE_RECHITS 10000
 
@@ -354,6 +357,7 @@ private:
 
     // gpu stuff
     hcal::mahi::DeviceData ddata_;
+    hcal::mahi::PulseShapeData psdata_;
 };
 
 //
@@ -424,6 +428,14 @@ HBHEPhase1ReconstructorGPU::HBHEPhase1ReconstructorGPU(const edm::ParameterSet& 
 
     // allocate memory on the gpu device 
     ddata_.allocate(MAX_SIZE_RECHITS);
+
+    // adapt pulse shapes
+    HcalPulseShapes pshapes;
+    auto t = pshapes.enumerate();
+    psdata_.npulses = std::get<2>(t);
+    psdata_.allocate();
+    hcal::cuda::copy_vector_to_device(std::get<0>(t), psdata_.hashes);
+    hcal::cuda::copy_vector_to_device(std::get<1>(t), psdata_.data);
 }
 
 
@@ -434,6 +446,7 @@ HBHEPhase1ReconstructorGPU::~HBHEPhase1ReconstructorGPU()
 
     // deallocate memory on the gpu device
     ddata_.free();
+    psdata_.free();
 }
 
 
@@ -558,7 +571,7 @@ void HBHEPhase1ReconstructorGPU::processData(const Collection& coll,
     }
 
     // perform the reconstruction on the whole vector 
-    hcal::mahi::reco(ddata_, *infos, *rechits, vparams, vcalibs, isRealData);
+    hcal::mahi::reco(ddata_, *infos, *rechits, vparams, vcalibs, psdata_, isRealData);
 
     /*
     for (size_t ihit=0; ihit<infos->size(); ihit++) {
