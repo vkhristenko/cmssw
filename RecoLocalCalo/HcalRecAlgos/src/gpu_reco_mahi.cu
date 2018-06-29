@@ -1,5 +1,6 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/gpu_reco_mahi.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/gpu_common.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/MahiAux.h"
 
 #include <iostream>
 
@@ -53,11 +54,9 @@ __device__ void update_pulse_shape(Workspace &ws, FullSampleVector &pshape,
     }
 
     //
-    /*
     double const xx[4] = {t0, 1.0, 0.0, 3};
     double const xxm[4] = {-ws.dt + t0, 1.0, 0.0, 3};
     double const xxp[4] = {ws.dt + t0, 1.0, 0.0, 3};
-    */
 
     // 
     // TODO: to implement
