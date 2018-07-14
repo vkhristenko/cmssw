@@ -56,8 +56,6 @@ struct Workspace {
     PulseVector updateWork;
 
     FitterFuncs::MahiFunctor functor;
-
-    // TODO: solvers, etc...
 };
 
 struct RecValues {

@@ -58,7 +58,6 @@ __device__ void update_pulse_shape(Workspace &ws, FullSampleVector &pshape,
     double const xxp[4] = {ws.dt + t0, 1.0, 0.0, 3};
 
     // 
-    // TODO: to implement
     ws.functor.singlePulseShapeFunc(xx);
     ws.functor.getPulseShape(ws.pulseN);
     ws.functor.singlePulseShapeFunc(xxm);
@@ -119,7 +118,7 @@ __device__ void nnls_unconstrain_parameter(Workspace &ws, Eigen::Index idxp) {
     ws.aTaMat.row(ws.nP).swap(ws.aTaMat.row(idxp));
     ws.pulseMat.col(ws.nP).swap(ws.pulseMat.col(idxp));
     
-    // TODO: needs to be implemented!
+    // 
     Eigen::numext::swap(ws.aTbVec.coeffRef(ws.nP), ws.aTbVec.coeffRef(idxp));
     Eigen::numext::swap(ws.ampVec.coeffRef(ws.nP), ws.ampVec.coeffRef(idxp));
     Eigen::numext::swap(ws.bxs.coeffRef(ws.nP), ws.bxs.coeffRef(idxp));
@@ -131,7 +130,7 @@ __device__ void nnls_constrain_parameter(Workspace &ws, Eigen::Index minratioidx
     ws.aTaMat.row(ws.nP-1).swap(ws.aTaMat.row(minratioidx));
     ws.pulseMat.col(ws.nP-1).swap(ws.pulseMat.col(minratioidx));
 
-    // TODO: to implement
+    //
     Eigen::numext::swap(ws.aTbVec.coeffRef(ws.nP-1), ws.aTbVec.coeffRef(minratioidx));
     Eigen::numext::swap(ws.ampVec.coeffRef(ws.nP-1), ws.ampVec.coeffRef(minratioidx));
     Eigen::numext::swap(ws.bxs.coeffRef(ws.nP-1), ws.bxs.coeffRef(minratioidx));
