@@ -56,6 +56,11 @@ struct Workspace {
     PulseVector updateWork;
 
     FitterFuncs::MahiFunctor functor;
+
+    SampleDecompLLT covDecomp;
+    SampleMatrix covDecompLinv;
+    PulseMatrix topleft_work;
+    PulseDecompLDLT pulseDecomp;
 };
 
 struct RecValues {

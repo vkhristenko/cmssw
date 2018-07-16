@@ -45,6 +45,7 @@ namespace FitterFuncs{
            diffVarItvlIdxMinusOneVec[HcalConst::nsPerBX];
 
      //
+     __device__
      void funcShape(double *ntmpbin, const double pulseTime, 
                     const double pulseHeight,const double slew);
      double psFit_x[HcalConst::maxSamples], psFit_y[HcalConst::maxSamples], psFit_erry[HcalConst::maxSamples], psFit_erry2[HcalConst::maxSamples], psFit_slew[HcalConst::maxSamples];

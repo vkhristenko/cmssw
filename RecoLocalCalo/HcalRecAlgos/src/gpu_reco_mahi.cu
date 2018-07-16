@@ -110,7 +110,7 @@ __device__ void update_covariance(Workspace &ws) {
 
     // recompute Cholesky decomposition
     // TODO
-    //ws.covDecomp.compute(ws.invCovMat);
+    ws.covDecomp.compute(ws.invCovMat);
 }
 
 __device__ void nnls_unconstrain_parameter(Workspace &ws, Eigen::Index idxp) {
@@ -137,6 +137,59 @@ __device__ void nnls_constrain_parameter(Workspace &ws, Eigen::Index minratioidx
     --ws.nP;
 }
 
+/*
+__device__ void solve_submatrix(Workspace &ws) {
+    switch (ws.nP) {
+    case 10:
+        {
+            auto tmp = ws.aTaMat;
+
+            aTbVec
+                ampvecpermtest
+        }
+        break;
+    case 9:
+        {
+        }
+        break;
+    case 9:
+        {
+        }
+        break;
+    case 9:
+        {
+        }
+        break;
+    case 9:
+        {
+        }
+        break;
+    case 9:
+        {
+        }
+        break;
+    case 9:
+        {
+        }
+        break;
+    case 9:
+        {
+        }
+        break;
+    case 9:
+        {
+        }
+        break;
+    case 9:
+        {
+        }
+        break;
+    default:
+        return;
+    }
+}
+*/
+
 __device__ void nnls(Workspace &ws) {
     unsigned int const npulse = ws.nPulseTot;
     for (unsigned int ibx=0; ibx<npulse; ++ibx) {
@@ -149,10 +202,10 @@ __device__ void nnls(Workspace &ws) {
     }
 
     // TODO
-    //ws.invcovp = ws.covDecomp.matrixL().solve(ws.pulseMat);
+    ws.invcovp = ws.covDecomp.matrixL().solve(ws.pulseMat);
     ws.aTaMat = ws.invcovp.transpose().lazyProduct(ws.invcovp);
-    //auto tmp = ws.covDecomp.matrixL().solve(ws.amplitudes);
-    auto tmp = SampleVector::Ones(ws.tsSize);
+    auto tmp = ws.covDecomp.matrixL().solve(ws.amplitudes);
+    //auto tmp = SampleVector::Ones(ws.tsSize);
     ws.aTbVec = ws.invcovp.transpose().lazyProduct(tmp);
 
     //
@@ -188,6 +241,7 @@ __device__ void nnls(Workspace &ws) {
             // solveSubmatrix()
             // TODO
             //solve_submatrix(ws.aTaMat, ws.aTbVec, ws.ampvecpermtest, ws.nP);
+            ws.ampvecpermtest.head(ws.nP) = ws.aTaMat.topLeftCorner(ws.nP, ws.nP).ldlt().solve(ws.aTbVec.head(ws.nP));
 
             // check solution
             bool positive = true;
@@ -234,15 +288,15 @@ __device__ void one_pulse_minimize(Workspace &ws) {
 
     // TODO 
     auto aTamatval = ws.invcovp.transpose()*ws.invcovp;
-//    auto tmp = ws.covDecomp.matrixL().solve(ws.amplitudes);
-    //auto aTbvecval = ws.invcovp.transpose()*tmp;
-    SingleVector aTbvecval = SingleVector::Ones(ws.tsSize);
+    auto tmp = ws.covDecomp.matrixL().solve(ws.amplitudes);
+    auto aTbvecval = ws.invcovp.transpose()*tmp;
+    //SingleVector aTbvecval = SingleVector::Ones(ws.tsSize);
     ws.ampVec.coeffRef(0) = std::max(0., aTbvecval.coeff(0)/aTamatval.coeff(0));
 }
 
 // TODO
 __device__ double calculate_chi2(Workspace &ws) {
-    return 0.001;
+    return ws.covDecomp.matrixL().solve(ws.pulseMat*ws.ampVec - ws.amplitudes).squaredNorm();
 }
 
 __device__ double minimize(Workspace &ws) {
@@ -287,8 +341,8 @@ __device__ double calc_arrival_time(Workspace &ws) {
     }
 
     // TODO: this needs to be implemented!
-    //PulseVector solution = ws.pulseDerivMat.colPivHouseholderQr().solve(ws.residuals);
-    PulseVector solution = PulseVector::Ones(ws.tsSize);
+    PulseVector solution = ws.pulseDerivMat.colPivHouseholderQr().solve(ws.residuals);
+    //PulseVector solution = PulseVector::Ones(ws.tsSize);
     float t = solution.coeff(itIndex) / ws.ampVec.coeff(itIndex);
     t = (t > timeLimit_) ? timeLimit_ :
         ((t < -timeLimit_) ? -timeLimit_ : t);
@@ -514,7 +568,7 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
         // TODO  rewrite these guys
         float energy = recValues.energy * info.tsGain(0);
         float time = recValues.time;
-//        float chi2 = recValues.chi2;
+        float chi2 = recValues.chi2;
 
         // set the values for the rec hit and put it into the correct array cell
         auto rechit = HBHERecHit(info.id(), energy, time, info.soiRiseTime());
