@@ -19,10 +19,10 @@
 #define dynamicPed_ true
 
 #define println(msg)\
-    printf("idx=%d " msg "\n", idx)
+//    printf("idx=%d " msg "\n", idx)
 
 #define println_noidx(msg)\
-    printf(msg "\n")
+//    printf(msg "\n")
 
 __constant__ int const activeBXs_[] = {-1, 0, 1};
 static int const bxSizeConf_ = 3;
