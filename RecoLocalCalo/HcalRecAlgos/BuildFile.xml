@@ -16,6 +16,8 @@
 <use   name="rootminuit2"/> 
 
 <use name="cuda"/>
+<flags CXXFLAGS="-g"/>
+<flags CUDA_FLAGS="-G -g"/>
 <export>
   <lib   name="1"/>
 </export>

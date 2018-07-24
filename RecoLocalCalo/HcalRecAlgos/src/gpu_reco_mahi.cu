@@ -18,6 +18,12 @@
 #define timeLimit_ 12.5
 #define dynamicPed_ true
 
+#define println(msg)\
+    printf("idx=%d " msg "\n", idx)
+
+#define println_noidx(msg)\
+    printf(msg "\n")
+
 __constant__ int const activeBXs_[] = {-1, 0, 1};
 static int const bxSizeConf_ = 3;
 static int const bxOffsetConf_ = 1;
@@ -214,7 +220,9 @@ __device__ void nnls(Workspace &ws) {
     double threshold = nnlsThresh_;
     ws.nP = 0;
     Eigen::Index idxwmax = 0;
-    while (true) {
+    int current_outer_iteration = 0;
+    int max_outer_iterations = 100;
+    while (true and current_outer_iteration<max_outer_iterations) {
         if (iter>0 or ws.nP==0) {
             if (ws.nP == std::min(npulse, ws.tsSize)) break;
 
@@ -234,7 +242,9 @@ __device__ void nnls(Workspace &ws) {
         }
 
         //
-        while (true) {
+        int current_inner_iteration = 0;
+        int max_inner_iterations = 100;
+        while (true and current_inner_iteration<max_inner_iterations) {
             if (ws.nP == 0) break;
             ws.ampvecpermtest = ws.ampVec;
     
@@ -273,6 +283,8 @@ __device__ void nnls(Workspace &ws) {
 
             ws.ampVec.coeffRef(minratioidx) = 0.;
             nnls_constrain_parameter(ws, minratioidx);
+
+            current_inner_iteration++;
         }
 
         ++iter;
@@ -280,16 +292,19 @@ __device__ void nnls(Workspace &ws) {
         // ensure best value is used
         if (iter % 10 == 0)
             threshold *= 10.;
+
+        current_outer_iteration++;
     }
 }
 
 __device__ void one_pulse_minimize(Workspace &ws) {
-    //ws.invcovp = ws.covDecomp.matrixL().solve(ws.pulseMat);
+    ws.invcovp = ws.covDecomp.matrixL().solve(ws.pulseMat);
 
     // TODO 
     auto aTamatval = ws.invcovp.transpose()*ws.invcovp;
     auto tmp = ws.covDecomp.matrixL().solve(ws.amplitudes);
-    auto aTbvecval = ws.invcovp.transpose()*tmp;
+    auto aTbvecval = ws.invcovp.transpose()*
+        ws.covDecomp.matrixL().solve(ws.amplitudes);
     //SingleVector aTbvecval = SingleVector::Ones(ws.tsSize);
     ws.ampVec.coeffRef(0) = std::max(0., aTbvecval.coeff(0)/aTamatval.coeff(0));
 }
@@ -354,8 +369,9 @@ __device__ void do_fit(Workspace &ws, RecValues &values, int nbx) {
     unsigned int bxSize = 1;
 
     //
+    println_noidx("    do_fit: started");
     if (nbx==1) {
-         ws.bxOffset = 0;
+        ws.bxOffset = 0;
         ws.bxs.resize(bxSize);
         ws.bxs.coeffRef(0) = 0;
     } else {
@@ -367,6 +383,8 @@ __device__ void do_fit(Workspace &ws, RecValues &values, int nbx) {
             ws.bxs.coeffRef(ibx) = activeBXs_[ibx];
     }
 
+    println_noidx("    do_fit: arranged bxs");
+
     //
     ws.nPulseTot = bxSize;
     if (dynamicPed_) {
@@ -375,6 +393,8 @@ __device__ void do_fit(Workspace &ws, RecValues &values, int nbx) {
         ws.bxs[ws.nPulseTot-1] = pedestalBX_;
     }
 
+    println_noidx("    do_fit: if stmt for dynamic ped");
+
     //
     ws.pulseMat.resize(ws.tsSize, ws.nPulseTot);
     ws.ampVec = PulseVector::Zero(ws.nPulseTot);
@@ -382,6 +402,7 @@ __device__ void do_fit(Workspace &ws, RecValues &values, int nbx) {
     int offset = 0;
 
     //
+    println_noidx("    do_fit: for loop over the number of total pulses");
     for (unsigned int ibx=0; ibx<ws.nPulseTot; ++ibx) {
         offset = ws.bxs.coeff(ibx);
 
@@ -404,22 +425,28 @@ __device__ void do_fit(Workspace &ws, RecValues &values, int nbx) {
         }
     }
 
+    println_noidx("    do_fit: after the for loop over the number of total pulses");
+
     // 
     ws.pulseMat.col(ws.nPulseTot - 1) = SampleVector::Ones(ws.tsSize);
     ws.aTaMat.resize(ws.nPulseTot, ws.nPulseTot);
     ws.aTbVec.resize(ws.nPulseTot);
 
-    //
+    // 
     // minimization
     //
+    println_noidx("    do_fit: before minimize");
     double chi2 = minimize(ws);
+    //double chi2 = 0.0000001;
 
     //
     // compute residuals
     //
+    println_noidx("    do_fit: computing residuals");
     ws.residuals = ws.pulseMat*ws.ampVec - ws.amplitudes;
 
     //
+    println_noidx("    do_fit: another for loop over the number of total pulses");
     bool foundintime = false;
     unsigned int ipulseintime = 0;
     for (unsigned int ibx=0; ibx<ws.nPulseTot; ++ibx) {
@@ -430,6 +457,7 @@ __device__ void do_fit(Workspace &ws, RecValues &values, int nbx) {
     }
 
     //
+    println_noidx("    do_fit: foundintime if stmt and sets the energy ...");
     if (foundintime) {
         values.energy = ws.ampVec.coeff(ipulseintime);
         if (values.energy != 0) {
@@ -439,6 +467,7 @@ __device__ void do_fit(Workspace &ws, RecValues &values, int nbx) {
             values.time = -9999;
         values.chi2 = chi2;
     }
+    println_noidx("    do_fit: the end");
 }
 
 __device__ float get_time(HBHEChannelInfo& info, float fc_ampl,
@@ -486,6 +515,8 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
         auto params = vparams[idx];
         auto calibs = vcalibs[idx];
 
+        println("extracted input parameters/data");
+
         // reconstructed values
         RecValues recValues;
 
@@ -496,6 +527,8 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
         ws.tsSize = info.nSamples();
         ws.tsOffset = info.soi();
         ws.fullTSOffset = fullTSofInterest_ - ws.tsOffset;
+
+        println("cted workspace and obtained the pulse shape data");
 
         // TODO: understand why we need this:
         bool useTriple = false;
@@ -514,6 +547,8 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
         ws.pedConstraint = pedVal * SampleMatrix::Ones(ws.tsSize, ws.tsSize);
         ws.amplitudes.resize(ws.tsSize);
         ws.noiseTerms.resize(ws.tsSize);
+
+        println("manips with the matrices");
 
         // per ts
         double tstot = 0, tstrig = 0;
@@ -544,18 +579,25 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
                 tstrig += (charge - ped) * info.tsGain(0);
         }
 
+        println("after the for loop over all time slices");
+
         //
         if (tstrig >= ts4Thresh_ and tstot>0) {
             useTriple = false;
+
+            println("before the chi2_switch");
             
             // only do the prefit with 1 pulse if ichisq threshold is positive
             if (chiSqSwitch_>0) {
+                println("do_fit call chi2_switch > 0");
                 do_fit(ws, recValues, 1);
                 if (recValues.chi2 > chiSqSwitch_) {
+                    println("do_fit call chi2 > chi2_switch");
                     do_fit(ws, recValues, 0); // nbx=0 means to use configured bxs
                     useTriple = true;
                 }
             } else {
+                println("do_fit call chi2_switch failed");
                 do_fit(ws, recValues, 0);
                 useTriple = true;
             }
@@ -564,6 +606,8 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
             recValues.time = -9999.;
             recValues.chi2 = -9999.;
         }
+
+        println("assign values and exit the kernel");
         
         // TODO  rewrite these guys
         float energy = recValues.energy * info.tsGain(0);
