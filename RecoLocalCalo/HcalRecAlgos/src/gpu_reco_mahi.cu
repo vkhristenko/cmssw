@@ -222,7 +222,8 @@ __device__ void nnls(Workspace &ws) {
     Eigen::Index idxwmax = 0;
     int current_outer_iteration = 0;
     int max_outer_iterations = 100;
-    while (true and current_outer_iteration<max_outer_iterations) {
+    //while (true and current_outer_iteration<max_outer_iterations) {
+    while (true) {
         if (iter>0 or ws.nP==0) {
             if (ws.nP == std::min(npulse, ws.tsSize)) break;
 
@@ -244,7 +245,8 @@ __device__ void nnls(Workspace &ws) {
         //
         int current_inner_iteration = 0;
         int max_inner_iterations = 100;
-        while (true and current_inner_iteration<max_inner_iterations) {
+        //while (true and current_inner_iteration<max_inner_iterations) {
+        while (true) {
             if (ws.nP == 0) break;
             ws.ampvecpermtest = ws.ampVec;
     
