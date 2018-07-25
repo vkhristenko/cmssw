@@ -17,7 +17,7 @@
 
 <use name="cuda"/>
 <flags CXXFLAGS="-g"/>
-<flags CUDA_FLAGS="-G -g"/>
+<flags CUDA_FLAGS="-Xptxas -O2,-v"/>
 <export>
   <lib   name="1"/>
 </export>

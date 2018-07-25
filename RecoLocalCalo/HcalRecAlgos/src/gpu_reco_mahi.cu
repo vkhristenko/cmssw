@@ -519,6 +519,7 @@ __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
 
         println("extracted input parameters/data");
 
+
         // reconstructed values
         RecValues recValues;
 

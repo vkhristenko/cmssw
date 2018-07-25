@@ -342,6 +342,20 @@ private:
                      HBHEChannelInfo* info,
                      HBHEChannelInfoCollection* infoColl,
                      HBHERecHitCollection* rechits);
+    template<typename T, typename C>
+    void gather(C const& input,
+                HcalDbService const& cond,
+                HcalChannelQuality const& quality,
+                HcalSeverityLevelComputer const& severity,
+                HBHEChannelInfo *info,
+                HBHEChannelInfoCollection *infos,
+                std::vector<HcalRecoParam> &vparams,
+                std::vector<HcalCalibrations> &vcalibs);
+    void scatter(HBHEChannelInfoCollection *infos,
+                 std::vector<HcalRecoParam> const& vparams,
+                 std::vector<HcalCalibrations> const& vcalibs,
+                 bool const isRealData,
+                 HBHERecHitCollection *rechits);
 
     // Methods for setting rechit status bits
     void setAsicSpecificBits(const HBHEDataFrame& frame, const HcalCoder& coder,
@@ -447,6 +461,131 @@ HBHEPhase1ReconstructorGPU::~HBHEPhase1ReconstructorGPU()
     // deallocate memory on the gpu device
     ddata_.free();
     psdata_.free();
+}
+
+template<typename T, typename C>
+void HBHEPhase1ReconstructorGPU::gather(C const& coll,
+                                        HcalDbService const& cond,
+                                        HcalChannelQuality const& qual,
+                                        HcalSeverityLevelComputer const& severity,
+                                        HBHEChannelInfo* channelInfo,
+                                        HBHEChannelInfoCollection* infos,
+                                        std::vector<HcalRecoParam> &vparams,
+                                        std::vector<HcalCalibrations> &vcalibs)
+{
+    using value_type = T;
+
+    // If "saveDroppedInfos_" flag is set, fill the info with something
+    // meaningful even if the database tells us to drop this channel.
+    // Note that this flag affects only "infos", the rechits are still
+    // not going to be constructed from such channels.
+    const bool skipDroppedChannels = !(infos && saveDroppedInfos_);
+    
+    // Iterate over the input collection
+    for (typename C::const_iterator it = coll.begin();
+         it != coll.end(); ++it)
+    {
+        const value_type& frame(*it);
+        const HcalDetId cell(frame.id());
+
+        // Protection against calibration channels which are not
+        // in the database but can still come in the QIE11DataFrame
+        // in the laser calibs, etc.
+        const HcalSubdetector subdet = cell.subdet();
+        if (!(subdet == HcalSubdetector::HcalBarrel ||
+              subdet == HcalSubdetector::HcalEndcap ||
+              subdet == HcalSubdetector::HcalOuter))
+            continue;
+
+        // Check if the database tells us to drop this channel
+        const HcalChannelStatus* mydigistatus = qual.getValues(cell.rawId());
+        const bool taggedBadByDb = severity.dropChannel(mydigistatus->getValue());
+        if (taggedBadByDb && skipDroppedChannels)
+            continue;
+
+        // Check if the channel is zero suppressed
+        bool dropByZS = false;
+        if (dropZSmarkedPassed_)
+            if (frame.zsMarkAndPass())
+                dropByZS = true;
+        if (dropByZS && skipDroppedChannels)
+            continue;
+
+        // Basic ADC decoding tools
+        const HcalRecoParam* param_ts = paramTS_->getValues(cell.rawId());
+        const HcalCalibrations& calib = cond.getHcalCalibrations(cell);
+        const HcalCalibrationWidths& calibWidth = cond.getHcalCalibrationWidths(cell);
+        const HcalQIECoder* channelCoder = cond.getHcalCoder(cell);
+        const HcalQIEShape* shape = cond.getHcalShape(channelCoder);
+        const HcalCoderDb coder(*channelCoder, *shape);
+
+        // needed for the dark current in the M2
+        const HcalSiPMParameter& siPMParameter(*cond.getHcalSiPMParameter(cell));
+        const double darkCurrent = siPMParameter.getDarkCurrent();
+        const double fcByPE = siPMParameter.getFCByPE();
+        const double lambda = cond.getHcalSiPMCharacteristics()->getCrossTalk(siPMParameter.getType());
+
+        // ADC to fC conversion
+        CaloSamples cs;
+        coder.adc2fC(frame, cs);
+
+        // Prepare to iterate over time slices
+        const bool saveEffectivePeds = channelInfo->hasEffectivePedestals();
+        const int nRead = cs.size();
+        const int maxTS = std::min(nRead, static_cast<int>(HBHEChannelInfo::MAXSAMPLES));
+        const int soi = tsFromDB_ ? param_ts->firstSample() : frame.presamples();
+        const RawChargeFromSample<value_type> rcfs(sipmQTSShift_, sipmQNTStoSum_, 
+                                               cond, cell, cs, soi, frame, maxTS);
+        int soiCapid = 4;
+
+        // Go over time slices and fill the samples
+        for (int ts = 0; ts < maxTS; ++ts)
+        {
+            auto s(frame[ts]);
+            const uint8_t adc = s.adc();
+            const int capid = s.capid();
+            //optionally store "effective" pedestal (measured with bias voltage on)
+            // = QIE contribution + SiPM contribution (from dark current + crosstalk)
+            const double pedestal = saveEffectivePeds ? calib.effpedestal(capid) : calib.pedestal(capid);
+            const double pedestalWidth = saveEffectivePeds ? calibWidth.effpedestal(capid) : calibWidth.pedestal(capid);
+            const double gain = calib.respcorrgain(capid);
+            const double gainWidth = calibWidth.gain(capid);
+            //always use QIE-only pedestal for this computation
+            const double rawCharge = rcfs.getRawCharge(cs[ts], calib.pedestal(capid));
+            const float t = getTDCTimeFromSample(s);
+            const float dfc = getDifferentialChargeGain(*channelCoder, *shape, adc,
+                                                        capid, channelInfo->hasTimeInfo());
+            channelInfo->setSample(ts, adc, dfc, rawCharge,
+                                   pedestal, pedestalWidth,
+                                   gain, gainWidth, t);
+            if (ts == soi)
+                soiCapid = capid;
+        }
+
+        // Fill the overall channel info items
+        const int pulseShapeID = param_ts->pulseShapeID();
+        const std::pair<bool,bool> hwerr = findHWErrors(frame, maxTS);
+        channelInfo->setChannelInfo(cell, pulseShapeID, maxTS, soi, soiCapid,
+                                    darkCurrent, fcByPE, lambda,
+                                    hwerr.first, hwerr.second,
+                                    taggedBadByDb || dropByZS);
+
+        const bool makeThisRechit = !channelInfo->isDropped();
+        if (makeThisRechit) {
+            // push the needed info
+            infos->push_back(*channelInfo);
+            vparams.push_back(*param_ts);
+            vcalibs.push_back(calib);
+        }
+    }
+}
+    
+void HBHEPhase1ReconstructorGPU::scatter(HBHEChannelInfoCollection *infos,
+             std::vector<HcalRecoParam> const& vparams,
+             std::vector<HcalCalibrations> const& vcalibs,
+             bool const isRealData,
+             HBHERecHitCollection *rechits) {
+    hcal::mahi::reco(ddata_, *infos, *rechits, vparams, vcalibs, psdata_, isRealData);
 }
 
 
@@ -572,24 +711,6 @@ void HBHEPhase1ReconstructorGPU::processData(const Collection& coll,
 
     // perform the reconstruction on the whole vector 
     hcal::mahi::reco(ddata_, *infos, *rechits, vparams, vcalibs, psdata_, isRealData);
-
-    /*
-    for (size_t ihit=0; ihit<infos->size(); ihit++) {
-        auto *param_ts = &(vparams[ihit]);
-        auto &calib = vcalibs[ihit];
-        auto &ch = (*infos)[ihit];
-
-        // Reconstruct the rechit
-        const HcalRecoParam* pptr = nullptr;
-        if (recoParamsFromDB_)
-            pptr = param_ts;
-        HBHERecHit rh = reco_->reconstruct(ch, pptr, calib, isRealData);
-        if (rh.id().rawId()) {
-       //     setAsicSpecificBits(frame, coder, *channelInfo, calib, &rh);
-       //     setCommonStatusBits(*channelInfo, calib, &rh);
-            rechits->push_back(rh);
-        }
-    }*/
 }
 
 void HBHEPhase1ReconstructorGPU::setCommonStatusBits(
@@ -696,6 +817,10 @@ HBHEPhase1ReconstructorGPU::produce(edm::Event& e, const edm::EventSetup& eventS
         out->reserve(maxOutputSize);
     }
 
+    // accumulate conditions
+    std::vector<HcalRecoParam> vparams;
+    std::vector<HcalCalibrations> vcalibs;
+
     // Process the input collections, filling the output ones
     const bool isData = e.isRealData();
     if (processQIE8_)
@@ -704,10 +829,14 @@ HBHEPhase1ReconstructorGPU::produce(edm::Event& e, const edm::EventSetup& eventS
             hbheFlagSetterQIE8_->Clear();
 
         HBHEChannelInfo channelInfo(false,false);
+        gather<HBHEDataFrame>(*hbDigis, *conditions, *p, *mycomputer,
+                              &channelInfo, infos.get(), vparams, vcalibs);
+        /*
         processData<HBHEDataFrame>(*hbDigis, *conditions, *p, *mycomputer,
                                    isData, &channelInfo, infos.get(), out.get());
         if (setNoiseFlagsQIE8_)
             hbheFlagSetterQIE8_->SetFlagsFromRecHits(*out);
+            */
     }
 
     if (processQIE11_)
@@ -716,11 +845,18 @@ HBHEPhase1ReconstructorGPU::produce(edm::Event& e, const edm::EventSetup& eventS
             hbheFlagSetterQIE11_->Clear();
 
         HBHEChannelInfo channelInfo(true,saveEffectivePedestal_);
+        gather<QIE11DataFrame>(*heDigis, *conditions, *p, *mycomputer,
+                               &channelInfo, infos.get(), vparams, vcalibs);
+        /*
         processData<QIE11DataFrame>(*heDigis, *conditions, *p, *mycomputer,
                                     isData, &channelInfo, infos.get(), out.get());
         if (setNoiseFlagsQIE11_)
             hbheFlagSetterQIE11_->SetFlagsFromRecHits(*out);
+            */
     }
+
+    // offload the kernel
+    scatter(infos.get(), vparams, vcalibs, isData, out.get());
 
     // Add the output collections to the event record
     if (saveInfos_)
