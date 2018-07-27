@@ -365,292 +365,291 @@ void MahiFit::nnls() const {
   double threshold = nnlsThresh_;
 
   nnlsWork_.nP=0;
-  
+
   while (true) {    
-    if (iter>0 || nnlsWork_.nP==0) {
-      if ( nnlsWork_.nP==std::min(npulse, nnlsWork_.tsSize)) break;
-      
-      const unsigned int nActive = npulse - nnlsWork_.nP;
-      nnlsWork_.updateWork = nnlsWork_.aTbVec - nnlsWork_.aTaMat*nnlsWork_.ampVec;
-      
-      Index idxwmaxprev = idxwmax;
-      double wmaxprev = wmax;
-      wmax = nnlsWork_.updateWork.tail(nActive).maxCoeff(&idxwmax);
-      
-      if (wmax<threshold || (idxwmax==idxwmaxprev && wmax==wmaxprev)) {
-	break;
+      if (iter>0 || nnlsWork_.nP==0) {
+          if ( nnlsWork_.nP==std::min(npulse, nnlsWork_.tsSize)) break;
+
+          const unsigned int nActive = npulse - nnlsWork_.nP;
+          nnlsWork_.updateWork = nnlsWork_.aTbVec - nnlsWork_.aTaMat*nnlsWork_.ampVec;
+
+          Index idxwmaxprev = idxwmax;
+          double wmaxprev = wmax;
+          wmax = nnlsWork_.updateWork.tail(nActive).maxCoeff(&idxwmax);
+
+          if (wmax<threshold || (idxwmax==idxwmaxprev && wmax==wmaxprev)) {
+              break;
+          }
+
+          if (iter>=nMaxItersNNLS_) {
+              break;
+          }
+
+          //unconstrain parameter
+          Index idxp = nnlsWork_.nP + idxwmax;
+          nnlsUnconstrainParameter(idxp);
+
       }
-      
-      if (iter>=nMaxItersNNLS_) {
-	break;
+
+      while (true) {
+          if (nnlsWork_.nP==0) break;     
+
+          nnlsWork_.ampvecpermtest = nnlsWork_.ampVec;
+
+          solveSubmatrix(nnlsWork_.aTaMat,nnlsWork_.aTbVec,nnlsWork_.ampvecpermtest,nnlsWork_.nP);
+
+          //check solution
+          bool positive = true;
+          for (unsigned int i = 0; i < nnlsWork_.nP; ++i)
+              positive &= (nnlsWork_.ampvecpermtest(i) > 0);
+          if (positive) {
+              nnlsWork_.ampVec.head(nnlsWork_.nP) = nnlsWork_.ampvecpermtest.head(nnlsWork_.nP);
+              break;
+          } 
+
+          //update parameter vector
+          Index minratioidx=0;
+
+          // no realizable optimization here (because it autovectorizes!)
+          double minratio = std::numeric_limits<double>::max();
+          for (unsigned int ipulse=0; ipulse<nnlsWork_.nP; ++ipulse) {
+              if (nnlsWork_.ampvecpermtest.coeff(ipulse)<=0.) {
+                  const double c_ampvec = nnlsWork_.ampVec.coeff(ipulse);
+                  const double ratio = c_ampvec/(c_ampvec-nnlsWork_.ampvecpermtest.coeff(ipulse));
+                  if (ratio<minratio) {
+                      minratio = ratio;
+                      minratioidx = ipulse;
+                  }
+              }
+          }
+          nnlsWork_.ampVec.head(nnlsWork_.nP) += minratio*(nnlsWork_.ampvecpermtest.head(nnlsWork_.nP) - nnlsWork_.ampVec.head(nnlsWork_.nP));
+
+          //avoid numerical problems with later ==0. check
+          nnlsWork_.ampVec.coeffRef(minratioidx) = 0.;
+
+          nnlsConstrainParameter(minratioidx);
       }
 
-      //unconstrain parameter
-      Index idxp = nnlsWork_.nP + idxwmax;
-      nnlsUnconstrainParameter(idxp);
+      ++iter;
 
-    }
-
-    while (true) {
-      if (nnlsWork_.nP==0) break;     
-
-      nnlsWork_.ampvecpermtest = nnlsWork_.ampVec;
-      
-      solveSubmatrix(nnlsWork_.aTaMat,nnlsWork_.aTbVec,nnlsWork_.ampvecpermtest,nnlsWork_.nP);
-
-      //check solution
-      bool positive = true;
-      for (unsigned int i = 0; i < nnlsWork_.nP; ++i)
-        positive &= (nnlsWork_.ampvecpermtest(i) > 0);
-      if (positive) {
-        nnlsWork_.ampVec.head(nnlsWork_.nP) = nnlsWork_.ampvecpermtest.head(nnlsWork_.nP);
-        break;
-      } 
-
-      //update parameter vector
-      Index minratioidx=0;
-      
-      // no realizable optimization here (because it autovectorizes!)
-      double minratio = std::numeric_limits<double>::max();
-      for (unsigned int ipulse=0; ipulse<nnlsWork_.nP; ++ipulse) {
-	if (nnlsWork_.ampvecpermtest.coeff(ipulse)<=0.) {
-	  const double c_ampvec = nnlsWork_.ampVec.coeff(ipulse);
-	  const double ratio = c_ampvec/(c_ampvec-nnlsWork_.ampvecpermtest.coeff(ipulse));
-	  if (ratio<minratio) {
-	    minratio = ratio;
-	    minratioidx = ipulse;
-	  }
-	}
+      //adaptive convergence threshold to avoid infinite loops but still
+      //ensure best value is used
+      if (iter%10==0) {
+          threshold *= 10.;
       }
-      nnlsWork_.ampVec.head(nnlsWork_.nP) += minratio*(nnlsWork_.ampvecpermtest.head(nnlsWork_.nP) - nnlsWork_.ampVec.head(nnlsWork_.nP));
-      
-      //avoid numerical problems with later ==0. check
-      nnlsWork_.ampVec.coeffRef(minratioidx) = 0.;
-      
-      nnlsConstrainParameter(minratioidx);
-    }
-   
-    ++iter;
 
-    //adaptive convergence threshold to avoid infinite loops but still
-    //ensure best value is used
-    if (iter%10==0) {
-      threshold *= 10.;
-    }
-    
   }
 
-  
 }
 
 void MahiFit::onePulseMinimize() const {
 
-  nnlsWork_.invcovp = nnlsWork_.covDecomp.matrixL().solve(nnlsWork_.pulseMat);
+    nnlsWork_.invcovp = nnlsWork_.covDecomp.matrixL().solve(nnlsWork_.pulseMat);
 
-  SingleMatrix aTamatval = nnlsWork_.invcovp.transpose()*nnlsWork_.invcovp;
-  SingleVector aTbvecval = nnlsWork_.invcovp.transpose()*nnlsWork_.covDecomp.matrixL().solve(nnlsWork_.amplitudes);
+    SingleMatrix aTamatval = nnlsWork_.invcovp.transpose()*nnlsWork_.invcovp;
+    SingleVector aTbvecval = nnlsWork_.invcovp.transpose()*nnlsWork_.covDecomp.matrixL().solve(nnlsWork_.amplitudes);
 
-  nnlsWork_.ampVec.coeffRef(0) = std::max(0., aTbvecval.coeff(0)/aTamatval.coeff(0));
+    nnlsWork_.ampVec.coeffRef(0) = std::max(0., aTbvecval.coeff(0)/aTamatval.coeff(0));
 
 
 }
 
 double MahiFit::calculateChiSq() const {
-  
-  return (nnlsWork_.covDecomp.matrixL().solve(nnlsWork_.pulseMat*nnlsWork_.ampVec - nnlsWork_.amplitudes)).squaredNorm();
+
+    return (nnlsWork_.covDecomp.matrixL().solve(nnlsWork_.pulseMat*nnlsWork_.ampVec - nnlsWork_.amplitudes)).squaredNorm();
 }
 
 void MahiFit::setPulseShapeTemplate(const HcalPulseShapes::Shape& ps,const HcalTimeSlew* hcalTimeSlewDelay) {
 
-  if (!(&ps == currentPulseShape_ ))
+    if (!(&ps == currentPulseShape_ ))
     {
 
-      hcalTimeSlewDelay_ = hcalTimeSlewDelay;
-      tsDelay1GeV_= hcalTimeSlewDelay->delay(1.0, slewFlavor_);
+        hcalTimeSlewDelay_ = hcalTimeSlewDelay;
+        tsDelay1GeV_= hcalTimeSlewDelay->delay(1.0, slewFlavor_);
 
-      resetPulseShapeTemplate(ps);
-      currentPulseShape_ = &ps;
+        resetPulseShapeTemplate(ps);
+        currentPulseShape_ = &ps;
     }
 }
 
 void MahiFit::resetPulseShapeTemplate(const HcalPulseShapes::Shape& ps) { 
-  ++ cntsetPulseShape_;
+    ++ cntsetPulseShape_;
 
-  // only the pulse shape itself from PulseShapeFunctor is used for Mahi
-  // the uncertainty terms calculated inside PulseShapeFunctor are used for Method 2 only
-  psfPtr_.reset(new FitterFuncs::PulseShapeFunctor(ps,false,false,false,
-						   1,0,0,10));
-  pfunctor_ = std::unique_ptr<ROOT::Math::Functor>( new ROOT::Math::Functor(psfPtr_.get(),&FitterFuncs::PulseShapeFunctor::singlePulseShapeFunc, 3) );
+    // only the pulse shape itself from PulseShapeFunctor is used for Mahi
+    // the uncertainty terms calculated inside PulseShapeFunctor are used for Method 2 only
+    psfPtr_.reset(new FitterFuncs::PulseShapeFunctor(ps,false,false,false,
+                1,0,0,10));
+    pfunctor_ = std::unique_ptr<ROOT::Math::Functor>( new ROOT::Math::Functor(psfPtr_.get(),&FitterFuncs::PulseShapeFunctor::singlePulseShapeFunc, 3) );
 
 
 }
 
 void MahiFit::nnlsUnconstrainParameter(Index idxp) const {
-  nnlsWork_.aTaMat.col(nnlsWork_.nP).swap(nnlsWork_.aTaMat.col(idxp));
-  nnlsWork_.aTaMat.row(nnlsWork_.nP).swap(nnlsWork_.aTaMat.row(idxp));
-  nnlsWork_.pulseMat.col(nnlsWork_.nP).swap(nnlsWork_.pulseMat.col(idxp));
-  std::swap(nnlsWork_.aTbVec.coeffRef(nnlsWork_.nP),nnlsWork_.aTbVec.coeffRef(idxp));
-  std::swap(nnlsWork_.ampVec.coeffRef(nnlsWork_.nP),nnlsWork_.ampVec.coeffRef(idxp));
-  std::swap(nnlsWork_.bxs.coeffRef(nnlsWork_.nP),nnlsWork_.bxs.coeffRef(idxp));
-  ++nnlsWork_.nP;
+    nnlsWork_.aTaMat.col(nnlsWork_.nP).swap(nnlsWork_.aTaMat.col(idxp));
+    nnlsWork_.aTaMat.row(nnlsWork_.nP).swap(nnlsWork_.aTaMat.row(idxp));
+    nnlsWork_.pulseMat.col(nnlsWork_.nP).swap(nnlsWork_.pulseMat.col(idxp));
+    std::swap(nnlsWork_.aTbVec.coeffRef(nnlsWork_.nP),nnlsWork_.aTbVec.coeffRef(idxp));
+    std::swap(nnlsWork_.ampVec.coeffRef(nnlsWork_.nP),nnlsWork_.ampVec.coeffRef(idxp));
+    std::swap(nnlsWork_.bxs.coeffRef(nnlsWork_.nP),nnlsWork_.bxs.coeffRef(idxp));
+    ++nnlsWork_.nP;
 }
 
 void MahiFit::nnlsConstrainParameter(Index minratioidx) const {
-  nnlsWork_.aTaMat.col(nnlsWork_.nP-1).swap(nnlsWork_.aTaMat.col(minratioidx));
-  nnlsWork_.aTaMat.row(nnlsWork_.nP-1).swap(nnlsWork_.aTaMat.row(minratioidx));
-  nnlsWork_.pulseMat.col(nnlsWork_.nP-1).swap(nnlsWork_.pulseMat.col(minratioidx));
-  std::swap(nnlsWork_.aTbVec.coeffRef(nnlsWork_.nP-1),nnlsWork_.aTbVec.coeffRef(minratioidx));
-  std::swap(nnlsWork_.ampVec.coeffRef(nnlsWork_.nP-1),nnlsWork_.ampVec.coeffRef(minratioidx));
-  std::swap(nnlsWork_.bxs.coeffRef(nnlsWork_.nP-1),nnlsWork_.bxs.coeffRef(minratioidx));
-  --nnlsWork_.nP;
+    nnlsWork_.aTaMat.col(nnlsWork_.nP-1).swap(nnlsWork_.aTaMat.col(minratioidx));
+    nnlsWork_.aTaMat.row(nnlsWork_.nP-1).swap(nnlsWork_.aTaMat.row(minratioidx));
+    nnlsWork_.pulseMat.col(nnlsWork_.nP-1).swap(nnlsWork_.pulseMat.col(minratioidx));
+    std::swap(nnlsWork_.aTbVec.coeffRef(nnlsWork_.nP-1),nnlsWork_.aTbVec.coeffRef(minratioidx));
+    std::swap(nnlsWork_.ampVec.coeffRef(nnlsWork_.nP-1),nnlsWork_.ampVec.coeffRef(minratioidx));
+    std::swap(nnlsWork_.bxs.coeffRef(nnlsWork_.nP-1),nnlsWork_.bxs.coeffRef(minratioidx));
+    --nnlsWork_.nP;
 
 }
 
 void MahiFit::phase1Debug(const HBHEChannelInfo& channelData,
-			  MahiDebugInfo& mdi) const {
+        MahiDebugInfo& mdi) const {
 
-  float recoEnergy, recoTime, chi2;
-  bool use3;
-  phase1Apply(channelData, recoEnergy, recoTime, use3, chi2);
+    float recoEnergy, recoTime, chi2;
+    bool use3;
+    phase1Apply(channelData, recoEnergy, recoTime, use3, chi2);
 
 
-  mdi.nSamples    = channelData.nSamples();
-  mdi.soi         = channelData.soi();
+    mdi.nSamples    = channelData.nSamples();
+    mdi.soi         = channelData.soi();
 
-  mdi.use3        = use3;
+    mdi.use3        = use3;
 
-  mdi.inTimeConst = nnlsWork_.dt;
-  mdi.inPedAvg    = 0.25*( channelData.tsPedestalWidth(0)*channelData.tsPedestalWidth(0)+
-			   channelData.tsPedestalWidth(1)*channelData.tsPedestalWidth(1)+
-			   channelData.tsPedestalWidth(2)*channelData.tsPedestalWidth(2)+
-			   channelData.tsPedestalWidth(3)*channelData.tsPedestalWidth(3) );
-  mdi.inGain      = channelData.tsGain(0);
+    mdi.inTimeConst = nnlsWork_.dt;
+    mdi.inPedAvg    = 0.25*( channelData.tsPedestalWidth(0)*channelData.tsPedestalWidth(0)+
+            channelData.tsPedestalWidth(1)*channelData.tsPedestalWidth(1)+
+            channelData.tsPedestalWidth(2)*channelData.tsPedestalWidth(2)+
+            channelData.tsPedestalWidth(3)*channelData.tsPedestalWidth(3) );
+    mdi.inGain      = channelData.tsGain(0);
 
-  for (unsigned int iTS=0; iTS<channelData.nSamples(); ++iTS) {
+    for (unsigned int iTS=0; iTS<channelData.nSamples(); ++iTS) {
 
-    double charge = channelData.tsRawCharge(iTS);
-    double ped = channelData.tsPedestal(iTS);
+        double charge = channelData.tsRawCharge(iTS);
+        double ped = channelData.tsPedestal(iTS);
 
-    mdi.inNoiseADC[iTS]  = (1./sqrt(12))*channelData.tsDFcPerADC(iTS);
+        mdi.inNoiseADC[iTS]  = (1./sqrt(12))*channelData.tsDFcPerADC(iTS);
 
-    if ( (charge-ped)>channelData.tsPedestalWidth(iTS)) {
-      mdi.inNoisePhoto[iTS] = sqrt((charge-ped)*channelData.fcByPE());
+        if ( (charge-ped)>channelData.tsPedestalWidth(iTS)) {
+            mdi.inNoisePhoto[iTS] = sqrt((charge-ped)*channelData.fcByPE());
+        }
+        else { mdi.inNoisePhoto[iTS] = 0; }
+
+        mdi.inPedestal[iTS]  = channelData.tsPedestalWidth(iTS);    
+        mdi.totalUCNoise[iTS] = nnlsWork_.noiseTerms.coeffRef(iTS);
+
+        if (channelData.hasTimeInfo()) {
+            mdi.inputTDC[iTS] = channelData.tsRiseTime(iTS);
+        }
+        else { mdi.inputTDC[iTS]=-1; }
+
     }
-    else { mdi.inNoisePhoto[iTS] = 0; }
 
-    mdi.inPedestal[iTS]  = channelData.tsPedestalWidth(iTS);    
-    mdi.totalUCNoise[iTS] = nnlsWork_.noiseTerms.coeffRef(iTS);
+    mdi.arrivalTime = recoTime;
+    mdi.chiSq       = chi2;
 
-    if (channelData.hasTimeInfo()) {
-      mdi.inputTDC[iTS] = channelData.tsRiseTime(iTS);
-    }
-    else { mdi.inputTDC[iTS]=-1; }
-
-  }
-
-  mdi.arrivalTime = recoTime;
-  mdi.chiSq       = chi2;
-
-  for (unsigned int iBX=0; iBX<nnlsWork_.nPulseTot; ++iBX) {
-    if (nnlsWork_.bxs.coeff(iBX)==0) {
-      mdi.mahiEnergy=nnlsWork_.ampVec.coeff(iBX);
-      for(unsigned int iTS=0; iTS<nnlsWork_.tsSize; ++iTS){
-	mdi.count[iTS] = iTS;
-	mdi.inputTS[iTS] = nnlsWork_.amplitudes.coeff(iTS);
-	mdi.itPulse[iTS] = nnlsWork_.pulseMat.col(iBX).coeff(iTS);
-      }
-    }
-    else if (nnlsWork_.bxs.coeff(iBX)==pedestalBX_) {
-      mdi.pedEnergy=nnlsWork_.ampVec.coeff(iBX);
-    }
-    else if (nnlsWork_.bxs.coeff(iBX)==-1) {
-      mdi.pEnergy=nnlsWork_.ampVec.coeff(iBX);
-      for(unsigned int iTS=0; iTS<nnlsWork_.tsSize; ++iTS){
-        mdi.pPulse[iTS] = nnlsWork_.pulseMat.col(iBX).coeff(iTS);
-      }
-    }
-    else if (nnlsWork_.bxs.coeff(iBX)==1) {
-      mdi.nEnergy=nnlsWork_.ampVec.coeff(iBX);
-      for(unsigned int iTS=0; iTS<nnlsWork_.tsSize; ++iTS){
-	mdi.nPulse[iTS] = nnlsWork_.pulseMat.col(iBX).coeff(iTS);
-      }
-    }
-  }  
+    for (unsigned int iBX=0; iBX<nnlsWork_.nPulseTot; ++iBX) {
+        if (nnlsWork_.bxs.coeff(iBX)==0) {
+            mdi.mahiEnergy=nnlsWork_.ampVec.coeff(iBX);
+            for(unsigned int iTS=0; iTS<nnlsWork_.tsSize; ++iTS){
+                mdi.count[iTS] = iTS;
+                mdi.inputTS[iTS] = nnlsWork_.amplitudes.coeff(iTS);
+                mdi.itPulse[iTS] = nnlsWork_.pulseMat.col(iBX).coeff(iTS);
+            }
+        }
+        else if (nnlsWork_.bxs.coeff(iBX)==pedestalBX_) {
+            mdi.pedEnergy=nnlsWork_.ampVec.coeff(iBX);
+        }
+        else if (nnlsWork_.bxs.coeff(iBX)==-1) {
+            mdi.pEnergy=nnlsWork_.ampVec.coeff(iBX);
+            for(unsigned int iTS=0; iTS<nnlsWork_.tsSize; ++iTS){
+                mdi.pPulse[iTS] = nnlsWork_.pulseMat.col(iBX).coeff(iTS);
+            }
+        }
+        else if (nnlsWork_.bxs.coeff(iBX)==1) {
+            mdi.nEnergy=nnlsWork_.ampVec.coeff(iBX);
+            for(unsigned int iTS=0; iTS<nnlsWork_.tsSize; ++iTS){
+                mdi.nPulse[iTS] = nnlsWork_.pulseMat.col(iBX).coeff(iTS);
+            }
+        }
+    }  
 }
 
 
 void MahiFit::solveSubmatrix(PulseMatrix& mat, PulseVector& invec, PulseVector& outvec, unsigned nP) const {
-  using namespace Eigen;
-  switch( nP ) { // pulse matrix is always square.
-  case 10:
-    {
-      Matrix<double,10,10> temp = mat;
-      outvec.head<10>() = temp.ldlt().solve(invec.head<10>());
+    using namespace Eigen;
+    switch( nP ) { // pulse matrix is always square.
+        case 10:
+            {
+                Matrix<double,10,10> temp = mat;
+                outvec.head<10>() = temp.ldlt().solve(invec.head<10>());
+            }
+            break;
+        case 9:
+            {
+                Matrix<double,9,9> temp = mat.topLeftCorner<9,9>();
+                outvec.head<9>() = temp.ldlt().solve(invec.head<9>());
+            }
+            break;
+        case 8:
+            {
+                Matrix<double,8,8> temp = mat.topLeftCorner<8,8>();
+                outvec.head<8>() = temp.ldlt().solve(invec.head<8>());
+            }
+            break;
+        case 7:
+            {
+                Matrix<double,7,7> temp = mat.topLeftCorner<7,7>();
+                outvec.head<7>() = temp.ldlt().solve(invec.head<7>());
+            }
+            break;
+        case 6:
+            {
+                Matrix<double,6,6> temp = mat.topLeftCorner<6,6>();
+                outvec.head<6>() = temp.ldlt().solve(invec.head<6>());
+            }
+            break;
+        case 5:
+            {
+                Matrix<double,5,5> temp = mat.topLeftCorner<5,5>();
+                outvec.head<5>() = temp.ldlt().solve(invec.head<5>());
+            }
+            break;
+        case 4:
+            {
+                Matrix<double,4,4> temp = mat.topLeftCorner<4,4>();
+                outvec.head<4>() = temp.ldlt().solve(invec.head<4>());
+            }
+            break;
+        case 3: 
+            {
+                Matrix<double,3,3> temp = mat.topLeftCorner<3,3>();
+                outvec.head<3>() = temp.ldlt().solve(invec.head<3>());
+            }
+            break;
+        case 2:
+            {
+                Matrix<double,2,2> temp = mat.topLeftCorner<2,2>();
+                outvec.head<2>() = temp.ldlt().solve(invec.head<2>());
+            }
+            break;
+        case 1:
+            {
+                Matrix<double,1,1> temp = mat.topLeftCorner<1,1>();
+                outvec.head<1>() = temp.ldlt().solve(invec.head<1>());
+            }
+            break;
+        default:
+            throw cms::Exception("HcalMahiWeirdState") 
+                << "Weird number of pulses encountered in Mahi, module is configured incorrectly!";
     }
-    break;
-  case 9:
-    {
-      Matrix<double,9,9> temp = mat.topLeftCorner<9,9>();
-      outvec.head<9>() = temp.ldlt().solve(invec.head<9>());
-    }
-    break;
-  case 8:
-    {
-      Matrix<double,8,8> temp = mat.topLeftCorner<8,8>();
-      outvec.head<8>() = temp.ldlt().solve(invec.head<8>());
-    }
-    break;
-  case 7:
-    {
-      Matrix<double,7,7> temp = mat.topLeftCorner<7,7>();
-      outvec.head<7>() = temp.ldlt().solve(invec.head<7>());
-    }
-    break;
-  case 6:
-    {
-      Matrix<double,6,6> temp = mat.topLeftCorner<6,6>();
-      outvec.head<6>() = temp.ldlt().solve(invec.head<6>());
-    }
-    break;
-  case 5:
-    {
-      Matrix<double,5,5> temp = mat.topLeftCorner<5,5>();
-      outvec.head<5>() = temp.ldlt().solve(invec.head<5>());
-    }
-    break;
-  case 4:
-    {
-      Matrix<double,4,4> temp = mat.topLeftCorner<4,4>();
-      outvec.head<4>() = temp.ldlt().solve(invec.head<4>());
-    }
-    break;
-  case 3: 
-    {
-      Matrix<double,3,3> temp = mat.topLeftCorner<3,3>();
-      outvec.head<3>() = temp.ldlt().solve(invec.head<3>());
-    }
-    break;
-  case 2:
-    {
-      Matrix<double,2,2> temp = mat.topLeftCorner<2,2>();
-      outvec.head<2>() = temp.ldlt().solve(invec.head<2>());
-    }
-    break;
-  case 1:
-    {
-      Matrix<double,1,1> temp = mat.topLeftCorner<1,1>();
-      outvec.head<1>() = temp.ldlt().solve(invec.head<1>());
-    }
-    break;
-  default:
-    throw cms::Exception("HcalMahiWeirdState") 
-      << "Weird number of pulses encountered in Mahi, module is configured incorrectly!";
-  }
 }
 
 void MahiFit::resetWorkspace() const {
 
-  nnlsWork_.nPulseTot=0;
+    nnlsWork_.nPulseTot=0;
   nnlsWork_.tsSize=0;
   nnlsWork_.tsOffset=0;
   nnlsWork_.fullTSOffset=0;

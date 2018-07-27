@@ -14,6 +14,10 @@
 <use   name="CondFormats/DataRecord"/>
 <use   name="vdt_headers"/>
 <use   name="rootminuit2"/> 
+
+<use name="cuda"/>
+<flags CXXFLAGS="-g"/>
+<flags CUDA_FLAGS="-Xptxas -O2,-v"/>
 <export>
   <lib   name="1"/>
 </export>
