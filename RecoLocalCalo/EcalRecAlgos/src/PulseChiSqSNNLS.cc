@@ -252,7 +252,8 @@ bool PulseChiSqSNNLS::Minimize(const SampleMatrix &samplecov, const FullSampleMa
     status = updateCov(samplecov,fullpulsecov);    
     if (!status) break; 
     if (npulse>1) {
-      status = fnnls();
+      status = NNLS();
+      //status = fnnls();
     }
     else {
       //special case for one pulse fit (performance optimized)
