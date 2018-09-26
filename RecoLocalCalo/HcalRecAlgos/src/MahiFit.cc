@@ -1,6 +1,8 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/MahiFit.h" 
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 
+#include "RecoLocalCalo/Common/interface/inplace_fnnls.h"
+
 MahiFit::MahiFit() :
   fullTSSize_(19), 
   fullTSofInterest_(8)
@@ -353,6 +355,21 @@ double MahiFit::calculateArrivalTime() const {
   
 
 void MahiFit::nnls() const {
+/*
+  std::cout << "rows = " << nnlsWork_.pulseMat.rows() << "  cols = " << nnlsWork_.pulseMat.cols()
+            << std::endl;
+  std::cout << nnlsWork_.pulseMat << std::endl;
+  std::cout << nnlsWork_.amplitudes << std::endl;
+  std::cout << nnlsWork_.ampVec << std::endl;
+  FixedMatrix A = nnlsWork_.covDecomp.matrixL().solve(nnlsWork_.pulseMat);
+  FixedVector b = nnlsWork_.covDecomp.matrixL().solve(nnlsWork_.amplitudes);
+
+  FixedVector x = FixedVector(nnlsWork_.ampVec);
+
+  inplace_fnnls(A, b, x, nnlsThresh_, nMaxItersNNLS_);
+
+  nnlsWork_.ampVec = x;
+*/
   const unsigned int npulse = nnlsWork_.nPulseTot;
 
   nnlsWork_.invcovp = nnlsWork_.covDecomp.matrixL().solve(nnlsWork_.pulseMat);
@@ -440,7 +457,6 @@ void MahiFit::nnls() const {
     
   }
 
-  
 }
 
 void MahiFit::onePulseMinimize() const {

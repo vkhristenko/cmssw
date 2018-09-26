@@ -12,6 +12,7 @@
 <use   name="FWCore/PluginManager"/>
 <use   name="FWCore/ParameterSet"/>
 <use   name="CondFormats/DataRecord"/>
+<use   name="RecoLocalCalo/Common" />
 <use   name="vdt_headers"/>
 <use   name="rootminuit2"/> 
 <export>

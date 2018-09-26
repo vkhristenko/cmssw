@@ -3,6 +3,8 @@
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include <iostream>
 
+#include "RecoLocalCalo/Common/interface/inplace_fnnls.h"
+
 void eigen_solve_submatrix(PulseMatrix& mat, PulseVector& invec, PulseVector& outvec, unsigned NP) {
   using namespace Eigen;
   switch( NP ) { // pulse matrix is always square.
@@ -250,7 +252,7 @@ bool PulseChiSqSNNLS::Minimize(const SampleMatrix &samplecov, const FullSampleMa
     status = updateCov(samplecov,fullpulsecov);    
     if (!status) break; 
     if (npulse>1) {
-      status = NNLS();
+      status = fnnls();
     }
     else {
       //special case for one pulse fit (performance optimized)
@@ -318,6 +320,21 @@ double PulseChiSqSNNLS::ComputeApproxUncertainty(unsigned int ipulse) {
       
   return 1./_covdecomp.matrixL().solve(_pulsemat.col(ipulse)).norm();
   
+}
+
+bool PulseChiSqSNNLS::fnnls() {
+    FixedMatrix A = _covdecomp.matrixL().solve(_pulsemat);
+    FixedVector b = _covdecomp.matrixL().solve(_sampvec);
+
+    double const epsilon = 1e-11;
+    unsigned int const max_iterations = 500;
+
+    FixedVector x = FixedVector(_ampvec);
+    inplace_fnnls(A, b, x, epsilon, max_iterations);
+
+    _ampvec = x;
+
+    return true;
 }
 
 bool PulseChiSqSNNLS::NNLS() {
