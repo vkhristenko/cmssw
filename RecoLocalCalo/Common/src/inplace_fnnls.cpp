@@ -18,7 +18,7 @@ inline FixedMatrix transpose_multiply(const FixedMatrix &A){
   return result;
 }
 
-void inplace_fnnls(const FixedMatrix& A,
+int inplace_fnnls(const FixedMatrix& A,
                    const FixedVector& b,
                    FixedVector& x,
                    const double eps,
@@ -72,7 +72,10 @@ void inplace_fnnls(const FixedMatrix& A,
   permutation.setIdentity();
 
 // main loop
-  for (auto iter = 0u; iter < max_iterations; ++iter) {
+  unsigned int iter = 0;
+  Eigen::Index w_max_idx_prev = 0;
+  double max_w_prev = 0.0;
+  for (iter = 0u; iter < max_iterations; ++iter) {
     const auto nActive = VECTOR_SIZE - nPassive;
 
 #ifdef DEBUG_FNNLS_CPU
@@ -92,8 +95,11 @@ void inplace_fnnls(const FixedMatrix& A,
     const auto max_w = w.tail(nActive).maxCoeff(&w_max_idx);
 
     // check for convergence
-    if (max_w < eps)
+    if (max_w < eps or (w_max_idx == w_max_idx_prev and max_w == max_w_prev))
       break;
+
+    max_w_prev = max_w;
+    w_max_idx_prev = w_max_idx;
 
     // cout << "n active " << nActive << endl;
     // cout << "w max idx " << w_max_idx << endl;
@@ -175,5 +181,9 @@ void inplace_fnnls(const FixedMatrix& A,
                           permutation.indices()[alpha_idx]);
     }
   }
+
+  //std::cout << "*** iter = " << iter << std::endl;
   x = x.transpose() * permutation.transpose();  
+
+  return iter;
 }

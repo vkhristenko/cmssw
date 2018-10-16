@@ -3,7 +3,7 @@
 
 #include "RecoLocalCalo/Common/interface/data_types.h"
 
-void
+int
 inplace_fnnls(const FixedMatrix& A,
               const FixedVector& b,
               FixedVector& x,

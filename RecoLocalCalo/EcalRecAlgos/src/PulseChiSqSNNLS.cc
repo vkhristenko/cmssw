@@ -5,6 +5,20 @@
 
 #include "RecoLocalCalo/Common/interface/inplace_fnnls.h"
 
+struct SomeStaticTracker {
+    void track(int value) {
+        if (value >= 500)
+            counter++;
+    }
+    SomeStaticTracker() = default;
+    ~SomeStaticTracker() {
+        std::cout << "counter = " << counter << std::endl;
+    }
+
+    int counter = 0;
+};
+
+
 void eigen_solve_submatrix(PulseMatrix& mat, PulseVector& invec, PulseVector& outvec, unsigned NP) {
   using namespace Eigen;
   switch( NP ) { // pulse matrix is always square.
@@ -236,6 +250,8 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples, const SampleMatrix &sam
 
 bool PulseChiSqSNNLS::Minimize(const SampleMatrix &samplecov, const FullSampleMatrix &fullpulsecov) {
 
+    static SomeStaticTracker tracker{};
+
   const unsigned int npulse = _bxs.rows();
   
   int iter = 0;
@@ -252,8 +268,10 @@ bool PulseChiSqSNNLS::Minimize(const SampleMatrix &samplecov, const FullSampleMa
     status = updateCov(samplecov,fullpulsecov);    
     if (!status) break; 
     if (npulse>1) {
-      status = NNLS();
-      //status = fnnls();
+        status = true;
+      //auto iterations = NNLS();
+      auto iterations = fnnls();
+      tracker.track(iterations);
     }
     else {
       //special case for one pulse fit (performance optimized)
@@ -323,7 +341,7 @@ double PulseChiSqSNNLS::ComputeApproxUncertainty(unsigned int ipulse) {
   
 }
 
-bool PulseChiSqSNNLS::fnnls() {
+int PulseChiSqSNNLS::fnnls() {
     FixedMatrix A = _covdecomp.matrixL().solve(_pulsemat);
     FixedVector b = _covdecomp.matrixL().solve(_sampvec);
 
@@ -331,15 +349,15 @@ bool PulseChiSqSNNLS::fnnls() {
     unsigned int const max_iterations = 500;
 
     FixedVector x = FixedVector(_ampvec);
-    inplace_fnnls(A, b, x, epsilon, max_iterations);
+    int iterations = inplace_fnnls(A, b, x, epsilon, max_iterations);
 
     _ampvec = x;
 
-    return true;
+    return iterations;
 }
 
-bool PulseChiSqSNNLS::NNLS() {
-  
+int PulseChiSqSNNLS::NNLS() {
+
   //Fast NNLS (fnnls) algorithm as per http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.157.9203&rep=rep1&type=pdf
   
   const unsigned int npulse = _bxs.rows();
@@ -433,8 +451,10 @@ bool PulseChiSqSNNLS::NNLS() {
       threshold *= 2;
     }
   }
-  
-  return true;
+ 
+//  std::cout << "*** iter = " << iter << std::endl;
+
+  return iter;
   
   
 }
