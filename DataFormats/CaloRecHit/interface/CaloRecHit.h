@@ -5,9 +5,9 @@
 #include <ostream>
 
 #ifdef __CUDA_ARCH__
-  __constant__
+  __constant__ const
 #else
-  constexpr
+  constexpr //static
 #endif
   uint32_t calo_rechit_masks[] = {
     0x00000000u,0x00000001u,0x00000003u,0x00000007u,0x0000000fu,0x0000001fu,
