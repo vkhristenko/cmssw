@@ -506,7 +506,7 @@ __device__ float get_time(HBHEChannelInfo& info, float fc_ampl,
     return time;
 }
 
-/// method 0 kernel
+/// mahi/multifit kernel
 __global__ void kernel_reco(HBHEChannelInfo *vinfos, HBHERecHit *vrechits, 
                             HcalRecoParam *vparams, HcalCalibrations *vcalibs, 
                             int* hashes, float* psdata, int size) {
