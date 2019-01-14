@@ -60,7 +60,8 @@
 // Fetcher for reco algorithm data
 #include "RecoLocalCalo/HcalRecAlgos/interface/fetchHcalAlgoData.h"
 
-#include "RecoLocalCalo/HcalRecAlgos/interface/gpu_reco_mahi.h"
+//#include "RecoLocalCalo/HcalRecAlgos/interface/gpu_reco_mahi.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/SimpleHBHEPhase1Algo_gpu.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/gpu_common.h"
 
 #define MAX_SIZE_RECHITS 10000
@@ -585,7 +586,7 @@ void HBHEPhase1ReconstructorGPU::scatter(HBHEChannelInfoCollection *infos,
              std::vector<HcalCalibrations> const& vcalibs,
              bool const isRealData,
              HBHERecHitCollection *rechits) {
-    hcal::mahi::reco(ddata_, *infos, *rechits, vparams, vcalibs, psdata_, isRealData);
+    hcal::mahi::reconstruct(ddata_, *infos, *rechits, vparams, vcalibs, psdata_, isRealData);
 }
 
 
@@ -710,7 +711,7 @@ void HBHEPhase1ReconstructorGPU::processData(const Collection& coll,
     }
 
     // perform the reconstruction on the whole vector 
-    hcal::mahi::reco(ddata_, *infos, *rechits, vparams, vcalibs, psdata_, isRealData);
+    //hcal::mahi::reco(ddata_, *infos, *rechits, vparams, vcalibs, psdata_, isRealData);
 }
 
 void HBHEPhase1ReconstructorGPU::setCommonStatusBits(
