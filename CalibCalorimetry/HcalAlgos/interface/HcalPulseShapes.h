@@ -97,7 +97,7 @@ public:
 
   std::tuple<std::vector<int>, std::vector<float>, int> enumerate() {
       int constexpr max_size = 256;
-      int constexpr max_pulses = 500;
+      int constexpr max_pulses = 500; // see HcalPulseShapes.cc for #shapes
 
       std::vector<int> vhashes(max_pulses);
       std::vector<int> keys;
