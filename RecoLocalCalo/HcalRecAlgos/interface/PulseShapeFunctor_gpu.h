@@ -1,6 +1,8 @@
 #ifndef RecoLocalCalo_HcalRecAlgos_PulseShapeFunctor_gpu_h
 #define RecoLocalCalo_HcalRecAlgos_PulseShapeFunctor_gpu_h
 
+namespace hcal { namespace mahi {
+
 namespace HcalConst{
 
    constexpr int maxSamples = 10;
@@ -109,5 +111,7 @@ namespace FitterFuncs {
    };
    
 }
+
+}}
 
 #endif // PulseShapeFunctor_h

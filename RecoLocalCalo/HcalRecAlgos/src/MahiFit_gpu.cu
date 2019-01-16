@@ -1,5 +1,7 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/MahiFit_gpu.h" 
 
+namespace hcal { namespace mahi {
+
 __device__
 MahiFit::MahiFit(float const* pshape) :
   fullTSSize_{19}, 
@@ -494,9 +496,9 @@ void MahiFit::nnlsUnconstrainParameter(Index idxp) const {
   nnlsWork_.aTaMat.col(nnlsWork_.nP).swap(nnlsWork_.aTaMat.col(idxp));
   nnlsWork_.aTaMat.row(nnlsWork_.nP).swap(nnlsWork_.aTaMat.row(idxp));
   nnlsWork_.pulseMat.col(nnlsWork_.nP).swap(nnlsWork_.pulseMat.col(idxp));
-  std::swap(nnlsWork_.aTbVec.coeffRef(nnlsWork_.nP),nnlsWork_.aTbVec.coeffRef(idxp));
-  std::swap(nnlsWork_.ampVec.coeffRef(nnlsWork_.nP),nnlsWork_.ampVec.coeffRef(idxp));
-  std::swap(nnlsWork_.bxs.coeffRef(nnlsWork_.nP),nnlsWork_.bxs.coeffRef(idxp));
+  Eigen::numext::swap(nnlsWork_.aTbVec.coeffRef(nnlsWork_.nP),nnlsWork_.aTbVec.coeffRef(idxp));
+  Eigen::numext::swap(nnlsWork_.ampVec.coeffRef(nnlsWork_.nP),nnlsWork_.ampVec.coeffRef(idxp));
+  Eigen::numext::swap(nnlsWork_.bxs.coeffRef(nnlsWork_.nP),nnlsWork_.bxs.coeffRef(idxp));
   ++nnlsWork_.nP;
 }
 
@@ -505,9 +507,9 @@ void MahiFit::nnlsConstrainParameter(Index minratioidx) const {
   nnlsWork_.aTaMat.col(nnlsWork_.nP-1).swap(nnlsWork_.aTaMat.col(minratioidx));
   nnlsWork_.aTaMat.row(nnlsWork_.nP-1).swap(nnlsWork_.aTaMat.row(minratioidx));
   nnlsWork_.pulseMat.col(nnlsWork_.nP-1).swap(nnlsWork_.pulseMat.col(minratioidx));
-  std::swap(nnlsWork_.aTbVec.coeffRef(nnlsWork_.nP-1),nnlsWork_.aTbVec.coeffRef(minratioidx));
-  std::swap(nnlsWork_.ampVec.coeffRef(nnlsWork_.nP-1),nnlsWork_.ampVec.coeffRef(minratioidx));
-  std::swap(nnlsWork_.bxs.coeffRef(nnlsWork_.nP-1),nnlsWork_.bxs.coeffRef(minratioidx));
+  Eigen::numext::swap(nnlsWork_.aTbVec.coeffRef(nnlsWork_.nP-1),nnlsWork_.aTbVec.coeffRef(minratioidx));
+  Eigen::numext::swap(nnlsWork_.ampVec.coeffRef(nnlsWork_.nP-1),nnlsWork_.ampVec.coeffRef(minratioidx));
+  Eigen::numext::swap(nnlsWork_.bxs.coeffRef(nnlsWork_.nP-1),nnlsWork_.bxs.coeffRef(minratioidx));
   --nnlsWork_.nP;
 
 }
@@ -686,3 +688,6 @@ void MahiFit::resetWorkspace() const {
 
 
 }
+
+
+}}

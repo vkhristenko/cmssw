@@ -1,6 +1,8 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/PulseShapeFunctor_gpu.h"
 #include "FWCore/Utilities/interface/isFinite.h"
 
+namespace hcal { namespace mahi {
+
 namespace FitterFuncs{
 
   //Decalare the Pulse object take it in from Hcal and set some options
@@ -197,3 +199,5 @@ namespace FitterFuncs{
   }
 
 }
+
+}}

@@ -8,7 +8,7 @@
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/PulseShapeFunctor_gpu.h"
 
-#include <Math/Functor.h>
+namespace hcal { namespace mahi {
 
 struct MahiNnlsWorkspace {
 
@@ -213,5 +213,8 @@ class MahiFit
   int cntsetPulseShape_;
 
   mutable FitterFuncs::PulseShapeFunctor functor_;
-}; 
+};
+
+}}
+
 #endif
