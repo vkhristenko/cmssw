@@ -46,7 +46,7 @@ void SimpleHBHEPhase1Algo::beginRun(const edm::Run& r,
     edm::ESHandle<HcalTimeSlew> delay;
     es.get<HcalTimeSlewRecord>().get("HBHE", delay);
     hcalTimeSlew_delay_ = &*delay;
-  
+
     runnum_ = r.run();
     pulseCorr_.beginRun(es);
 }

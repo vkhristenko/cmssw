@@ -12,8 +12,8 @@ namespace hcal { namespace cuda {
 
     template<typename T>
     inline 
-    void copy_vector_to_device(std::vector<T> const& src, T *dest) {
-        cudaMemcpy(dest, src.data(), src.size() * sizeof(T), 
+    cudaError_t copy_vector_to_device(std::vector<T> const& src, T *dest) {
+        return cudaMemcpy(dest, src.data(), src.size() * sizeof(T), 
             cudaMemcpyHostToDevice);
     }
 

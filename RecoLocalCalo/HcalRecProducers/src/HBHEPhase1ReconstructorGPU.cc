@@ -63,6 +63,7 @@
 //#include "RecoLocalCalo/HcalRecAlgos/interface/gpu_reco_mahi.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/SimpleHBHEPhase1Algo_gpu.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/gpu_common.h"
+#include "CalibCalorimetry/HcalAlgos/interface/HcalTimeSlew.h"
 
 #define MAX_SIZE_RECHITS 10000
 
@@ -373,6 +374,7 @@ private:
     // gpu stuff
     hcal::mahi::DeviceData ddata_;
     hcal::mahi::PulseShapeData psdata_;
+    HcalTimeSlew::HcalTimeSlewM2Parameters *time_slew_parameters_;
 };
 
 //
@@ -451,6 +453,11 @@ HBHEPhase1ReconstructorGPU::HBHEPhase1ReconstructorGPU(const edm::ParameterSet& 
     psdata_.allocate();
     hcal::cuda::copy_vector_to_device(std::get<0>(t), psdata_.hashes);
     hcal::cuda::copy_vector_to_device(std::get<1>(t), psdata_.data);
+
+    // allocate for time slew constants
+    auto status = cudaMalloc((void**)&time_slew_parameters_, 
+        HcalTimeSlew::Fast+1 * sizeof(HcalTimeSlew::HcalTimeSlewM2Parameters));
+    assert(status == cudaSuccess);
 }
 
 
@@ -462,6 +469,9 @@ HBHEPhase1ReconstructorGPU::~HBHEPhase1ReconstructorGPU()
     // deallocate memory on the gpu device
     ddata_.free();
     psdata_.free();
+
+    // deallocate for time slew constants
+    cudaFree(time_slew_parameters_);
 }
 
 template<typename T, typename C>
@@ -904,6 +914,17 @@ HBHEPhase1ReconstructorGPU::beginRun(edm::Run const& r, edm::EventSetup const& e
     }
 
     reco_->beginRun(r, es);
+
+    // retrieve time slew constants and transfer to device
+     edm::ESHandle<HcalTimeSlew> delay;
+     es.get<HcalTimeSlewRecord>().get("HBHE", delay);
+     auto const& params = delay->get_m2_params();
+     std::cout << "params.size() = " << params.size() << std::endl;
+     auto status = hcal::cuda::copy_vector_to_device(params, time_slew_parameters_);
+     std::cout << "status = " << status << std::endl;
+     std::cout << "cudaSuccess = " << cudaSuccess << std::endl;
+     std::cout << "cudaErrorInvalidValue = " << cudaErrorInvalidValue << std::endl;
+     assert(status == cudaSuccess);
 }
 
 void
