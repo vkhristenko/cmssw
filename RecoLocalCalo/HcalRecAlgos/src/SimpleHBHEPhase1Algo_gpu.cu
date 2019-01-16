@@ -310,6 +310,7 @@ public:
     __device__
     inline bool isCorrectingForPhaseContainment() const {return corrFPC_;}
 
+    // TODO: resolve this
 //    const HcalTimeSlew* hcalTimeSlew_delay_;
 
 protected:
@@ -334,6 +335,7 @@ protected:
                  const HcalCalibrations& calibs,
                  int nSamplesToExamine) const;
 private:
+    // TODO:resolve this
  //   HcalPulseContainmentManager pulseCorr_;
 
     int firstSampleShift_;
@@ -342,8 +344,6 @@ private:
     float timeShift_;
     bool corrFPC_;
     int runnum_{999999};
-
- //   HcalPulseShapes theHcalPulseShapes_;
 };
 
 constexpr float PulseContainmentFractionalError = 0.002f;
@@ -410,6 +410,7 @@ HBHERecHit SimpleHBHEPhase1Algo::reconstruct(const HBHEChannelInfo& info,
         m2E *= hbminusCorrectionFactor(channelId, m2E, isData);
     }*/
 
+    // TODO: resolve this
     // Run "Method 3"
     float m3t = 0.f, m3E = 0.f;
     /*

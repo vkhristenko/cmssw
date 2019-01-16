@@ -140,7 +140,7 @@ class MahiFit
 
   typedef BXVector::Index Index;
   float const* pshape_;
-//  const HcalPulseShapes::Shape* currentPulseShape_=nullptr;
+  // TODO: resolve this
 //  const HcalTimeSlew* hcalTimeSlewDelay_=nullptr;
 
  private:
