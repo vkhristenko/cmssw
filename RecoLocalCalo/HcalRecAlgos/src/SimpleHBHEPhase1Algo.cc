@@ -13,6 +13,8 @@
 #include "FWCore/Framework/interface/EventSetup.h"
 #include "FWCore/Framework/interface/ESHandle.h"
 
+#include "RecoLocalCalo/HcalRecAlgos/interface/MahiFit_gpu_test4cpu.h"
+
 // Maximum fractional error for calculating Method 0
 // pulse containment correction
 constexpr float PulseContainmentFractionalError = 0.002f;
@@ -110,12 +112,26 @@ HBHERecHit SimpleHBHEPhase1Algo::reconstruct(const HBHEChannelInfo& info,
     bool m4UseTriple=false;
 
     const MahiFit* mahi = mahiOOTpuCorr_.get();
-
     if (mahi) {
       mahiOOTpuCorr_->setPulseShapeTemplate(theHcalPulseShapes_.getShape(info.recoShape()),hcalTimeSlew_delay_);
       mahi->phase1Apply(info,m4E,m4T,m4UseTriple,m4chi2);
       m4E *= hbminusCorrectionFactor(channelId, m4E, isData);
     }
+
+    /*
+    auto t = theHcalPulseShapes_.enumerate();
+    auto const& hashes = std::get<0>(t);
+    auto const& data = std::get<1>(t);
+    auto const* pshape = data.data() + hashes[info.recoShape()] * 256;
+    hcal::mahi::test::MahiFit mfit{pshape};
+    float m4E_test {0.0f}, m4chi2_test{-1.0f}, m4T_test {0.0f};
+    mfit.phase1Apply(info, m4E_test, m4T_test, m4UseTriple, m4chi2_test);
+    m4E_test *= hbminusCorrectionFactor(channelId, m4E_test, isData);
+    std::cout << std::endl 
+        << "------------------------------------------------------" << std::endl;
+    std::cout << "comparison: \n"
+              << "\tE = " << m4E << " E_test = " << m4E_test << std::endl;
+              */
 
     // Finally, construct the rechit
     float rhE = m0E;
@@ -183,12 +199,13 @@ float SimpleHBHEPhase1Algo::m0Energy(const HBHEChannelInfo& info,
     double e = info.energyInWindow(ibeg, ibeg + nSamplesToAdd);
 
     // Pulse containment correction
+    /*
     {    
         double corrFactor = 1.0;
         if (applyContainmentCorrection)
             corrFactor = pulseCorr_.get(info.id(), nSamplesToAdd, phaseNs)->getCorrection(fc_ampl);
         e *= corrFactor;
-    }
+    }*/
 
     return e;
 }
@@ -232,7 +249,7 @@ float SimpleHBHEPhase1Algo::m0Time(const HBHEChannelInfo& info,
             time = (maxI - soi)*25.f + timeshift_ns_hbheho(wpksamp);
 
             // Legacy QIE8 timing correction
-            time -= hcalTimeSlew_delay_->delay(std::max(1.0, fc_ampl), HcalTimeSlew::Medium);
+            //time -= hcalTimeSlew_delay_->delay(std::max(1.0, fc_ampl), HcalTimeSlew::Medium);
             // Time calibration
             time -= calibs.timecorr();
         }

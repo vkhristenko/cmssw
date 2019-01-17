@@ -567,7 +567,7 @@ void kernel_reconstruct(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
         auto info = vinfos[idx];
         auto params = vparams[idx];
         auto calibs = vcalibs[idx];
-        auto *pshape = psdata + hashes[info.recoShape()];
+        auto *pshape = psdata + hashes[info.recoShape()] * 256;
 
         SimpleHBHEPhase1Algo algo{};
         auto rh = algo.reconstruct(info, &params, calibs,  

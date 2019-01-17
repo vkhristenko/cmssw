@@ -1,14 +1,14 @@
-#ifndef RecoLocalCalo_HcalRecAlgos_MahiFit_gpu_HH
-#define RecoLocalCalo_HcalRecAlgos_MahiFit_gpu_HH
+#ifndef RecoLocalCalo_HcalRecAlgos_MahiFit_gpu_test4cpu_HH
+#define RecoLocalCalo_HcalRecAlgos_MahiFit_gpu_test4cpu_HH
 
 #include "DataFormats/HcalDetId/interface/HcalSubdetector.h"
 #include "DataFormats/HcalDetId/interface/HcalDetId.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/EigenMatrixTypes.h"
 #include "DataFormats/HcalRecHit/interface/HBHEChannelInfo.h"
 
-#include "RecoLocalCalo/HcalRecAlgos/interface/PulseShapeFunctor_gpu.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/PulseShapeFunctor_gpu_test4cpu.h"
 
-namespace hcal { namespace mahi {
+namespace hcal { namespace mahi { namespace test {
 
 struct MahiNnlsWorkspace {
 
@@ -114,27 +114,27 @@ struct MahiDebugInfo {
 class MahiFit
 {
  public:
-  __device__ 
+   
   MahiFit(float const*);
 
-  __device__
+  
   void phase1Apply(const HBHEChannelInfo& channelData, 
 		   float& reconstructedEnergy, 
 		   float& reconstructedTime, 
 		   bool& useTriple,
 		   float& chi2) const;
 
-  __device__
+  
   void phase1Debug(const HBHEChannelInfo& channelData,
 		   MahiDebugInfo& mdi) const;
 
-  __device__
+  
   void doFit(float correctedOutput[3], const int nbx) const;
 
-  __device__
+  
   //void setPulseShapeTemplate  (const HcalPulseShapes::Shape& ps,const HcalTimeSlew * hcalTimeSlewDelay);
   void setPulseShapeTemplate(float const* pshape);
-/*  __device__
+/*  
   void resetPulseShapeTemplate(const HcalPulseShapes::Shape& ps);
   */
 
@@ -145,32 +145,32 @@ class MahiFit
 
  private:
 
-  __device__
+  
   double minimize() const;
-  __device__
+  
   void onePulseMinimize() const;
-  __device__
+  
   void updateCov() const;
-  __device__
+  
   void updatePulseShape(double itQ, FullSampleVector &pulseShape, 
 			FullSampleVector &pulseDeriv,
 			FullSampleMatrix &pulseCov) const;
 
-  __device__
+  
   double calculateArrivalTime() const;
-  __device__
+  
   double calculateChiSq() const;
-  __device__
+  
   void nnls() const;
-  __device__
+  
   void resetWorkspace() const;
 
-  __device__
+  
   void nnlsUnconstrainParameter(Index idxp) const;
-  __device__
+  
   void nnlsConstrainParameter(Index minratioidx) const;
 
-  __device__
+  
   void solveSubmatrix(PulseMatrix& mat, PulseVector& invec, PulseVector& outvec, unsigned nP) const;
 
   mutable MahiNnlsWorkspace nnlsWork_;
@@ -192,7 +192,7 @@ class MahiFit
 
   bool applyTimeSlew_{true}; 
   /* HcalTimeSlew::BiasSetting */ int slewFlavor_{1};
-  double tsDelay1GeV_{10.0};
+  double tsDelay1GeV_{10};
 
   float meanTime_{0.0};
   float timeSigmaHPD_{5.0}; 
@@ -215,6 +215,6 @@ class MahiFit
   mutable FitterFuncs::PulseShapeFunctor functor_;
 };
 
-}}
+}}}
 
 #endif

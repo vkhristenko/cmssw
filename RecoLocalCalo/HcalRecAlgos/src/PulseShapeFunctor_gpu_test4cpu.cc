@@ -1,12 +1,15 @@
-#include "RecoLocalCalo/HcalRecAlgos/interface/PulseShapeFunctor_gpu.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/PulseShapeFunctor_gpu_test4cpu.h"
 #include "FWCore/Utilities/interface/isFinite.h"
 
-namespace hcal { namespace mahi {
+#include <cmath>
+#include <iostream>
+
+namespace hcal { namespace mahi { namespace test {
 
 namespace FitterFuncs{
 
   //Decalare the Pulse object take it in from Hcal and set some options
-  __device__
+  
   PulseShapeFunctor::PulseShapeFunctor(float const* pulse,
 				                       bool iPedestalConstraint, 
                                        bool iTimeConstraint,bool iAddPulseJitter,
@@ -19,7 +22,6 @@ namespace FitterFuncs{
         acc25nsVec[i] = 0;
         diff25nsItvlVec[i] = 0;
     }
-
     for (unsigned int i=0; i<HcalConst::nsPerBX; i++) {
         accVarLenIdxZEROVec[i] = 0;
         diffVarItvlIdxZEROVec[i] = 0;
@@ -28,9 +30,11 @@ namespace FitterFuncs{
     }
 
     //The raw pulse
+    std::cout << "--- test4cpu pulse shape ---\n";
     for(int i=0;i<HcalConst::maxPSshapeBin;++i)  {
         // done according to HcalPulseShape.cc::at(double t)
         pulse_hist[i] = pulse[(int)(static_cast<double>(i) + 0.5)];
+        std::cout << "\tpulse_hist[ " << i << " ] = " << pulse_hist[i] << "\n";
     }
 
     // Accumulate 25ns for each starting point of 0, 1, 2, 3...
@@ -75,7 +79,7 @@ namespace FitterFuncs{
 
   }
 
-  __device__
+  
   void PulseShapeFunctor::funcShape(double ntmpbin[HcalConst::maxSamples],
     const double pulseTime, const double pulseHeight,const double slew) {
 
@@ -121,7 +125,7 @@ namespace FitterFuncs{
     return;
   }
 
-  __device__
+  
   double PulseShapeFunctor::EvalPulse(const double *pars, const unsigned nPars) {
 
       unsigned i =0, j=0;
@@ -195,21 +199,21 @@ namespace FitterFuncs{
       return chisq;
    }
 
-  __device__
+  
   double PulseShapeFunctor::singlePulseShapeFunc( const double *x ) {
     return EvalPulse(x,3);
   }
   
-  __device__
+  
   double PulseShapeFunctor::doublePulseShapeFunc( const double *x ) {
     return EvalPulse(x,5);
   }
   
-  __device__
+  
   double PulseShapeFunctor::triplePulseShapeFunc( const double *x ) {
     return EvalPulse(x,7);
   }
 
 }
 
-}}
+}}}

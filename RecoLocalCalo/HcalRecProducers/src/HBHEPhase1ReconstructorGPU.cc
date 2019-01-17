@@ -916,7 +916,7 @@ HBHEPhase1ReconstructorGPU::beginRun(edm::Run const& r, edm::EventSetup const& e
     reco_->beginRun(r, es);
 
     // retrieve time slew constants and transfer to device
-     edm::ESHandle<HcalTimeSlew> delay;
+     /*edm::ESHandle<HcalTimeSlew> delay;
      es.get<HcalTimeSlewRecord>().get("HBHE", delay);
      auto const& params = delay->get_m2_params();
      std::cout << "params.size() = " << params.size() << std::endl;
@@ -924,7 +924,7 @@ HBHEPhase1ReconstructorGPU::beginRun(edm::Run const& r, edm::EventSetup const& e
      std::cout << "status = " << status << std::endl;
      std::cout << "cudaSuccess = " << cudaSuccess << std::endl;
      std::cout << "cudaErrorInvalidValue = " << cudaErrorInvalidValue << std::endl;
-     assert(status == cudaSuccess);
+     assert(status == cudaSuccess);*/
 }
 
 void

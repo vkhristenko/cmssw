@@ -16,7 +16,12 @@ namespace FitterFuncs{
     accVarLenIdxZEROVec(HcalConst::nsPerBX), diffVarItvlIdxZEROVec(HcalConst::nsPerBX), 
     accVarLenIdxMinusOneVec(HcalConst::nsPerBX), diffVarItvlIdxMinusOneVec(HcalConst::nsPerBX) {
     //The raw pulse
-    for(int i=0;i<HcalConst::maxPSshapeBin;++i) pulse_hist[i] = pulse(i);
+        std::cout << "--- original pulse shape ---\n";
+    for(int i=0;i<HcalConst::maxPSshapeBin;++i) {
+        pulse_hist[i] = pulse(i);
+
+        std::cout << "\tpulse[ " << i << " ] = " << pulse_hist[i] << "\n";
+    }
     // Accumulate 25ns for each starting point of 0, 1, 2, 3...
     for(int i=0; i<HcalConst::maxPSshapeBin; ++i){
       for(int j=i; j<i+HcalConst::nsPerBX; ++j){  //sum over HcalConst::nsPerBXns from point i
