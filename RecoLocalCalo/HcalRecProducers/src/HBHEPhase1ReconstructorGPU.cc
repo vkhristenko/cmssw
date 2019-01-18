@@ -605,7 +605,8 @@ void HBHEPhase1ReconstructorGPU::scatter(HBHEChannelInfoCollection *infos,
              std::vector<HcalCalibrations> const& vcalibs,
              bool const isRealData,
              HBHERecHitCollection *rechits) {
-    hcal::mahi::reconstruct(ddata_, *infos, *rechits, vparams, vcalibs, psdata_, isRealData, custream_);
+    hcal::mahi::reconstruct(ddata_, *infos, *rechits, 
+                            vparams, vcalibs, psdata_, isRealData, custream_);
 }
 
 
