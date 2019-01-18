@@ -166,7 +166,8 @@ void reconstruct(DeviceData,
                  HBHEChannelInfoCollection&, HBHERecHitCollection&, 
                  std::vector<HcalRecoParam> const&, 
                  std::vector<HcalCalibrations> const&, 
-                 PulseShapeData &, bool);
+                 PulseShapeData &, bool,
+                 cudaStream_t custream);
 
 }}
 

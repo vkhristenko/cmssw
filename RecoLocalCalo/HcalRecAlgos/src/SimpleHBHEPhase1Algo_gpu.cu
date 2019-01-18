@@ -582,37 +582,39 @@ void reconstruct(DeviceData ddata,
           HBHEChannelInfoCollection& vinfos, HBHERecHitCollection& vrechits, 
           std::vector<HcalRecoParam> const& vparams, 
           std::vector<HcalCalibrations> const& vcalibs, 
-          PulseShapeData &psdata, bool) {
+          PulseShapeData &psdata, bool,
+          cudaStream_t custream) {
     // resize the output vector
     vrechits.resize(vinfos.size());
 
     std::cout << "size = " << vinfos.size() << std::endl;
 
     // transfer to the device
-    cudaMemcpy(ddata.vinfos, &(*vinfos.begin()), 
+    cudaMemcpyAsync(ddata.vinfos, &(*vinfos.begin()), 
         vinfos.size() * sizeof(HBHEChannelInfo),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(ddata.vparams, &(*vparams.begin()), 
+        cudaMemcpyHostToDevice, custream);
+    cudaMemcpyAsync(ddata.vparams, &(*vparams.begin()), 
         vinfos.size() * sizeof(HcalRecoParam),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(ddata.vcalibs, &(*vcalibs.begin()), 
+        cudaMemcpyHostToDevice, custream);
+    cudaMemcpyAsync(ddata.vcalibs, &(*vcalibs.begin()), 
         vinfos.size() * sizeof(HcalCalibrations),
-        cudaMemcpyHostToDevice);
+        cudaMemcpyHostToDevice, custream);
 
     // call the kernel
     int nthreadsPerBlock = 256;
     int nblocks = (vinfos.size() + nthreadsPerBlock - 1) / nthreadsPerBlock;
-    kernel_reconstruct<<<nblocks, nthreadsPerBlock>>>(ddata.vinfos, ddata.vrechits,
+    kernel_reconstruct<<<nblocks, nthreadsPerBlock, 0, custream>>>(
+        ddata.vinfos, ddata.vrechits,
         ddata.vparams, ddata.vcalibs, psdata.hashes, psdata.data, vinfos.size());
-        cudaDeviceSynchronize();
-        hcal::cuda::assert_if_error();
+//    cudaDeviceSynchronize();
+//    hcal::cuda::assert_if_error();
 
     // transfer back
-    cudaMemcpy(&(*vrechits.begin()), ddata.vrechits, 
+    cudaMemcpyAsync(&(*vrechits.begin()), ddata.vrechits, 
         vinfos.size() * sizeof(HBHERecHit),
-        cudaMemcpyDeviceToHost);
-        cudaDeviceSynchronize();
-        hcal::cuda::assert_if_error();
+        cudaMemcpyDeviceToHost, custream);
+    cudaStreamSynchronize(custream);
+    hcal::cuda::assert_if_error();
 }
 
 }}

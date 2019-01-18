@@ -17,6 +17,14 @@ namespace hcal { namespace cuda {
             cudaMemcpyHostToDevice);
     }
 
+    template<typename T>
+    inline
+    cudaError_t copy_vector_to_device(std::vector<T> const& src, T *dest,
+                                      cudaStream_t custream) {
+        return cudaMemcpyAsync(dest, src.data(), src.size() * sizeof(T), 
+            cudaMemcpyHostToDevice, custream);
+    }
+
 }}
 
 #endif // RecoLocalCalo_HcalRecAlgos_interface_gpu_common_h

@@ -375,6 +375,7 @@ private:
     hcal::mahi::DeviceData ddata_;
     hcal::mahi::PulseShapeData psdata_;
     HcalTimeSlew::HcalTimeSlewM2Parameters *time_slew_parameters_;
+    cudaStream_t custream_;
 };
 
 //
@@ -443,6 +444,9 @@ HBHEPhase1ReconstructorGPU::HBHEPhase1ReconstructorGPU(const edm::ParameterSet& 
     if (makeRecHits_)
         produces<HBHERecHitCollection>();
 
+    // create a stream
+    cudaStreamCreate(&custream_);
+
     // allocate memory on the gpu device 
     ddata_.allocate(MAX_SIZE_RECHITS);
 
@@ -451,8 +455,10 @@ HBHEPhase1ReconstructorGPU::HBHEPhase1ReconstructorGPU(const edm::ParameterSet& 
     auto t = pshapes.enumerate();
     psdata_.npulses = std::get<2>(t);
     psdata_.allocate();
-    hcal::cuda::copy_vector_to_device(std::get<0>(t), psdata_.hashes);
-    hcal::cuda::copy_vector_to_device(std::get<1>(t), psdata_.data);
+    hcal::cuda::copy_vector_to_device(std::get<0>(t), psdata_.hashes,
+        custream_);
+    hcal::cuda::copy_vector_to_device(std::get<1>(t), psdata_.data,
+        custream_);
 
     // allocate for time slew constants
     auto status = cudaMalloc((void**)&time_slew_parameters_, 
@@ -472,6 +478,9 @@ HBHEPhase1ReconstructorGPU::~HBHEPhase1ReconstructorGPU()
 
     // deallocate for time slew constants
     cudaFree(time_slew_parameters_);
+
+    // clean up
+    cudaStreamDestroy(custream_);
 }
 
 template<typename T, typename C>
@@ -596,7 +605,7 @@ void HBHEPhase1ReconstructorGPU::scatter(HBHEChannelInfoCollection *infos,
              std::vector<HcalCalibrations> const& vcalibs,
              bool const isRealData,
              HBHERecHitCollection *rechits) {
-    hcal::mahi::reconstruct(ddata_, *infos, *rechits, vparams, vcalibs, psdata_, isRealData);
+    hcal::mahi::reconstruct(ddata_, *infos, *rechits, vparams, vcalibs, psdata_, isRealData, custream_);
 }
 
 
