@@ -286,11 +286,11 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
     // 
     // things to gather before sending to the device
     //
-    std::vector<EcalPedestal> vpedestals;
-    std::vector<EcalMGPAGainRatio> vgains;
-    std::vector<EcalXtalGroupId> vxtals;
-    std::vector<EcalPulseShape> vpulseshapes;
-    std::vector<EcalPulseCovariance>
+    std::vector<EcalPedestal> vpedestals; vpedestals.reserve(digis.size());
+    std::vector<EcalMGPAGainRatio> vgains; vgains.reserve(digis.size());
+    std::vector<EcalXtalGroupId> vxtals; vxtals.reserve(digis.size());
+    std::vector<EcalPulseShape> vpulseshapes; vpulseshapes.reserve(digis.size());
+    std::vector<EcalPulseCovariance> vcovariances; vcovariances.reserve(digis.size());
 
     result.reserve(result.size() + digis.size());
     for (auto itdg = digis.begin(); itdg != digis.end(); ++itdg)
@@ -325,6 +325,13 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
             aPulseCov  = &pulsecovariances->endcap(hashedIndex);
             offsetTime = offtime->getEEValue();
         }
+
+        // collect items for this id
+        vpedestals.push_back(*aped);
+        vgains.push_back(*aGain);
+        vxtals.push_back(*gid);
+        vpulseshapes.push_back(*aPulse);
+        vcovariances.push_back(*aPulseCov);
 
         double pedVec[3]     = { aped->mean_x12, aped->mean_x6, aped->mean_x1 };
         double pedRMSVec[3]  = { aped->rms_x12,  aped->rms_x6,  aped->rms_x1 };
