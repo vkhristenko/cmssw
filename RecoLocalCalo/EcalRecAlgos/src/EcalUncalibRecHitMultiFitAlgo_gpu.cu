@@ -11,6 +11,20 @@
 
 namespace ecal { namespace multifit {
 
+__global__ kernel_reconstruct(uint16_t *digis,
+                              EcalPedestal *pedestals,
+                              EcalMGPAGainRatio *gains,
+                              EcalXtalGroupId *xtals,
+                              EcalPulseShape *shapes,
+                              EcalPulseCovariance *covariances,
+                              unsigned int size) {
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+    if (idx < size) {
+
+    }
+}
+
 void scatter(EcalDigiCollection const& digis,
              EcalUncalibratedRecHitCollection&,
              std::vector<EcalPedestal> const& vpedestals,
