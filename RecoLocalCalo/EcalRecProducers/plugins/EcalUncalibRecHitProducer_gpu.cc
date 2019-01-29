@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "RecoLocalCalo/EcalRecProducers/plugins/EcalUncalibRecHitProducer_gpu.h"
 #include "FWCore/Framework/interface/ConsumesCollector.h"
 #include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
@@ -43,6 +45,7 @@ EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU()
 }
 
 void EcalUncalibRecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
+    std::cout << "1111111" << std::endl;
 
   EcalUncalibRecHitFillDescriptionWorkerFactory* factory = EcalUncalibRecHitFillDescriptionWorkerFactory::get(); 
   std::vector<edmplugin::PluginInfo> infos = factory->available();
@@ -66,7 +69,7 @@ void EcalUncalibRecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptio
       std::unique_ptr<EcalUncalibRecHitWorkerBaseClass> tmw(EcalUncalibRecHitFillDescriptionWorkerFactory::get()->create(itInfos->name_));
       s = (std::move(s) or itInfos->name_ >> edm::ParameterDescription<edm::ParameterSetDescription>("algoPSet", tmw->getAlgoDescription(), true));
     }
-    desc.ifValue(edm::ParameterDescription<std::string>("algo", "EcalUncalibRecHitWorkerMultiFit", true), std::move(s));
+    desc.ifValue(edm::ParameterDescription<std::string>("algo", "EcalUncalibRecHitWorkerMultiFitGPU", true), std::move(s));
     
     descriptions.addDefault(desc);
   }
@@ -83,9 +86,11 @@ void EcalUncalibRecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptio
     desc.add<edm::ParameterSetDescription>("algoPSet", fdWorker->getAlgoDescription()); 
     
     std::string algoName = itInfos->name_.substr(itInfos->name_.find("Worker")+6, itInfos->name_.length());
-//    descriptions.addDefault("ecal"+algoName+"UncalibRecHit", desc);
-    descriptions.addDefault(desc);
+    descriptions.add("ecal"+algoName+"UncalibRecHitGPU", desc);
+//    descriptions.addDefault(desc);
   }
+
+  std::cout << "22222" << std::endl;
 }
 
 void

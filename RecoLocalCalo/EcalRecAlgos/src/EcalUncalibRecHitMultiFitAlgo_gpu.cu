@@ -1,15 +1,64 @@
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitMultiFitAlgo_gpu.h"
 
+#include "DataFormats/EcalDigi/interface/EcalDigiCollections.h"
+#include "CondFormats/EcalObjects/interface/EcalPedestals.h"
+#include "CondFormats/EcalObjects/interface/EcalMGPAGainRatio.h"
+#include "CondFormats/EcalObjects/interface/EcalXtalGroupId.h"
+#include "CondFormats/EcalObjects/interface/EcalPulseShapes.h"
+#include "CondFormats/EcalObjects/interface/EcalPulseCovariances.h"
+
+#include <iostream>
+
 namespace ecal { namespace multifit {
 
-void scatter(EcalDigiCollection const&,
+void scatter(EcalDigiCollection const& digis,
              EcalUncalibratedRecHitCollection&,
-             std::vector<EcalPedestal> const&,
-             std::vector<EcalMGPAGainRatio> const&,
-             std::vector<EcalXtalGroupId> const&,
-             std::vector<EcalPulseShape> const&,
-            std::vector<EcalPulseCovariance> const&) {
+             std::vector<EcalPedestal> const& vpedestals,
+             std::vector<EcalMGPAGainRatio> const& vgains,
+             std::vector<EcalXtalGroupId> const& vxtals,
+             std::vector<EcalPulseShape> const& vpulses,
+             std::vector<EcalPulseCovariance> const& vcovariances) {
+    EcalDigiCollection::data_type *d_digis;
+    EcalPedestal *d_pedestals;
+    EcalMGPAGainRatio *d_gains;
+    EcalXtalGroupId *d_xtals;
+    EcalPulseShape *d_shapes;
+    EcalPulseCovariance *d_covariances;
+    
     //
+    // TODO: remove per event alloc/dealloc -> do once at the start
+    //
+    cudaMalloc((void**)&d_digis,
+        digis.size() * EcalDigiCollection::MAXSAMPLES * 
+        sizeof(ecalMGPA::sample_type));
+    cudaMalloc((void**)&d_pedestals,
+        vpedestals.size() * sizeof(EcalPedestal));
+    cudaMalloc((void**)&d_gains, 
+        vgains.size() * sizeof(EcalMGPAGainRatio));
+    cudaMalloc((void**)&d_xtals,
+        vxtals.size() * sizeof(EcalXtalGroupId));
+    cudaMalloc((void**)&d_shapes,
+        vpulses.size() * sizeof(EcalPulseShape));
+    cudaMalloc((void**)&d_covariances,
+        vcovariances.size() * sizeof(EcalPulseCovariance));
+
+    std::cout << "ecal::multifit::scatter()" << std::endl;
+
+    // 
+    // copy to the device
+    //
+    //cudaMemcpyAsync();
+
+    // 
+    // free all the device ptrs
+    // TODO: remove per event dealloc
+    //
+    cudaFree(d_digis);
+    cudaFree(d_pedestals);
+    cudaFree(d_gains);
+    cudaFree(d_xtals);
+    cudaFree(d_shapes);
+    cudaFree(d_covariances);
 }
 
 }}
