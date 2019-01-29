@@ -261,6 +261,7 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
     DetId detid(digis.begin()->id());
     bool barrel = (detid.subdetId()==EcalBarrel);
 
+    /*
     multiFitMethod_.setSimplifiedNoiseModelForGainSwitch(simplifiedNoiseModelForGainSwitch_);
     if (barrel) {
         multiFitMethod_.setDoPrefit(doPrefitEB_);
@@ -282,16 +283,41 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
         
     FullSampleVector fullpulse(FullSampleVector::Zero());
     FullSampleMatrix fullpulsecov(FullSampleMatrix::Zero());
+    */
+
+    //
+    // gather conditions to send to device
+    //
+    auto const& vpedestals = barrel ? peds->barrelItems() : peds->endcapItems();
+    auto const& vgains = barrel ? gains->barrelItems() : gains->endcapItems();
+    auto const& vxtals = barrel ? grps->barrelItems() : grps->endcapItems();
+    auto const& vpulseshapes = barrel ? pulseshapes->barrelItems()
+        : pulseshapes->endcapItems();
+    auto const& vcovariances = barrel ? pulsecovariances->barrelItems()
+        : pulsecovariances->endcapItems();
+    
+    // 
+    // prepare the result
+    //
+    result.reserve(digis.size());
+    EcalUncalibratedRecHitCollection rechits(digis.size());
 
     // 
-    // things to gather before sending to the device
+    // launch
     //
-    std::vector<EcalPedestal> vpedestals; vpedestals.reserve(digis.size());
-    std::vector<EcalMGPAGainRatio> vgains; vgains.reserve(digis.size());
-    std::vector<EcalXtalGroupId> vxtals; vxtals.reserve(digis.size());
-    std::vector<EcalPulseShape> vpulseshapes; vpulseshapes.reserve(digis.size());
-    std::vector<EcalPulseCovariance> vcovariances; vcovariances.reserve(digis.size());
+    ecal::multifit::scatter(digis, rechits, 
+                            vpedestals, vgains,
+                            vxtals, vpulseshapes,
+                            vcovariances);
 
+    // 
+    // TODO: remove this copy
+    //
+    for (unsigned int i=0; i<rechits.size(); i++) {
+        result.push_back(rechits[i]);
+    }
+
+    /*
     result.reserve(result.size() + digis.size());
     for (auto itdg = digis.begin(); itdg != digis.end(); ++itdg)
     {
@@ -388,6 +414,7 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
             
             result.push_back(multiFitMethod_.makeRecHit(*itdg, aped, aGain, noisecors, fullpulse, fullpulsecov, activeBX));
             auto & uncalibRecHit = result.back();
+*/
 
             /*
             
@@ -519,12 +546,10 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
 	if( ((EcalDataFrame)(*itdg)).hasSwitchToGain6()  ) uncalibRecHit.setFlagBit( EcalUncalibratedRecHit::kHasSwitchToGain6 );
 	if( ((EcalDataFrame)(*itdg)).hasSwitchToGain1()  ) uncalibRecHit.setFlagBit( EcalUncalibratedRecHit::kHasSwitchToGain1 );
     */
-    }
 
-    //
-    // scatter: launch the cuda stuff
-    //
-    ecal::multifit::scatter_multifit();
+/*
+    }
+    */
 }
 
 edm::ParameterSetDescription 
