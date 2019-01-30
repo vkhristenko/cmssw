@@ -45,8 +45,6 @@ EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU()
 }
 
 void EcalUncalibRecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
-    std::cout << "1111111" << std::endl;
-
   EcalUncalibRecHitFillDescriptionWorkerFactory* factory = EcalUncalibRecHitFillDescriptionWorkerFactory::get(); 
   std::vector<edmplugin::PluginInfo> infos = factory->available();
  
@@ -90,7 +88,6 @@ void EcalUncalibRecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptio
 //    descriptions.addDefault(desc);
   }
 
-  std::cout << "22222" << std::endl;
 }
 
 void

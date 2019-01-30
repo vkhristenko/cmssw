@@ -9,6 +9,8 @@
 
 #include <iostream>
 
+#include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
+
 namespace ecal { namespace multifit {
 
 __global__ kernel_reconstruct(uint16_t *digis,
@@ -55,13 +57,51 @@ void scatter(EcalDigiCollection const& digis,
         vpulses.size() * sizeof(EcalPulseShape));
     cudaMalloc((void**)&d_covariances,
         vcovariances.size() * sizeof(EcalPulseCovariance));
-
-    std::cout << "ecal::multifit::scatter()" << std::endl;
+    ecal::cuda::assert_if_error();
 
     // 
     // copy to the device
+    // TODO: can conditions be copied only once when updated?
     //
-    //cudaMemcpyAsync();
+    cudaMemcpy(d_digis, &(*digis.begin()),
+        digis.size() * 
+        EcalDigiCollection::MAXSAMPLES * sizeof(ecalMGPA::sample_type),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_pedestals, vpedestals.data(),
+        vpedestals.size() * sizeof(EcalPedestal),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_gains, vgains.data(),
+        vgains.size() * sizeof(EcalMGPAGainRatio),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_xtals, vxtals.data(),
+        vxtals.size() * sizeof(EcalXtalGroupId),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_shapes, vpulses.data(),
+        vpulses.size() * sizeof(EcalPulseShape),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_covariances, vcovariances.data(),
+        vcovariances.size() * sizeof(EcalPulseCovariance),
+        cudaMemcpyHostToDevice);
+    ecal::cuda::assert_if_error();
+    
+    //
+    // launch 
+    // TODO: further ntreads/nblocks optimizations...
+    //
+    std::cout << "ecal::multifit::scatter()" << std::endl;
+    int nthreads_per_block = 256;
+    int nblocks = (digis.size() + nthreads_per_block - 1) / nthreads_per_block;
+    ecal::reco::kernel_reconstruct<<<nblocks, nthreads_per_block>>>(
+        d_digis,
+        /* d_rechits, */
+        d_pedestals,
+        d_gains,
+        d_xtals,
+        d_shapes,
+        d_covariances,
+        digis.size()
+    );
+
 
     // 
     // free all the device ptrs
@@ -73,6 +113,7 @@ void scatter(EcalDigiCollection const& digis,
     cudaFree(d_xtals);
     cudaFree(d_shapes);
     cudaFree(d_covariances);
+    ecal::cuda::assert_if_error();
 }
 
 }}

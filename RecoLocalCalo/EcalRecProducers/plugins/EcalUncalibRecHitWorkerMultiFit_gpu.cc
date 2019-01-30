@@ -555,8 +555,6 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
 edm::ParameterSetDescription 
 EcalUncalibRecHitWorkerMultiFitGPU::getAlgoDescription() {
   
-    std::cout << "0000000000" << std::endl;
-
   edm::ParameterSetDescription psd0;
   psd0.addNode((edm::ParameterDescription<std::vector<double>>("EBPulseShapeTemplate", {1.13979e-02, 7.58151e-01, 1.00000e+00, 8.87744e-01, 6.73548e-01, 4.74332e-01, 3.19561e-01, 2.15144e-01, 1.47464e-01, 1.01087e-01, 6.93181e-02, 4.75044e-02}, true) and
 		edm::ParameterDescription<std::vector<double>>("EEPulseShapeTemplate", {1.16442e-01, 7.56246e-01, 1.00000e+00, 8.97182e-01, 6.86831e-01, 4.91506e-01, 3.44111e-01, 2.45731e-01, 1.74115e-01, 1.23361e-01, 8.74288e-02, 6.19570e-02}, true)));
