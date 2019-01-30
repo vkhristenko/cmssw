@@ -30,17 +30,17 @@ struct EcalPedestal {
         float rms_x1;
 
         public:
-        float const * mean_rms(int i) const {
+        constexpr float const * mean_rms(int i) const {
                 if (i==0) return &zero.z1;
                 return (&mean_x12)+(2*(i-1));
         }
 
-        float mean(int i) const {
+        constexpr float mean(int i) const {
                 if (i==0) return 0.;
                 return *(&mean_x12+(2*(i-1)));
         }
 
-        float rms(int i) const {
+        constexpr float rms(int i) const {
                 if (i==0) return 0.;
                 return *(&rms_x12+(2*(i-1)));
         }
