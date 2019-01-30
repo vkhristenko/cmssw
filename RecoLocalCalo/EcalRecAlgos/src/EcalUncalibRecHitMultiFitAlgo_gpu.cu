@@ -9,44 +9,120 @@
 
 #include <iostream>
 
+#include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 
 namespace ecal { namespace multifit {
 
-__global__ void kernel_reconstruct(uint16_t *digis,
-                              EcalPedestal *pedestals,
-                              EcalMGPAGainRatio *gains,
-                              EcalXtalGroupId *xtals,
-                              EcalPulseShape *shapes,
-                              EcalPulseCovariance *covariances,
+__global__
+void kernel_reconstruct(uint16_t const *digis,
+                              uint32_t const *ids,
+                              EcalPedestal const *pedestals,
+                              EcalMGPAGainRatio const *gains,
+                              EcalXtalGroupId const *xtals,
+                              EcalPulseShape const *shapes,
+                              EcalPulseCovariance const *covariances,
+                              EcalUncalibratedRecHit *rechits,
+                              SampleMatrix const *noisecors,
                               unsigned int size) {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
     if (idx < size) {
-        printf("hello from thread %d\n", idx);
+        uint16_t const* p_current_digi = &digis[idx*EcalDataFrame::MAXSAMPLES];
+        DetId  current_id{ids[idx]};
+        EcalDataFrame edf{edm::DataFrame{ids[idx], p_current_digi, EcalDataFrame::MAXSAMPLES}};
+        auto const* aped = &pedestals[idx];
+        auto const* aGain = &gains[idx];
+        auto const* gid = &xtals[idx];
+        auto const* aPulse = &shapes[idx];
+        auto const* aPulseCov = &covariances[idx];
+
+        FullSampleVector fullpulse(FullSampleVector::Zero());
+        FullSampleMatrix fullpulsecov(FullSampleMatrix::Zero());
+
+        double pedVec[3]     = {aped->mean_x12, aped->mean_x6, aped->mean_x1 };
+        double pedRMSVec[3]  = {aped->rms_x12,  aped->rms_x6,  aped->rms_x1 };
+        double gainRatios[3] = {1., aGain->gain12Over6(), 
+                                aGain->gain6Over1()*aGain->gain12Over6()};
+
+        for (int i=0; i<EcalPulseShape::TEMPLATESAMPLES; ++i)
+            fullpulse(i+7) = aPulse->pdfval[i];
+        for(int i=0; i<EcalPulseShape::TEMPLATESAMPLES;i++)
+        for(int j=0; j<EcalPulseShape::TEMPLATESAMPLES;j++)
+            fullpulsecov(i+7,j+7) = aPulseCov->covval[i][j];
+
+        int lastSampleBeforeSaturation = -2;
+        for(unsigned int iSample = 0; 
+            iSample < EcalDataFrame::MAXSAMPLES; iSample++){
+            if (edf.sample(iSample).gainId() == 0 ) {
+                lastSampleBeforeSaturation=iSample-1;
+                break;
+            }
+        }
+
+        EcalUncalibratedRecHit rh{current_id, 4095*12, 0, 0, 0};
+
+        // === amplitude computation ===
+        if ( lastSampleBeforeSaturation == 4 ) { 
+            // saturation on the expected max sample
+            EcalUncalibratedRecHit tmp{current_id, 4095*12, 0, 0, 0};
+            tmp.setFlagBit( EcalUncalibratedRecHit::kSaturated );
+            // do not propagate the default chi2 = -1 value 
+            // to the calib rechit (mapped to 64), set it to 0 when saturation
+            tmp.setChi2(0);
+            rechits[idx] = tmp;
+        } else if ( lastSampleBeforeSaturation >= -1 ) { 
+            // saturation on other samples: cannot extrapolate from the fourth one
+            int gainId = edf.sample(5).gainId();
+            if (gainId==0) gainId=3;
+            auto pedestal = pedVec[gainId-1];
+            auto gainratio = gainRatios[gainId-1];
+            double amplitude = ((double)(edf.sample(5).adc()) - 
+                    pedestal) * gainratio;
+            EcalUncalibratedRecHit tmp{current_id, amplitude, 0, 0, 0};
+            tmp.setFlagBit( EcalUncalibratedRecHit::kSaturated );
+            // do not propagate the default chi2 = -1 value to the calib rechit (mapped to 64), set it to 0 when saturation
+            tmp.setChi2(0);
+            rechits[idx] = tmp;
+        } else {
+            // multifit
+            //result.push_back(multiFitMethod_.makeRecHit(*itdg, aped, aGain, 
+            //                 noisecors, fullpulse, fullpulsecov, activeBX));
+            ;
+        }
+        
     }
 }
 
 void scatter(EcalDigiCollection const& digis,
-             EcalUncalibratedRecHitCollection&,
+             EcalUncalibratedRecHitCollection& rechits,
              std::vector<EcalPedestal> const& vpedestals,
              std::vector<EcalMGPAGainRatio> const& vgains,
              std::vector<EcalXtalGroupId> const& vxtals,
              std::vector<EcalPulseShape> const& vpulses,
-             std::vector<EcalPulseCovariance> const& vcovariances) {
-    EcalDigiCollection::data_type *d_digis;
+             std::vector<EcalPulseCovariance> const& vcovariances,
+             SampleMatrixGainArray const& noisecors) {
+    auto const& ids = digis.ids();
+    auto const& digis_data = digis.data();
+    using digis_type = std::vector<uint16_t>;
+    using dids_type = std::vector<uint32_t>;
+    digis_type::value_type *d_digis_data;
+    dids_type::value_type *d_ids;
     EcalPedestal *d_pedestals;
     EcalMGPAGainRatio *d_gains;
     EcalXtalGroupId *d_xtals;
     EcalPulseShape *d_shapes;
     EcalPulseCovariance *d_covariances;
+    EcalUncalibratedRecHit *d_rechits;
+    SampleMatrix *d_noisecors;
     
     //
     // TODO: remove per event alloc/dealloc -> do once at the start
     //
-    cudaMalloc((void**)&d_digis,
-        digis.size() * EcalDigiCollection::MAXSAMPLES * 
-        sizeof(ecalMGPA::sample_type));
+    cudaMalloc((void**)&d_digis_data,
+        digis_data.size() * sizeof(digis_type::value_type));
+    cudaMalloc((void**)&d_ids,
+        ids.size() * sizeof(dids_type::value_type));
     cudaMalloc((void**)&d_pedestals,
         vpedestals.size() * sizeof(EcalPedestal));
     cudaMalloc((void**)&d_gains, 
@@ -57,15 +133,21 @@ void scatter(EcalDigiCollection const& digis,
         vpulses.size() * sizeof(EcalPulseShape));
     cudaMalloc((void**)&d_covariances,
         vcovariances.size() * sizeof(EcalPulseCovariance));
+    cudaMalloc((void**)&d_rechits,
+        rechits.size() * sizeof(EcalUncalibratedRecHit));
+    cudaMalloc((void**)&d_noisecors,
+        noisecors.size() * sizeof(SampleMatrix));
     ecal::cuda::assert_if_error();
 
     // 
     // copy to the device
     // TODO: can conditions be copied only once when updated?
     //
-    cudaMemcpy(d_digis, &(*digis.begin()),
-        digis.size() * 
-        EcalDigiCollection::MAXSAMPLES * sizeof(ecalMGPA::sample_type),
+    cudaMemcpy(d_digis_data, digis_data.data(),
+        digis_data.size() * sizeof(digis_type::value_type),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_ids, ids.data(),
+        ids.size() * sizeof(dids_type::value_type),
         cudaMemcpyHostToDevice);
     cudaMemcpy(d_pedestals, vpedestals.data(),
         vpedestals.size() * sizeof(EcalPedestal),
@@ -82,6 +164,12 @@ void scatter(EcalDigiCollection const& digis,
     cudaMemcpy(d_covariances, vcovariances.data(),
         vcovariances.size() * sizeof(EcalPulseCovariance),
         cudaMemcpyHostToDevice);
+    cudaMemcpy(d_rechits, &(*rechits.begin()),
+        rechits.size() * sizeof(EcalUncalibratedRecHit),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_noisecors, noisecors.data(),
+        noisecors.size() * sizeof(SampleMatrix),
+        cudaMemcpyHostToDevice);
     ecal::cuda::assert_if_error();
     
     //
@@ -92,13 +180,16 @@ void scatter(EcalDigiCollection const& digis,
     int nthreads_per_block = 256;
     int nblocks = (digis.size() + nthreads_per_block - 1) / nthreads_per_block;
     kernel_reconstruct<<<nblocks, nthreads_per_block>>>(
-        d_digis,
+        d_digis_data,
+        d_ids,
         /* d_rechits, */
         d_pedestals,
         d_gains,
         d_xtals,
         d_shapes,
         d_covariances,
+        d_rechits,
+        d_noisecors,
         digis.size()
     );
     cudaDeviceSynchronize();
@@ -109,12 +200,15 @@ void scatter(EcalDigiCollection const& digis,
     // free all the device ptrs
     // TODO: remove per event dealloc
     //
-    cudaFree(d_digis);
+    cudaFree(d_digis_data);
+    cudaFree(d_ids);
     cudaFree(d_pedestals);
     cudaFree(d_gains);
     cudaFree(d_xtals);
     cudaFree(d_shapes);
     cudaFree(d_covariances);
+    cudaFree(d_rechits);
+    cudaFree(d_noisecors);
     ecal::cuda::assert_if_error();
 }
 

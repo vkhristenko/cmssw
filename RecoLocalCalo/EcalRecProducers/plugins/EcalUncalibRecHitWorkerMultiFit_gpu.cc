@@ -295,6 +295,7 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
         : pulseshapes->endcapItems();
     auto const& vcovariances = barrel ? pulsecovariances->barrelItems()
         : pulsecovariances->endcapItems();
+    const SampleMatrixGainArray &noisecors = noisecor(barrel);
     
     // 
     // prepare the result
@@ -308,7 +309,7 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
     ecal::multifit::scatter(digis, rechits, 
                             vpedestals, vgains,
                             vxtals, vpulseshapes,
-                            vcovariances);
+                            vcovariances, noisecors);
 
     // 
     // TODO: remove this copy
@@ -371,6 +372,7 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
             fullpulsecov(i+7,j+7) = aPulseCov->covval[i][j];
         
 	// compute the right bin of the pulse shape using time calibration constants
+    // TODO: do we need this???
 	EcalTimeCalibConstantMap::const_iterator it = itime->find( detid );
 	EcalTimeCalibConstant itimeconst = 0;
 	if( it != itime->end() ) {

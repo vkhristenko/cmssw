@@ -31,7 +31,7 @@ class EcalUncalibratedRecHit {
       OOTchi2_{0}, flags_{0}, aux_{0}
     {}
 
-  EcalUncalibratedRecHit(const DetId& id, float ampl, float ped,
+    constexpr EcalUncalibratedRecHit(const DetId& id, float ampl, float ped,
                          float jit, float chi2, uint32_t flags = 0, 
                          uint32_t aux = 0)
       : amplitude_(ampl), amplitudeError_(0.), pedestal_(ped), 
