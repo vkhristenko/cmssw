@@ -288,14 +288,51 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
     //
     // gather conditions to send to device
     //
-    auto const& vpedestals = barrel ? peds->barrelItems() : peds->endcapItems();
-    auto const& vgains = barrel ? gains->barrelItems() : gains->endcapItems();
-    auto const& vxtals = barrel ? grps->barrelItems() : grps->endcapItems();
-    auto const& vpulseshapes = barrel ? pulseshapes->barrelItems()
-        : pulseshapes->endcapItems();
-    auto const& vcovariances = barrel ? pulsecovariances->barrelItems()
-        : pulsecovariances->endcapItems();
+    std::vector<EcalPedestal> vpedestals;
+    std::vector<EcalMGPAGainRatio> vgains;
+    std::vector<EcalXtalGroupId> vxtals;
+    std::vector<EcalPulseShape> vpulseshapes;
+    std::vector<EcalPulseCovariance> vcovariances;
     const SampleMatrixGainArray &noisecors = noisecor(barrel);
+
+    // 
+    // TODO: employ hashed index on the device directly!
+    // need  to resort conditions in the order of digis
+    //
+    vpedestals.reserve(digis.size());
+    vgains.reserve(digis.size());
+    vxtals.reserve(digis.size());
+    vpulseshapes.reserve(digis.size());
+    vcovariances.reserve(digis.size());
+    for (auto const& digi : digis) {
+        DetId detid(digi.id());
+        const EcalPedestals::Item * aped = nullptr;
+        const EcalMGPAGainRatio * aGain = nullptr;
+        const EcalXtalGroupId * gid = nullptr;
+        const EcalPulseShapes::Item * aPulse = nullptr;
+        const EcalPulseCovariances::Item * aPulseCov = nullptr;
+        if (barrel) {
+            unsigned int hashedIndex = EBDetId(detid).hashedIndex();
+            aped       = &peds->barrel(hashedIndex);
+            aGain      = &gains->barrel(hashedIndex);
+            gid        = &grps->barrel(hashedIndex);
+            aPulse     = &pulseshapes->barrel(hashedIndex);
+            aPulseCov  = &pulsecovariances->barrel(hashedIndex);
+        } else {
+            unsigned int hashedIndex = EEDetId(detid).hashedIndex();
+            aped       = &peds->endcap(hashedIndex);
+            aGain      = &gains->endcap(hashedIndex);
+            gid        = &grps->endcap(hashedIndex);
+            aPulse     = &pulseshapes->endcap(hashedIndex);
+            aPulseCov  = &pulsecovariances->endcap(hashedIndex);
+        }
+
+        vpedestals.push_back(*aped);
+        vgains.push_back(*aGain);
+        vxtals.push_back(*gid);
+        vpulseshapes.push_back(*aPulse);
+        vcovariances.push_back(*aPulseCov);
+    }
     
     // 
     // prepare the result
