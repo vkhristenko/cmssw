@@ -1,4 +1,4 @@
-#include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitMultiFitAlgo_gpu.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitMultiFitAlgo_gpu_cputest.h"
 
 #include "DataFormats/EcalDigi/interface/EcalDigiCollections.h"
 #include "CondFormats/EcalObjects/interface/EcalPedestals.h"
@@ -11,29 +11,29 @@
 
 #include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
-#include "RecoLocalCalo/EcalRecAlgos/interface/PulseChiSqSNNLS_gpu.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/PulseChiSqSNNLS_gpu_cputest.h"
 
-namespace ecal { namespace multifit {
+namespace ecal { namespace multifit { namespace test {
 
 class EcalUncalibRecHitMultiFitAlgo
 {
       
 public:
-    __device__ 
+      
     EcalUncalibRecHitMultiFitAlgo();
-    __device__ 
+      
     EcalUncalibratedRecHit makeRecHit(const EcalDataFrame& dataFrame, const EcalPedestals::Item * aped, const EcalMGPAGainRatio * aGain, SampleMatrix const* noisecors, const FullSampleVector &fullpulse, const FullSampleMatrix &fullpulsecov, const BXVector &activeBX);
-    __device__
+     
     void disableErrorCalculation() { _computeErrors = false; }
-    __device__ 
+      
     void setDoPrefit(bool b) { _doPrefit = b; }
-    __device__ void setPrefitMaxChiSq(double x) { _prefitMaxChiSq = x; }
-    __device__ void setDynamicPedestals(bool b) { _dynamicPedestals = b; }
-    __device__ void setMitigateBadSamples(bool b) { _mitigateBadSamples = b; }
-    __device__ void setSelectiveBadSampleCriteria(bool b) { _selectiveBadSampleCriteria = b; }
-    __device__ void setAddPedestalUncertainty(double x) { _addPedestalUncertainty = x; }
-    __device__ void setSimplifiedNoiseModelForGainSwitch(bool b) { _simplifiedNoiseModelForGainSwitch = b; }
-    __device__ void setGainSwitchUseMaxSample(bool b) { _gainSwitchUseMaxSample = b; }
+      void setPrefitMaxChiSq(double x) { _prefitMaxChiSq = x; }
+      void setDynamicPedestals(bool b) { _dynamicPedestals = b; }
+      void setMitigateBadSamples(bool b) { _mitigateBadSamples = b; }
+      void setSelectiveBadSampleCriteria(bool b) { _selectiveBadSampleCriteria = b; }
+      void setAddPedestalUncertainty(double x) { _addPedestalUncertainty = x; }
+      void setSimplifiedNoiseModelForGainSwitch(bool b) { _simplifiedNoiseModelForGainSwitch = b; }
+      void setGainSwitchUseMaxSample(bool b) { _gainSwitchUseMaxSample = b; }
                                  
 private:
     PulseChiSqSNNLS _pulsefunc;
@@ -50,7 +50,7 @@ private:
     BXVector _singlebx;
 };
 
-__device__ 
+  
 EcalUncalibRecHitMultiFitAlgo::EcalUncalibRecHitMultiFitAlgo() : 
   _computeErrors(true),
   _doPrefit(false),
@@ -73,7 +73,7 @@ EcalUncalibRecHitMultiFitAlgo::EcalUncalibRecHitMultiFitAlgo() :
 }
 
 /// compute rechits
-__device__ 
+  
 EcalUncalibratedRecHit 
 EcalUncalibRecHitMultiFitAlgo::makeRecHit(const EcalDataFrame& dataFrame, 
                                           const EcalPedestals::Item * aped, 
@@ -285,7 +285,6 @@ EcalUncalibRecHitMultiFitAlgo::makeRecHit(const EcalDataFrame& dataFrame,
   return rh;
 }
 
-__global__
 void kernel_reconstruct(uint16_t const *digis,
                               uint32_t const *ids,
                               EcalPedestal const *pedestals,
@@ -296,9 +295,9 @@ void kernel_reconstruct(uint16_t const *digis,
                               EcalUncalibratedRecHit *rechits,
                               SampleMatrix const *noisecors,
                               unsigned int size) {
-    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+//    int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
-    if (idx < size) {
+    for (unsigned int idx=0; idx < size; idx++) {
         uint16_t const* p_current_digi = &digis[idx*EcalDataFrame::MAXSAMPLES];
         DetId  current_id{ids[idx]};
         EcalDataFrame edf{edm::DataFrame{ids[idx], p_current_digi, EcalDataFrame::MAXSAMPLES}};
@@ -307,19 +306,6 @@ void kernel_reconstruct(uint16_t const *digis,
         auto const* gid = &xtals[idx];
         auto const* aPulse = &shapes[idx];
         auto const* aPulseCov = &covariances[idx];
-
-#define DEBUG
-#ifdef DEBUG
-        if (idx == 1) {
-            printf("tid = %i debug\n", idx);
-            for(unsigned int iSample = 0; 
-                iSample < EcalDataFrame::MAXSAMPLES; iSample++)
-                printf("tid = %i i = %d adc = %d\n", idx, iSample, 
-                   edf.sample(iSample).adc());
-            for (int i=0; i<EcalPulseShape::TEMPLATESAMPLES; ++i)
-                printf("pulseshape[%d] = %d\n", i, aPulse->pdfval[i]);
-        }
-#endif
 
         FullSampleVector fullpulse(FullSampleVector::Zero());
         FullSampleMatrix fullpulsecov(FullSampleMatrix::Zero());
@@ -344,12 +330,12 @@ void kernel_reconstruct(uint16_t const *digis,
             }
         }
 
-        EcalUncalibratedRecHit rh{current_id, 4095*12, 0, 0, 0};
+        EcalUncalibratedRecHit rh{current_id, 4095*12, 0.f, 0.f, 0.f};
 
         // === amplitude computation ===
         if ( lastSampleBeforeSaturation == 4 ) { 
             // saturation on the expected max sample
-            EcalUncalibratedRecHit tmp{current_id, 4095*12, 0, 0, 0};
+            EcalUncalibratedRecHit tmp{current_id, 4095*12, 0.f, 0.f, 0.f};
             tmp.setFlagBit( EcalUncalibratedRecHit::kSaturated );
             // do not propagate the default chi2 = -1 value 
             // to the calib rechit (mapped to 64), set it to 0 when saturation
@@ -363,7 +349,7 @@ void kernel_reconstruct(uint16_t const *digis,
             auto gainratio = gainRatios[gainId-1];
             double amplitude = ((double)(edf.sample(5).adc()) - 
                     pedestal) * gainratio;
-            EcalUncalibratedRecHit tmp{current_id, amplitude, 0, 0, 0};
+            EcalUncalibratedRecHit tmp{current_id, static_cast<float>(amplitude), 0.f, 0.f, 0.f};
             tmp.setFlagBit( EcalUncalibratedRecHit::kSaturated );
             // do not propagate the default chi2 = -1 value to the calib rechit (mapped to 64), set it to 0 when saturation
             tmp.setChi2(0);
@@ -385,11 +371,11 @@ void kernel_reconstruct(uint16_t const *digis,
 }
 
 void scatter(EcalDigiCollection const& digis,
-             EcalUncalibratedRecHitCollection& rechits,
+             EcalUncalibratedRecHitCollection& vrechits,
              std::vector<EcalPedestal> const& vpedestals,
              std::vector<EcalMGPAGainRatio> const& vgains,
              std::vector<EcalXtalGroupId> const& vxtals,
-             std::vector<EcalPulseShape> const& vpulses,
+             std::vector<EcalPulseShape> const& vshapes,
              std::vector<EcalPulseCovariance> const& vcovariances,
              SampleMatrixGainArray const& noisecors) {
     auto const& ids = digis.ids();
@@ -406,33 +392,11 @@ void scatter(EcalDigiCollection const& digis,
     EcalUncalibratedRecHit *d_rechits;
     SampleMatrix *d_noisecors;
     
-    //
-    // TODO: remove per event alloc/dealloc -> do once at the start
-    //
-    cudaMalloc((void**)&d_digis_data,
-        digis_data.size() * sizeof(digis_type::value_type));
-    cudaMalloc((void**)&d_ids,
-        ids.size() * sizeof(dids_type::value_type));
-    cudaMalloc((void**)&d_pedestals,
-        vpedestals.size() * sizeof(EcalPedestal));
-    cudaMalloc((void**)&d_gains, 
-        vgains.size() * sizeof(EcalMGPAGainRatio));
-    cudaMalloc((void**)&d_xtals,
-        vxtals.size() * sizeof(EcalXtalGroupId));
-    cudaMalloc((void**)&d_shapes,
-        vpulses.size() * sizeof(EcalPulseShape));
-    cudaMalloc((void**)&d_covariances,
-        vcovariances.size() * sizeof(EcalPulseCovariance));
-    cudaMalloc((void**)&d_rechits,
-        rechits.size() * sizeof(EcalUncalibratedRecHit));
-    cudaMalloc((void**)&d_noisecors,
-        noisecors.size() * sizeof(SampleMatrix));
-    ecal::cuda::assert_if_error();
-
     // 
     // copy to the device
     // TODO: can conditions be copied only once when updated?
     //
+    /*
     cudaMemcpy(d_digis_data, digis_data.data(),
         digis_data.size() * sizeof(digis_type::value_type),
         cudaMemcpyHostToDevice);
@@ -461,48 +425,29 @@ void scatter(EcalDigiCollection const& digis,
         noisecors.size() * sizeof(SampleMatrix),
         cudaMemcpyHostToDevice);
     ecal::cuda::assert_if_error();
+    */
     
     //
     // launch 
     // TODO: further ntreads/nblocks optimizations...
     //
     std::cout << "ecal::multifit::scatter()" << std::endl;
-    int nthreads_per_block = 256;
-    int nblocks = (digis.size() + nthreads_per_block - 1) / nthreads_per_block;
-    kernel_reconstruct<<<nblocks, nthreads_per_block>>>(
-        d_digis_data,
-        d_ids,
+    kernel_reconstruct(
+        digis_data.data(),
+        ids.data(),
         /* d_rechits, */
-        d_pedestals,
-        d_gains,
-        d_xtals,
-        d_shapes,
-        d_covariances,
-        d_rechits,
-        d_noisecors,
+        vpedestals.data(),
+        vgains.data(),
+        vxtals.data(),
+        vshapes.data(),
+        vcovariances.data(),
+        &(*vrechits.begin()),
+        noisecors.data(),
         digis.size()
     );
-    cudaDeviceSynchronize();
-    ecal::cuda::assert_if_error();
-
-
-    // 
-    // free all the device ptrs
-    // TODO: remove per event dealloc
-    //
-    cudaFree(d_digis_data);
-    cudaFree(d_ids);
-    cudaFree(d_pedestals);
-    cudaFree(d_gains);
-    cudaFree(d_xtals);
-    cudaFree(d_shapes);
-    cudaFree(d_covariances);
-    cudaFree(d_rechits);
-    cudaFree(d_noisecors);
-    ecal::cuda::assert_if_error();
 }
 
-}}
+}}}
 
 /*
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
