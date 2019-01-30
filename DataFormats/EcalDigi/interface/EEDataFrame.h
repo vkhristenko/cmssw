@@ -18,12 +18,12 @@ class EEDataFrame : public EcalDataFrame
   typedef EEDetId key_type; ///< For the sorted collection
   typedef EcalDataFrame Base;
 
-  EEDataFrame() {}
+  constexpr EEDataFrame() {}
   // EEDataFrame(DetId i) :  Base(i) {}
-  EEDataFrame(edm::DataFrame const & base) : Base(base) {}
-  EEDataFrame(EcalDataFrame const & base) : Base(base) {}
+  constexpr EEDataFrame(edm::DataFrame const & base) : Base(base) {}
+  constexpr EEDataFrame(EcalDataFrame const & base) : Base(base) {}
     
-  ~EEDataFrame() override {}
+//  ~EEDataFrame() override {}
 
   key_type id() const { return Base::id(); }
 
