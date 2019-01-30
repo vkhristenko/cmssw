@@ -10,16 +10,16 @@
 
 class EcalXtalGroupId {
 public:
-  EcalXtalGroupId()  : id_(0){}
-  EcalXtalGroupId(const unsigned int& id)  : id_(id){}
+  constexpr EcalXtalGroupId()  : id_(0){}
+  constexpr EcalXtalGroupId(const unsigned int& id)  : id_(id){}
 
-  bool operator>(const EcalXtalGroupId& rhs) const{ return ( id_>rhs.id() ); }
-  bool operator>=(const EcalXtalGroupId& rhs) const { return ( id_>=rhs.id() ); }
-  bool operator==(const EcalXtalGroupId& rhs) const { return ( id_==rhs.id() ); }
-  bool operator<(const EcalXtalGroupId& rhs) const { return ( id_<rhs.id() ); }
-  bool operator<=(const EcalXtalGroupId& rhs) const { return ( id_<=rhs.id() ); }
+  constexpr bool operator>(const EcalXtalGroupId& rhs) const{ return ( id_>rhs.id() ); }
+  constexpr bool operator>=(const EcalXtalGroupId& rhs) const { return ( id_>=rhs.id() ); }
+  constexpr bool operator==(const EcalXtalGroupId& rhs) const { return ( id_==rhs.id() ); }
+  constexpr bool operator<(const EcalXtalGroupId& rhs) const { return ( id_<rhs.id() ); }
+  constexpr bool operator<=(const EcalXtalGroupId& rhs) const { return ( id_<=rhs.id() ); }
     
-  const unsigned int id() const { return id_; }
+  constexpr const unsigned int id() const { return id_; }
 
 private:
   unsigned int id_;
