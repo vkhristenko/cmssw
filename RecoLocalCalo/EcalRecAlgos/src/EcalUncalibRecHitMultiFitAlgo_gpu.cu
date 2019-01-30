@@ -13,7 +13,7 @@
 
 namespace ecal { namespace multifit {
 
-__global__ kernel_reconstruct(uint16_t *digis,
+__global__ void kernel_reconstruct(uint16_t *digis,
                               EcalPedestal *pedestals,
                               EcalMGPAGainRatio *gains,
                               EcalXtalGroupId *xtals,
@@ -23,7 +23,7 @@ __global__ kernel_reconstruct(uint16_t *digis,
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
     if (idx < size) {
-
+        printf("hello from thread %d\n", idx);
     }
 }
 
@@ -91,7 +91,7 @@ void scatter(EcalDigiCollection const& digis,
     std::cout << "ecal::multifit::scatter()" << std::endl;
     int nthreads_per_block = 256;
     int nblocks = (digis.size() + nthreads_per_block - 1) / nthreads_per_block;
-    ecal::reco::kernel_reconstruct<<<nblocks, nthreads_per_block>>>(
+    kernel_reconstruct<<<nblocks, nthreads_per_block>>>(
         d_digis,
         /* d_rechits, */
         d_pedestals,
@@ -101,6 +101,8 @@ void scatter(EcalDigiCollection const& digis,
         d_covariances,
         digis.size()
     );
+    cudaDeviceSynchronize();
+    ecal::cuda::assert_if_error();
 
 
     // 
