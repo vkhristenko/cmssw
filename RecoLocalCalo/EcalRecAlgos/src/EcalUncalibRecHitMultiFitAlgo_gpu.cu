@@ -13,6 +13,8 @@
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/PulseChiSqSNNLS_gpu.h"
 
+#define DEBUG
+
 namespace ecal { namespace multifit {
 
 class EcalUncalibRecHitMultiFitAlgo
@@ -308,16 +310,16 @@ void kernel_reconstruct(uint16_t const *digis,
         auto const* aPulse = &shapes[idx];
         auto const* aPulseCov = &covariances[idx];
 
-#define DEBUG
 #ifdef DEBUG
-        if (idx == 1) {
-            printf("tid = %i debug\n", idx);
+        if (idx == 0) {
+            printf("*******************\n");
+            printf("gpu debug tid = %i\n", idx);
             for(unsigned int iSample = 0; 
                 iSample < EcalDataFrame::MAXSAMPLES; iSample++)
                 printf("tid = %i i = %d adc = %d\n", idx, iSample, 
                    edf.sample(iSample).adc());
             for (int i=0; i<EcalPulseShape::TEMPLATESAMPLES; ++i)
-                printf("pulseshape[%d] = %d\n", i, aPulse->pdfval[i]);
+                printf("pulseshape[%d] = %f\n", i, aPulse->pdfval[i]);
         }
 #endif
 
@@ -461,6 +463,29 @@ void scatter(EcalDigiCollection const& digis,
         noisecors.size() * sizeof(SampleMatrix),
         cudaMemcpyHostToDevice);
     ecal::cuda::assert_if_error();
+
+#ifdef DEBUG
+    unsigned int idx = 0;
+        uint16_t const* p_current_digi = &digis_data[idx*EcalDataFrame::MAXSAMPLES];
+        DetId  current_id{ids[idx]};
+        EcalDataFrame edf{edm::DataFrame{ids[idx], p_current_digi, EcalDataFrame::MAXSAMPLES}};
+        auto const* aped = &vpedestals[idx];
+        auto const* aGain = &vgains[idx];
+        auto const* gid = &vxtals[idx];
+        auto const* aPulse = &vpulses[idx];
+        auto const* aPulseCov = &vcovariances[idx];
+
+        if (idx == 0) {
+            printf("*******************\n");
+            printf("cpu debug tid = %i\n", idx);
+            for(unsigned int iSample = 0; 
+                iSample < EcalDataFrame::MAXSAMPLES; iSample++)
+                printf("tid = %i i = %d adc = %d\n", idx, iSample, 
+                   edf.sample(iSample).adc());
+            for (int i=0; i<EcalPulseShape::TEMPLATESAMPLES; ++i)
+                printf("pulseshape[%d] = %f\n", i, aPulse->pdfval[i]);
+        }
+#endif
     
     //
     // launch 
@@ -485,6 +510,12 @@ void scatter(EcalDigiCollection const& digis,
     cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
+    //
+    // transfer the results back
+    // 
+    cudaMemcpy(&(*rechits.begin()), d_rechits,
+        rechits.size() * sizeof(EcalUncalibratedRecHit),
+        cudaMemcpyDeviceToHost);
 
     // 
     // free all the device ptrs
