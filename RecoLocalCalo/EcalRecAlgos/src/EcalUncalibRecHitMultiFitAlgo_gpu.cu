@@ -418,7 +418,8 @@ void scatter(EcalDigiCollection const& digis,
              std::vector<EcalXtalGroupId> const& vxtals,
              std::vector<EcalPulseShape> const& vpulses,
              std::vector<EcalPulseCovariance> const& vcovariances,
-             SampleMatrixGainArray const& noisecors) {
+             SampleMatrixGainArray const& noisecors,
+             device_data &d_data) {
     auto const& ids = digis.ids();
     auto const& digis_data = digis.data();
     using digis_type = std::vector<uint16_t>;
@@ -436,6 +437,7 @@ void scatter(EcalDigiCollection const& digis,
     //
     // TODO: remove per event alloc/dealloc -> do once at the start
     //
+    /*
     cudaMalloc((void**)&d_digis_data,
         digis_data.size() * sizeof(digis_type::value_type));
     cudaMalloc((void**)&d_ids,
@@ -455,36 +457,37 @@ void scatter(EcalDigiCollection const& digis,
     cudaMalloc((void**)&d_noisecors,
         noisecors.size() * sizeof(SampleMatrix));
     ecal::cuda::assert_if_error();
+    */
 
     // 
     // copy to the device
     // TODO: can conditions be copied only once when updated?
     //
-    cudaMemcpy(d_digis_data, digis_data.data(),
+    cudaMemcpy(d_data.digis_data, digis_data.data(),
         digis_data.size() * sizeof(digis_type::value_type),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_ids, ids.data(),
+    cudaMemcpy(d_data.ids, ids.data(),
         ids.size() * sizeof(dids_type::value_type),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_pedestals, vpedestals.data(),
+    cudaMemcpy(d_data.pedestals, vpedestals.data(),
         vpedestals.size() * sizeof(EcalPedestal),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_gains, vgains.data(),
+    cudaMemcpy(d_data.gains, vgains.data(),
         vgains.size() * sizeof(EcalMGPAGainRatio),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_xtals, vxtals.data(),
+    cudaMemcpy(d_data.xtals, vxtals.data(),
         vxtals.size() * sizeof(EcalXtalGroupId),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_shapes, vpulses.data(),
+    cudaMemcpy(d_data.pulses, vpulses.data(),
         vpulses.size() * sizeof(EcalPulseShape),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_covariances, vcovariances.data(),
+    cudaMemcpy(d_data.covariances, vcovariances.data(),
         vcovariances.size() * sizeof(EcalPulseCovariance),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_rechits, &(*rechits.begin()),
+    cudaMemcpy(d_data.rechits, &(*rechits.begin()),
         rechits.size() * sizeof(EcalUncalibratedRecHit),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_noisecors, noisecors.data(),
+    cudaMemcpy(d_data.noisecors, noisecors.data(),
         noisecors.size() * sizeof(SampleMatrix),
         cudaMemcpyHostToDevice);
     ecal::cuda::assert_if_error();
@@ -522,16 +525,16 @@ void scatter(EcalDigiCollection const& digis,
     int nthreads_per_block = 256;
     int nblocks = (digis.size() + nthreads_per_block - 1) / nthreads_per_block;
     kernel_reconstruct<<<nblocks, nthreads_per_block>>>(
-        d_digis_data,
-        d_ids,
+        d_data.digis_data,
+        d_data.ids,
         /* d_rechits, */
-        d_pedestals,
-        d_gains,
-        d_xtals,
-        d_shapes,
-        d_covariances,
-        d_rechits,
-        d_noisecors,
+        d_data.pedestals,
+        d_data.gains,
+        d_data.xtals,
+        d_data.pulses,
+        d_data.covariances,
+        d_data.rechits,
+        d_data.noisecors,
         digis.size()
     );
     cudaDeviceSynchronize();
@@ -540,7 +543,7 @@ void scatter(EcalDigiCollection const& digis,
     //
     // transfer the results back
     // 
-    cudaMemcpy(&(*rechits.begin()), d_rechits,
+    cudaMemcpy(&(*rechits.begin()), d_data.rechits,
         rechits.size() * sizeof(EcalUncalibratedRecHit),
         cudaMemcpyDeviceToHost);
 
@@ -548,6 +551,7 @@ void scatter(EcalDigiCollection const& digis,
     // free all the device ptrs
     // TODO: remove per event dealloc
     //
+    /*
     cudaFree(d_digis_data);
     cudaFree(d_ids);
     cudaFree(d_pedestals);
@@ -558,6 +562,7 @@ void scatter(EcalDigiCollection const& digis,
     cudaFree(d_rechits);
     cudaFree(d_noisecors);
     ecal::cuda::assert_if_error();
+    */
 }
 
 }}

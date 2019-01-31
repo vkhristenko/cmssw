@@ -77,6 +77,18 @@ class EcalPulseCovariance;
 
 namespace ecal { namespace multifit {
 
+struct device_data {
+    uint16_t *digis_data = nullptr;
+    uint32_t *ids = nullptr;
+    EcalPedestal *pedestals = nullptr;
+    EcalMGPAGainRatio *gains = nullptr;
+    EcalXtalGroupId *xtals = nullptr;
+    EcalPulseShape *pulses = nullptr;
+    EcalPulseCovariance *covariances = nullptr;
+    EcalUncalibratedRecHit *rechits = nullptr;
+    SampleMatrix *noisecors = nullptr;
+};
+
 void scatter(EcalDigiCollection const&,
              EcalUncalibratedRecHitCollection&,
              std::vector<EcalPedestal> const&,
@@ -84,7 +96,8 @@ void scatter(EcalDigiCollection const&,
              std::vector<EcalXtalGroupId> const&,
              std::vector<EcalPulseShape> const&,
              std::vector<EcalPulseCovariance> const&,
-             SampleMatrixGainArray const&);
+             SampleMatrixGainArray const&,
+             device_data&);
 
 }}
 

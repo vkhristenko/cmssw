@@ -44,7 +44,7 @@ class EcalUncalibRecHitWorkerMultiFitGPU final : public EcalUncalibRecHitWorkerB
         public:
                 EcalUncalibRecHitWorkerMultiFitGPU(const edm::ParameterSet&, edm::ConsumesCollector& c);
 		EcalUncalibRecHitWorkerMultiFitGPU() {};
-                ~EcalUncalibRecHitWorkerMultiFitGPU() override {};
+                ~EcalUncalibRecHitWorkerMultiFitGPU() override;
         private:
                 void set(const edm::EventSetup& es) override;
                 void set(const edm::Event& evt) override;
@@ -144,6 +144,11 @@ class EcalUncalibRecHitWorkerMultiFitGPU final : public EcalUncalibRecHitWorkerB
                 bool kPoorRecoFlagEE_;
                 double chi2ThreshEB_;
                 double chi2ThreshEE_;
+
+                //
+                // TODO: tmp solution for now: can we do better
+                //
+                ecal::multifit::device_data d_data;
 };
 
 #endif

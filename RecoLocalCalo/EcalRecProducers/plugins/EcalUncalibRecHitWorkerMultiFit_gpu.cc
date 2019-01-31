@@ -22,6 +22,12 @@
 #include <FWCore/ParameterSet/interface/ParameterSetDescription.h>
 #include <FWCore/ParameterSet/interface/EmptyGroupDescription.h>
 
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
+
+#define MAX_CHANNELS 50000
+
 EcalUncalibRecHitWorkerMultiFitGPU::EcalUncalibRecHitWorkerMultiFitGPU(const edm::ParameterSet&ps,edm::ConsumesCollector& c) :
   EcalUncalibRecHitWorkerBaseClass(ps,c)
 {
@@ -105,9 +111,47 @@ EcalUncalibRecHitWorkerMultiFitGPU::EcalUncalibRecHitWorkerMultiFitGPU(const edm
   chi2ThreshEB_=ps.getParameter<double>("chi2ThreshEB_");
   chi2ThreshEE_=ps.getParameter<double>("chi2ThreshEE_");
 
+  // 
+  // TODO
+  //
+  cudaMalloc((void**)&d_data.digis_data,
+    MAX_CHANNELS * EcalDataFrame::MAXSAMPLES * sizeof(uint16_t));
+  cudaMalloc((void**)&d_data.ids,
+    MAX_CHANNELS * sizeof(uint32_t));
+  cudaMalloc((void**)&d_data.pedestals,
+    MAX_CHANNELS * sizeof(EcalPedestal));
+  cudaMalloc((void**)&d_data.gains, 
+    MAX_CHANNELS * sizeof(EcalMGPAGainRatio));
+  cudaMalloc((void**)&d_data.xtals,
+    MAX_CHANNELS * sizeof(EcalXtalGroupId));
+  cudaMalloc((void**)&d_data.pulses,
+    MAX_CHANNELS * sizeof(EcalPulseShape));
+  cudaMalloc((void**)&d_data.covariances,
+    MAX_CHANNELS * sizeof(EcalPulseCovariance));
+  cudaMalloc((void**)&d_data.rechits,
+    MAX_CHANNELS * sizeof(EcalUncalibratedRecHit));
+  cudaMalloc((void**)&d_data.noisecors,
+    MAX_CHANNELS * sizeof(SampleMatrix));
+  ecal::cuda::assert_if_error();
 }
 
-
+EcalUncalibRecHitWorkerMultiFitGPU::~EcalUncalibRecHitWorkerMultiFitGPU() {
+    //
+    // TODO
+    //
+    if (d_data.digis_data) {
+        cudaFree(d_data.digis_data);
+        cudaFree(d_data.ids);
+        cudaFree(d_data.pedestals);
+        cudaFree(d_data.gains);
+        cudaFree(d_data.xtals);
+        cudaFree(d_data.pulses);
+        cudaFree(d_data.covariances);
+        cudaFree(d_data.rechits);
+        cudaFree(d_data.noisecors);
+        ecal::cuda::assert_if_error();
+    }
+}
 
 void
 EcalUncalibRecHitWorkerMultiFitGPU::set(const edm::EventSetup& es)
@@ -337,23 +381,25 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
     // 
     // prepare the result
     //
-    result.reserve(digis.size());
+    result.resize(digis.size());
     EcalUncalibratedRecHitCollection rechits(digis.size());
 
     // 
     // launch
     //
-    ecal::multifit::scatter(digis, rechits, 
+    ecal::multifit::scatter(digis, result, 
                             vpedestals, vgains,
                             vxtals, vpulseshapes,
-                            vcovariances, noisecors);
+                            vcovariances, noisecors,
+                            d_data);
 
     // 
     // TODO: remove this copy
     //
+    /*
     for (unsigned int i=0; i<rechits.size(); i++) {
         result.push_back(rechits[i]);
-    }
+    }*/
 
     /*
     result.reserve(result.size() + digis.size());
