@@ -77,6 +77,8 @@ class EcalPulseCovariance;
 
 namespace ecal { namespace multifit {
 
+enum TimeAlgo {noMethod, ratioMethod, weightsMethod};
+
 struct device_data {
     uint16_t *digis_data = nullptr;
     uint32_t *ids = nullptr;

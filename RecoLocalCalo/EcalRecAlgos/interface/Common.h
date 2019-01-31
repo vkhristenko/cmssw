@@ -19,4 +19,11 @@ void assert_if_error();
 
 }}
 
+namespace myMath {
+
+constexpr float fast_expf(float x) { return unsafe_expf<6>(x); }
+constexpr float fast_logf(float x) { return unsafe_logf<7>(x); }
+
+}
+
 #endif

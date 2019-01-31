@@ -12,6 +12,7 @@
 #include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/PulseChiSqSNNLS_gpu.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitRatioMethodAlgo_gpu.h"
 
 //#define DEBUG
 
@@ -347,6 +348,22 @@ void kernel_reconstruct(uint16_t const *digis,
         }
 
         EcalUncalibratedRecHit rh{current_id, 4095*12, 0, 0, 0};
+        double EEtimeFitParameters[timeFitParameters_size] 
+            = { -2.390548e+00, 3.553628e+00, 
+                -1.762341e+01, 6.767538e+01, 
+                -1.332130e+02, 1.407432e+02, 
+                -7.541106e+01, 1.620277e+01};
+        double EBtimeFitParameters[timeFitParameters_size] 
+            = { -2.015452e+00, 3.130702e+00, 
+                -1.234730e+01, 4.188921e+01, 
+                -8.283944e+01, 9.101147e+01, 
+                -5.035761e+01, 1.105621e+01};
+        double EBamplitudeFitParameters[amplitudeFitParameters_size] = {1.138,1.652};
+        double EEamplitudeFitParameters[amplitudeFitParameters_size] = {1.890,1.400};
+        double const EBtimeFitLimits_Lower{0.2};
+        double const EBtimeFitLimits_Upper{1.4};
+        double const EEtimeFitLimits_Lower{0.2};
+        double const EEtimeFitLimits_Upper{1.4};
 
         // === amplitude computation ===
         if ( lastSampleBeforeSaturation == 4 ) { 
@@ -406,8 +423,105 @@ void kernel_reconstruct(uint16_t const *digis,
             rechits[idx] = algo.makeRecHit(edf, aped, aGain, 
                                            noisecors, fullpulse, fullpulsecov, 
                                            activeBX);
+            TimeAlgo timealgo_ = ratioMethod;
+            if (timealgo_ == ratioMethod) {
+                // ratio method
+                constexpr float clockToNsConstant = 25.;
+                constexpr float invClockToNs = 1./clockToNsConstant;
+                if (not barrel) {
+                    ratioMethod_endcap_.init(*itdg, *sampleMask_, 
+                                             pedVec, pedRMSVec, gainRatios );
+                    ratioMethod_endcap_.computeTime(EEtimeFitParameters, 
+                                                    EEtimeFitLimits, 
+                                                    EEamplitudeFitParameters);
+                    ratioMethod_endcap_.computeAmplitude( EEamplitudeFitParameters);
+                    EcalUncalibRecHitRatioMethodAlgo::CalculatedRecHit crh = 
+                        ratioMethod_endcap_.getCalculatedRecHit();
+                    double theTimeCorrectionEE = 
+                        timeCorrection(uncalibRecHit.amplitude(), 
+                                       timeCorrBias_->EETimeCorrAmplitudeBins, 
+                                       timeCorrBias_->EETimeCorrShiftBins);
+                    uncalibRecHit.setJitter( crh.timeMax - 5 + theTimeCorrectionEE);
+                    uncalibRecHit.setJitterError( 
+                        std::sqrt(std::pow(crh.timeError,2) + 
+                        std::pow(EEtimeConstantTerm_*invClockToNs,2)) );
+
+                    // consider flagging as kOutOfTime only if above noise
+                    if (uncalibRecHit.amplitude() > 
+                        pedRMSVec[0] * amplitudeThreshEE_) {
+                        float outOfTimeThreshP = outOfTimeThreshG12pEE_;
+                        float outOfTimeThreshM = outOfTimeThreshG12mEE_;
+                        // determine if gain has switched away 
+                        // from gainId==1 (x12 gain)
+                        // and determine cuts (number of 'sigmas') 
+                        // to ose for kOutOfTime
+                        // >3k ADC is necessasry condition for gain switch to occur
+                        if (uncalibRecHit.amplitude() > 3000.) {
+                            for (int iSample = 0; iSample < EEDataFrame::MAXSAMPLES; 
+                                 iSample++) {
+                                int GainId = ((EcalDataFrame)(*itdg)).sample(iSample).gainId();
+                                if (GainId!=1) {
+                                    outOfTimeThreshP = outOfTimeThreshG61pEE_;
+                                    outOfTimeThreshM = outOfTimeThreshG61mEE_;
+                                    break;
+                                }
+                            }
+                        }
+                        float correctedTime = (crh.timeMax-5) * clockToNsConstant + 
+                            itimeconst + offsetTime;
+                        float cterm         = EEtimeConstantTerm_;
+                        float sigmaped      = pedRMSVec[0];  // approx for lower gains
+                        float nterm         = EEtimeNconst_*sigmaped/uncalibRecHit.amplitude();
+                        float sigmat        = std::sqrt( nterm*nterm  + cterm*cterm   );
+                         if ( ( correctedTime > sigmat*outOfTimeThreshP )   ||
+                              ( correctedTime < -sigmat*outOfTimeThreshM) )
+                         {  uncalibRecHit.setFlagBit( EcalUncalibratedRecHit::kOutOfTime ); }
+                    }
+                } else {
+                    ratioMethod_barrel_.init( *itdg, *sampleMask_, pedVec, pedRMSVec, gainRatios );
+                    ratioMethod_barrel_.fixMGPAslew(*itdg);
+                    ratioMethod_barrel_.computeTime(EBtimeFitParameters, 
+                                                    EBtimeFitLimits, 
+                                                    EBamplitudeFitParameters);
+                    ratioMethod_barrel_.computeAmplitude( EBamplitudeFitParameters_);
+                    EcalUncalibRecHitRatioMethodAlgo::CalculatedRecHit crh = ratioMethod_barrel_.getCalculatedRecHit();
+
+                    double theTimeCorrectionEB = timeCorrection(uncalibRecHit.amplitude(), timeCorrBias_->EBTimeCorrAmplitudeBins, timeCorrBias_->EBTimeCorrShiftBins);
+                    uncalibRecHit.setJitter( crh.timeMax - 5 + theTimeCorrectionEB);
+                    uncalibRecHit.setJitterError( std::hypot(crh.timeError, EBtimeConstantTerm_ / clockToNsConstant) );
+
+                    // consider flagging as kOutOfTime only if above noise
+                    if (uncalibRecHit.amplitude() > pedRMSVec[0] * amplitudeThreshEB_){
+                        float outOfTimeThreshP = outOfTimeThreshG12pEB_;
+                        float outOfTimeThreshM = outOfTimeThreshG12mEB_;
+                        // determine if gain has switched away from gainId==1 (x12 gain)
+                        // and determine cuts (number of 'sigmas') to ose for kOutOfTime
+                        // >3k ADC is necessasry condition for gain switch to occur
+                        if (uncalibRecHit.amplitude() > 3000.) {
+                            for (int iSample = 0; iSample < EBDataFrame::MAXSAMPLES; 
+                                 iSample++) {
+                                int GainId = ((EcalDataFrame)(*itdg)).sample(iSample).gainId();
+                                if (GainId!=1) {
+                                    outOfTimeThreshP = outOfTimeThreshG61pEB_;
+                                    outOfTimeThreshM = outOfTimeThreshG61mEB_;
+                                    break;
+                                }
+                            } 
+                        }
+                        float correctedTime = (crh.timeMax-5) * clockToNsConstant + itimeconst + offsetTime;
+                        float cterm         = EBtimeConstantTerm_;
+                        float sigmaped      = pedRMSVec[0];  // approx for lower gains
+                        float nterm         = EBtimeNconst_*sigmaped/uncalibRecHit.amplitude();
+                        float sigmat        = std::sqrt( nterm*nterm  + cterm*cterm   );
+                        if ( ( correctedTime > sigmat*outOfTimeThreshP )   ||
+                             ( correctedTime < -sigmat*outOfTimeThreshM ))
+                        {
+                            uncalibRecHit.setFlagBit( EcalUncalibratedRecHit::kOutOfTime );
+                        }
+                    }
+                } // if not barrel
+            } // if timeAlgo_ ==
         }
-        
     }
 }
 
