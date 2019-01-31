@@ -13,7 +13,7 @@
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/PulseChiSqSNNLS_gpu.h"
 
-#define DEBUG
+//#define DEBUG
 
 namespace ecal { namespace multifit {
 
@@ -378,6 +378,31 @@ void kernel_reconstruct(uint16_t const *digis,
             activeBX.resize(10);
             activeBX << -5,-4,-3,-2,-1,0,1,2,3,4;
             EcalUncalibRecHitMultiFitAlgo algo{};
+            algo.disableErrorCalculation();
+            bool barrel = (current_id.subdetId()==EcalBarrel);
+            // TODO: all of the parameters need to be propogated to the device
+            algo.setSimplifiedNoiseModelForGainSwitch(
+                /*simplifiedNoiseModelForGainSwitch_*/ true);
+            if (barrel) {
+                algo.setDoPrefit(/*doPrefitEB_*/ false);
+                algo.setPrefitMaxChiSq(/*prefitMaxChiSqEB_*/ 25.0);
+                algo.setDynamicPedestals(/*dynamicPedestalsEB_*/ false);
+                algo.setMitigateBadSamples(/*mitigateBadSamplesEB_*/ false);
+                algo.setGainSwitchUseMaxSample(/*gainSwitchUseMaxSampleEB_*/ true);
+                algo.setSelectiveBadSampleCriteria(
+                    /*selectiveBadSampleCriteriaEB_*/ false);
+                algo.setAddPedestalUncertainty(/*addPedestalUncertaintyEB_*/ 0.);
+            } else {
+                algo.setDoPrefit(/*doPrefitEE_*/ false);
+                algo.setPrefitMaxChiSq(/*prefitMaxChiSqEE_*/ 10.0);
+                algo.setDynamicPedestals(/*dynamicPedestalsEE_*/ false);
+                algo.setMitigateBadSamples(/*mitigateBadSamplesEE_*/ false);
+                algo.setGainSwitchUseMaxSample(/*gainSwitchUseMaxSampleEE_*/ false);
+                algo.setSelectiveBadSampleCriteria(
+                    /*selectiveBadSampleCriteriaEE_*/ false);
+                algo.setAddPedestalUncertainty(
+                    /*addPedestalUncertaintyEE_*/ 0.);
+            }
             rechits[idx] = algo.makeRecHit(edf, aped, aGain, 
                                            noisecors, fullpulse, fullpulsecov, 
                                            activeBX);
@@ -491,7 +516,9 @@ void scatter(EcalDigiCollection const& digis,
     // launch 
     // TODO: further ntreads/nblocks optimizations...
     //
+#ifdef DEBUG
     std::cout << "ecal::multifit::scatter()" << std::endl;
+#endif
     int nthreads_per_block = 256;
     int nblocks = (digis.size() + nthreads_per_block - 1) / nthreads_per_block;
     kernel_reconstruct<<<nblocks, nthreads_per_block>>>(
