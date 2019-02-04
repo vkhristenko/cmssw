@@ -75,6 +75,7 @@ class EcalUncalibRecHitRatioMethodAlgo {
                    double amplitudeFitParameters[amplitudeFitParameters_size]);
   __device__
   void computeAmplitude(double amplitudeFitParameters[amplitudeFitParameters_size]);
+  __device__
   CalculatedRecHit getCalculatedRecHit() { return calculatedRechit_; }
   __device__
   bool fixMGPAslew(const EcalDataFrame &dataFrame);
@@ -229,6 +230,7 @@ bool EcalUncalibRecHitRatioMethodAlgo::fixMGPAslew(const EcalDataFrame &dataFram
 
 }
 
+__device__
 void EcalUncalibRecHitRatioMethodAlgo::computeTime(
     double timeFitParameters[timeFitParameters_size],
     std::pair<double, double> &timeFitLimits,
@@ -282,13 +284,13 @@ void EcalUncalibRecHitRatioMethodAlgo::computeTime(
   Ratio ratios_[EcalDataFrame::MAXSAMPLES * (EcalDataFrame::MAXSAMPLES - 1) / 2];
   unsigned int ratios_size = 0;
 
-  double Rlim[amplitudes_.size()];
+  double Rlim[amplitudeFitParameters_size];
   for (unsigned int k = 1; k != EcalDataFrame::MAXSAMPLES; ++k)
     Rlim[k] = myMath::fast_expf(double(k) / beta) - 0.001;
 
   double relErr2[EcalDataFrame::MAXSAMPLES];
   double invampl[EcalDataFrame::MAXSAMPLES];
-  for (unsigned int i = 0; i < amplitudes_.size(); i++) {
+  for (unsigned int i = 0; i < amplitudeFitParameters_size; i++) {
     invampl[i] = (useless_[i]) ? 0 : 1. / amplitudes_[i];
     relErr2[i] = (useless_[i]) ? 0 : (amplitudeErrors_[i] * invampl[i]) *
                                          (amplitudeErrors_[i] * invampl[i]);
@@ -443,7 +445,7 @@ void EcalUncalibRecHitRatioMethodAlgo::computeTime(
   // find amplitude and chi2
   sumAf = 0;
   sumff = 0;
-  for (unsigned int i = 0; i < EcalDataFrame::MAXSAMPLES); i++) {
+  for (unsigned int i = 0; i < EcalDataFrame::MAXSAMPLES; i++) {
     if (useless_[i]) continue;
     double inverr2 = amplitudeIE2_[i];
     double offset = (double(i) - tMaxAlphaBeta) * invalphabeta;
@@ -566,7 +568,7 @@ void EcalUncalibRecHitRatioMethodAlgo::computeTime(
 
 __device__
 void EcalUncalibRecHitRatioMethodAlgo::computeAmplitude(
-    double amplitudeFitParameters[]amplitudeFitParameters_size) {
+    double amplitudeFitParameters[amplitudeFitParameters_size]) {
 
   calculatedRechit_.amplitudeMax =
       computeAmplitudeImpl(amplitudeFitParameters, 1., 1.);

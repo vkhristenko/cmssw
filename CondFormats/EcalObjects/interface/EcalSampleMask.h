@@ -48,13 +48,14 @@ class EcalSampleMask {
       s << "EcalSampleMask: EB " << sampleMaskEB_ << "; EE " << sampleMaskEE_ ;
     }
 
-    bool useSampleEB (const int sampleId) const {
-      
+    constexpr bool useSampleEB (const int sampleId) const {
+#ifndef __CUDA_ARCH__
       if( sampleId >= EcalDataFrame::MAXSAMPLES ){
         LogError("DataMismatch")<< "in EcalSampleMask::useSampleEB only sampleId up to: "  << EcalDataFrame::MAXSAMPLES 
               << " can be used, while: " << sampleId << " was found. Bailing out." << std::endl;
         assert(0);
       }
+#endif
       
       // ordering convention:
       // ebmask.at(0)                         refers to the first sample read out and is mapped into the _most_ significant bit of sampleMaskEB_ 
@@ -62,13 +63,14 @@ class EcalSampleMask {
       return ( sampleMaskEB_ & ( 0x1<< (EcalDataFrame::MAXSAMPLES -(sampleId+1) )) );
       
     }
-    bool useSampleEE (const int sampleId) const {
-      
+    constexpr bool useSampleEE (const int sampleId) const {
+#ifndef __CUDA_ARCH__
       if( sampleId >= EcalDataFrame::MAXSAMPLES ){
         LogError("DataMismatch")<< "in EcalSampleMask::useSampleEE only sampleId up to: "  << EcalDataFrame::MAXSAMPLES 
               << " can be used, while: " << sampleId << " was found. Bailing out." << std::endl;
         assert(0);
       }
+#endif
       
       // ordering convention:
       // ebmask.at(0)                         refers to the first sample read out and is mapped into the _most_ significant bit of sampleMaskEB_ 
@@ -77,13 +79,14 @@ class EcalSampleMask {
       
     }
 
-    bool useSample  (const int sampleId, DetId &theCrystalId) const {
-      
+    constexpr bool useSample  (const int sampleId, DetId &theCrystalId) const {
+#ifndef __CUDA_ARCH__      
       if( sampleId >= EcalDataFrame::MAXSAMPLES ){
         LogError("DataMismatch")<< "in EcalSampleMask::useSample only sampleId up to: "  << EcalDataFrame::MAXSAMPLES 
               << " can be used, while: " << sampleId << " was found. Bailing out." << std::endl;
         assert(0);
       }
+#endif
       
       
       if       (theCrystalId.subdetId()==EcalBarrel) {
@@ -93,8 +96,12 @@ class EcalSampleMask {
         return useSampleEE ( sampleId );
       }
       else {
+#ifndef __CUDA_ARCH__
         LogError("DataMismatch")<< "EcalSampleMaskuseSample::useSample can only be called for EcalBarrel or EcalEndcap DetID" << std::endl; 
         assert(0);
+#else
+        ;
+#endif
       }
       
     }

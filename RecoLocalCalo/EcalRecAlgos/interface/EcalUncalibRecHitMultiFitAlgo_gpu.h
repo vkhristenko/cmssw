@@ -65,6 +65,7 @@ class EcalUncalibRecHitMultiFitAlgo
 
 #include "CondFormats/EcalObjects/interface/EcalPedestals.h"
 #include "CondFormats/EcalObjects/interface/EcalGainRatios.h"
+#include "CondFormats/EcalObjects/interface/EcalTimeBiasCorrections.h"
 //#include "RecoLocalCalo/EcalRecAlgos/interface/PulseChiSqSNNLS.h"
 
 
@@ -74,6 +75,8 @@ class EcalMGPAGainRatio;
 class EcalXtalGroupId;
 class EcalPulseShape;
 class EcalPulseCovariance;
+class EcalSampleMask;
+class EcalTimeBiasCorrections;
 
 namespace ecal { namespace multifit {
 
@@ -89,8 +92,33 @@ struct device_data {
     EcalPulseCovariance *covariances = nullptr;
     EcalUncalibratedRecHit *rechits = nullptr;
     SampleMatrix *noisecors = nullptr;
+    EcalSampleMask *sample_mask = nullptr;
+    float *EBTimeCorrAmplitudeBins = nullptr;
+    int EBTimeCorrAmplitudeBins_size;
+    float *EBTimeCorrShiftBins = nullptr;
+    int EBTimeCorrShiftBins_size;
+    float *EETimeCorrAmplitudeBins = nullptr;
+    int EETimeCorrAmplitudeBins_size;
+    float *EETimeCorrShiftBins = nullptr;
+    int EETimeCorrShiftBins_size;
 };
 
+struct host_data {
+    EcalDigiCollection const *digis;
+    EcalUncalibratedRecHitCollection *rechits;
+    std::vector<EcalPedestal> const *pedestals;
+    std::vector<EcalMGPAGainRatio> const *gains;
+    std::vector<EcalXtalGroupId> const *xtals;
+    std::vector<EcalPulseShape> const *pulse_shapes;
+    std::vector<EcalPulseCovariance> const *pulse_covariances;
+    SampleMatrixGainArray const *noisecors;
+    EcalSampleMask const *sample_mask;
+    EcalTimeBiasCorrections const *time_bias_corrections;
+};
+
+void scatter(host_data&, device_data&);
+
+/*
 void scatter(EcalDigiCollection const&,
              EcalUncalibratedRecHitCollection&,
              std::vector<EcalPedestal> const&,
@@ -100,6 +128,7 @@ void scatter(EcalDigiCollection const&,
              std::vector<EcalPulseCovariance> const&,
              SampleMatrixGainArray const&,
              device_data&);
+*/
 
 }}
 

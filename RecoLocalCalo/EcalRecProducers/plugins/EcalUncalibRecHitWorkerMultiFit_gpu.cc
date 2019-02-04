@@ -27,6 +27,7 @@
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 
 #define MAX_CHANNELS 50000
+#define MAX_TIME_BIAS_CORRECTIONS 100
 
 EcalUncalibRecHitWorkerMultiFitGPU::EcalUncalibRecHitWorkerMultiFitGPU(const edm::ParameterSet&ps,edm::ConsumesCollector& c) :
   EcalUncalibRecHitWorkerBaseClass(ps,c)
@@ -132,6 +133,15 @@ EcalUncalibRecHitWorkerMultiFitGPU::EcalUncalibRecHitWorkerMultiFitGPU(const edm
     MAX_CHANNELS * sizeof(EcalUncalibratedRecHit));
   cudaMalloc((void**)&d_data.noisecors,
     MAX_CHANNELS * sizeof(SampleMatrix));
+  cudaMalloc((void**)&d_data.sample_mask, sizeof(EcalSampleMask));
+  cudaMalloc((void**)&d_data.EBTimeCorrAmplitudeBins,
+    sizeof(float) * MAX_TIME_BIAS_CORRECTIONS);
+  cudaMalloc((void**)&d_data.EBTimeCorrShiftBins,
+    sizeof(float) * MAX_TIME_BIAS_CORRECTIONS);
+  cudaMalloc((void**)&d_data.EETimeCorrAmplitudeBins,
+    sizeof(float) * MAX_TIME_BIAS_CORRECTIONS);
+  cudaMalloc((void**)&d_data.EETimeCorrShiftBins,
+    sizeof(float) * MAX_TIME_BIAS_CORRECTIONS);
   ecal::cuda::assert_if_error();
 }
 
@@ -149,6 +159,11 @@ EcalUncalibRecHitWorkerMultiFitGPU::~EcalUncalibRecHitWorkerMultiFitGPU() {
         cudaFree(d_data.covariances);
         cudaFree(d_data.rechits);
         cudaFree(d_data.noisecors);
+        cudaFree(d_data.sample_mask);
+        cudaFree(d_data.EBTimeCorrAmplitudeBins);
+        cudaFree(d_data.EBTimeCorrShiftBins);
+        cudaFree(d_data.EETimeCorrAmplitudeBins);
+        cudaFree(d_data.EETimeCorrShiftBins);
         ecal::cuda::assert_if_error();
     }
 }
@@ -377,6 +392,7 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
         vpulseshapes.push_back(*aPulse);
         vcovariances.push_back(*aPulseCov);
     }
+    EcalSampleMask const& sample_mask = *sampleMaskHand_.product();
     
     // 
     // prepare the result
@@ -387,11 +403,17 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
     // 
     // launch
     //
+    ecal::multifit::host_data h_data{&digis, &result, &vpedestals, &vgains,
+                                     &vxtals, &vpulseshapes, &vcovariances,
+                                     &noisecors, &sample_mask, &(*timeCorrBias_)};
+    ecal::multifit::scatter(h_data, d_data);
+    /*
     ecal::multifit::scatter(digis, result, 
                             vpedestals, vgains,
                             vxtals, vpulseshapes,
                             vcovariances, noisecors,
                             d_data);
+                            */
 
     // 
     // TODO: remove this copy

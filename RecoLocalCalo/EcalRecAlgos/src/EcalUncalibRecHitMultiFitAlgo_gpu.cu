@@ -288,6 +288,67 @@ EcalUncalibRecHitMultiFitAlgo::makeRecHit(const EcalDataFrame& dataFrame,
   return rh;
 }
 
+/**
+ * Amplitude-dependent time corrections; EE and EB have separate corrections:
+ * EXtimeCorrAmplitudes (ADC) and EXtimeCorrShifts (ns) need to have the same number of elements
+ * Bins must be ordered in amplitude. First-last bins take care of under-overflows.
+ *
+ * The algorithm is the same for EE and EB, only the correction vectors are different.
+ *
+ * @return Jitter (in clock cycles) which will be added to UncalibRechit.setJitter(), 0 if no correction is applied.
+*/
+__device__
+double timeCorrection(
+        float ampli,
+        float const* amplitudeBins, int amplitudeBins_size,
+        float const* shiftBins, int shiftBins_size) {
+    // computed initially in ns. Than turned in the BX's, as
+    // EcalUncalibratedRecHit need be.
+    double theCorrection = 0;
+
+    // sanity check for arrays
+    /*
+    if (amplitudeBins.empty()) {
+        edm::LogError("EcalRecHitError")
+            << "timeCorrAmplitudeBins is empty, forcing no time bias corrections.";
+        return 0;
+    }*/
+
+    /*
+    if (amplitudeBins.size() != shiftBins.size()) {
+        edm::LogError("EcalRecHitError")
+            << "Size of timeCorrAmplitudeBins different from "
+               "timeCorrShiftBins. Forcing no time bias corrections. ";
+        return 0;
+    }*/
+
+    // FIXME? what about a binary search?
+    int myBin = -1;
+    for (int bin = 0; bin < (int) amplitudeBins_size; bin++) {
+        if (ampli > amplitudeBins[bin]) {
+            myBin = bin;
+        } else {
+            break;
+        }
+    }
+
+    if (myBin == -1) {
+        theCorrection = shiftBins[0];
+    } else if (myBin == ((int)(amplitudeBins_size - 1))) {
+        theCorrection = shiftBins[myBin];
+    } else {
+        // interpolate linearly between two assingned points
+        theCorrection = (shiftBins[myBin + 1] - shiftBins[myBin]);
+        theCorrection *= (((double) ampli) - amplitudeBins[myBin]) /
+        (amplitudeBins[myBin + 1] - amplitudeBins[myBin]);
+        theCorrection += shiftBins[myBin];
+    }
+    
+    // convert ns into clocks
+    const double inv25 = 1./25.;
+    return theCorrection * inv25;
+}
+
 __global__
 void kernel_reconstruct(uint16_t const *digis,
                               uint32_t const *ids,
@@ -298,6 +359,15 @@ void kernel_reconstruct(uint16_t const *digis,
                               EcalPulseCovariance const *covariances,
                               EcalUncalibratedRecHit *rechits,
                               SampleMatrix const *noisecors,
+                              EcalSampleMask const* sample_mask,
+                              float const* EBTimeCorrAmplitudeBins,
+                              int EBTimeCorrAmplitudeBins_size,
+                              float const* EBTimeCorrShiftBins,
+                              int EBTimeCorrShiftBins_size,
+                              float const* EETimeCorrAmplitudeBins,
+                              int EETimeCorrAmplitudeBins_size,
+                              float const* EETimeCorrShiftBins,
+                              int EETimeCorrShiftBins_size,
                               unsigned int size) {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -362,8 +432,26 @@ void kernel_reconstruct(uint16_t const *digis,
         double EEamplitudeFitParameters[amplitudeFitParameters_size] = {1.890,1.400};
         double const EBtimeFitLimits_Lower{0.2};
         double const EBtimeFitLimits_Upper{1.4};
+        std::pair<double, double> EBtimeFitLimits 
+            {EBtimeFitLimits_Lower, EBtimeFitLimits_Upper};
         double const EEtimeFitLimits_Lower{0.2};
         double const EEtimeFitLimits_Upper{1.4};
+        std::pair<double, double> EEtimeFitLimits
+            {EEtimeFitLimits_Lower, EEtimeFitLimits_Upper};
+        double const EBtimeConstantTerm {.6};
+        double const EEtimeConstantTerm {1.0};
+        double amplitudeThreshEB{10};
+        double amplitudeThreshEE{10};
+        double outOfTimeThreshG12pEB {5}; //      # times estimated precision
+        double outOfTimeThreshG12mEB {5}; //      # times estimated precision
+        double outOfTimeThreshG61pEB {5}; //      # times estimated precision
+        double outOfTimeThreshG61mEB {5}; //      # times estimated precision
+        double outOfTimeThreshG12pEE {1000}; //   # times estimated precision
+        double outOfTimeThreshG12mEE {1000}; //   # times estimated precision
+        double outOfTimeThreshG61pEE {1000}; //   # times estimated precision
+        double outOfTimeThreshG61mEE {1000}; //   # times estimated precision
+        double EBtimeNconst{28.5};
+        double EEtimeNconst{31.8};
 
         // === amplitude computation ===
         if ( lastSampleBeforeSaturation == 4 ) { 
@@ -423,13 +511,19 @@ void kernel_reconstruct(uint16_t const *digis,
             rechits[idx] = algo.makeRecHit(edf, aped, aGain, 
                                            noisecors, fullpulse, fullpulsecov, 
                                            activeBX);
+            auto& uncalibRecHit = rechits[idx];
             TimeAlgo timealgo_ = ratioMethod;
+            // TODO: this needs to be propogated
+            float itimeconst = 0;
+            // TODO: this needs to be propogated
+            float offsetTime = 0;
             if (timealgo_ == ratioMethod) {
                 // ratio method
                 constexpr float clockToNsConstant = 25.;
                 constexpr float invClockToNs = 1./clockToNsConstant;
                 if (not barrel) {
-                    ratioMethod_endcap_.init(*itdg, *sampleMask_, 
+                    EcalUncalibRecHitRatioMethodAlgo ratioMethod_endcap_;
+                    ratioMethod_endcap_.init(edf, *sample_mask, 
                                              pedVec, pedRMSVec, gainRatios );
                     ratioMethod_endcap_.computeTime(EEtimeFitParameters, 
                                                     EEtimeFitLimits, 
@@ -439,79 +533,86 @@ void kernel_reconstruct(uint16_t const *digis,
                         ratioMethod_endcap_.getCalculatedRecHit();
                     double theTimeCorrectionEE = 
                         timeCorrection(uncalibRecHit.amplitude(), 
-                                       timeCorrBias_->EETimeCorrAmplitudeBins, 
-                                       timeCorrBias_->EETimeCorrShiftBins);
+                                       EETimeCorrAmplitudeBins, 
+                                       EETimeCorrAmplitudeBins_size,
+                                       EETimeCorrShiftBins,
+                                       EETimeCorrShiftBins_size);
                     uncalibRecHit.setJitter( crh.timeMax - 5 + theTimeCorrectionEE);
                     uncalibRecHit.setJitterError( 
                         std::sqrt(std::pow(crh.timeError,2) + 
-                        std::pow(EEtimeConstantTerm_*invClockToNs,2)) );
+                        std::pow(EEtimeConstantTerm * invClockToNs,2)) );
 
                     // consider flagging as kOutOfTime only if above noise
                     if (uncalibRecHit.amplitude() > 
-                        pedRMSVec[0] * amplitudeThreshEE_) {
-                        float outOfTimeThreshP = outOfTimeThreshG12pEE_;
-                        float outOfTimeThreshM = outOfTimeThreshG12mEE_;
+                        pedRMSVec[0] * amplitudeThreshEE) {
+                        float outOfTimeThreshP = outOfTimeThreshG12pEE;
+                        float outOfTimeThreshM = outOfTimeThreshG12mEE;
                         // determine if gain has switched away 
                         // from gainId==1 (x12 gain)
                         // and determine cuts (number of 'sigmas') 
                         // to ose for kOutOfTime
                         // >3k ADC is necessasry condition for gain switch to occur
                         if (uncalibRecHit.amplitude() > 3000.) {
-                            for (int iSample = 0; iSample < EEDataFrame::MAXSAMPLES; 
+                            for (int iSample = 0; iSample < EcalDataFrame::MAXSAMPLES; 
                                  iSample++) {
-                                int GainId = ((EcalDataFrame)(*itdg)).sample(iSample).gainId();
+                                int GainId = edf.sample(iSample).gainId();
                                 if (GainId!=1) {
-                                    outOfTimeThreshP = outOfTimeThreshG61pEE_;
-                                    outOfTimeThreshM = outOfTimeThreshG61mEE_;
+                                    outOfTimeThreshP = outOfTimeThreshG61pEE;
+                                    outOfTimeThreshM = outOfTimeThreshG61mEE;
                                     break;
                                 }
                             }
                         }
                         float correctedTime = (crh.timeMax-5) * clockToNsConstant + 
                             itimeconst + offsetTime;
-                        float cterm         = EEtimeConstantTerm_;
+                        float cterm         = EEtimeConstantTerm;
                         float sigmaped      = pedRMSVec[0];  // approx for lower gains
-                        float nterm         = EEtimeNconst_*sigmaped/uncalibRecHit.amplitude();
+                        float nterm         = EEtimeNconst*sigmaped/uncalibRecHit.amplitude();
                         float sigmat        = std::sqrt( nterm*nterm  + cterm*cterm   );
                          if ( ( correctedTime > sigmat*outOfTimeThreshP )   ||
                               ( correctedTime < -sigmat*outOfTimeThreshM) )
                          {  uncalibRecHit.setFlagBit( EcalUncalibratedRecHit::kOutOfTime ); }
                     }
                 } else {
-                    ratioMethod_barrel_.init( *itdg, *sampleMask_, pedVec, pedRMSVec, gainRatios );
-                    ratioMethod_barrel_.fixMGPAslew(*itdg);
+                    EcalUncalibRecHitRatioMethodAlgo ratioMethod_barrel_;
+                    ratioMethod_barrel_.init(edf, *sample_mask, 
+                        pedVec, pedRMSVec, gainRatios );
+                    ratioMethod_barrel_.fixMGPAslew(edf);
                     ratioMethod_barrel_.computeTime(EBtimeFitParameters, 
                                                     EBtimeFitLimits, 
                                                     EBamplitudeFitParameters);
-                    ratioMethod_barrel_.computeAmplitude( EBamplitudeFitParameters_);
+                    ratioMethod_barrel_.computeAmplitude(EBamplitudeFitParameters);
                     EcalUncalibRecHitRatioMethodAlgo::CalculatedRecHit crh = ratioMethod_barrel_.getCalculatedRecHit();
 
-                    double theTimeCorrectionEB = timeCorrection(uncalibRecHit.amplitude(), timeCorrBias_->EBTimeCorrAmplitudeBins, timeCorrBias_->EBTimeCorrShiftBins);
+                    double theTimeCorrectionEB = timeCorrection(
+                        uncalibRecHit.amplitude(), 
+                        EBTimeCorrAmplitudeBins, EBTimeCorrAmplitudeBins_size,
+                        EBTimeCorrShiftBins, EBTimeCorrShiftBins_size);
                     uncalibRecHit.setJitter( crh.timeMax - 5 + theTimeCorrectionEB);
-                    uncalibRecHit.setJitterError( std::hypot(crh.timeError, EBtimeConstantTerm_ / clockToNsConstant) );
+                    uncalibRecHit.setJitterError( std::hypot(crh.timeError, EBtimeConstantTerm / clockToNsConstant) );
 
                     // consider flagging as kOutOfTime only if above noise
-                    if (uncalibRecHit.amplitude() > pedRMSVec[0] * amplitudeThreshEB_){
-                        float outOfTimeThreshP = outOfTimeThreshG12pEB_;
-                        float outOfTimeThreshM = outOfTimeThreshG12mEB_;
+                    if (uncalibRecHit.amplitude() > pedRMSVec[0] * amplitudeThreshEB){
+                        float outOfTimeThreshP = outOfTimeThreshG12pEB;
+                        float outOfTimeThreshM = outOfTimeThreshG12mEB;
                         // determine if gain has switched away from gainId==1 (x12 gain)
                         // and determine cuts (number of 'sigmas') to ose for kOutOfTime
                         // >3k ADC is necessasry condition for gain switch to occur
                         if (uncalibRecHit.amplitude() > 3000.) {
-                            for (int iSample = 0; iSample < EBDataFrame::MAXSAMPLES; 
+                            for (int iSample = 0; iSample < EcalDataFrame::MAXSAMPLES; 
                                  iSample++) {
-                                int GainId = ((EcalDataFrame)(*itdg)).sample(iSample).gainId();
+                                int GainId = edf.sample(iSample).gainId();
                                 if (GainId!=1) {
-                                    outOfTimeThreshP = outOfTimeThreshG61pEB_;
-                                    outOfTimeThreshM = outOfTimeThreshG61mEB_;
+                                    outOfTimeThreshP = outOfTimeThreshG61pEB;
+                                    outOfTimeThreshM = outOfTimeThreshG61mEB;
                                     break;
                                 }
                             } 
                         }
                         float correctedTime = (crh.timeMax-5) * clockToNsConstant + itimeconst + offsetTime;
-                        float cterm         = EBtimeConstantTerm_;
+                        float cterm         = EBtimeConstantTerm;
                         float sigmaped      = pedRMSVec[0];  // approx for lower gains
-                        float nterm         = EBtimeNconst_*sigmaped/uncalibRecHit.amplitude();
+                        float nterm         = EBtimeNconst*sigmaped/uncalibRecHit.amplitude();
                         float sigmat        = std::sqrt( nterm*nterm  + cterm*cterm   );
                         if ( ( correctedTime > sigmat*outOfTimeThreshP )   ||
                              ( correctedTime < -sigmat*outOfTimeThreshM ))
@@ -525,6 +626,9 @@ void kernel_reconstruct(uint16_t const *digis,
     }
 }
 
+void scatter(host_data& h_data, device_data& d_data) {
+
+/*
 void scatter(EcalDigiCollection const& digis,
              EcalUncalibratedRecHitCollection& rechits,
              std::vector<EcalPedestal> const& vpedestals,
@@ -534,19 +638,11 @@ void scatter(EcalDigiCollection const& digis,
              std::vector<EcalPulseCovariance> const& vcovariances,
              SampleMatrixGainArray const& noisecors,
              device_data &d_data) {
-    auto const& ids = digis.ids();
-    auto const& digis_data = digis.data();
+*/
+    auto const& ids = h_data.digis->ids();
+    auto const& digis_data = h_data.digis->data();
     using digis_type = std::vector<uint16_t>;
     using dids_type = std::vector<uint32_t>;
-    digis_type::value_type *d_digis_data;
-    dids_type::value_type *d_ids;
-    EcalPedestal *d_pedestals;
-    EcalMGPAGainRatio *d_gains;
-    EcalXtalGroupId *d_xtals;
-    EcalPulseShape *d_shapes;
-    EcalPulseCovariance *d_covariances;
-    EcalUncalibratedRecHit *d_rechits;
-    SampleMatrix *d_noisecors;
     
     //
     // TODO: remove per event alloc/dealloc -> do once at the start
@@ -583,26 +679,45 @@ void scatter(EcalDigiCollection const& digis,
     cudaMemcpy(d_data.ids, ids.data(),
         ids.size() * sizeof(dids_type::value_type),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.pedestals, vpedestals.data(),
-        vpedestals.size() * sizeof(EcalPedestal),
+    cudaMemcpy(d_data.pedestals, h_data.pedestals->data(),
+        h_data.pedestals->size() * sizeof(EcalPedestal),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.gains, vgains.data(),
-        vgains.size() * sizeof(EcalMGPAGainRatio),
+    cudaMemcpy(d_data.gains, h_data.gains->data(),
+        h_data.gains->size() * sizeof(EcalMGPAGainRatio),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.xtals, vxtals.data(),
-        vxtals.size() * sizeof(EcalXtalGroupId),
+    cudaMemcpy(d_data.xtals, h_data.xtals->data(),
+        h_data.xtals->size() * sizeof(EcalXtalGroupId),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.pulses, vpulses.data(),
-        vpulses.size() * sizeof(EcalPulseShape),
+    cudaMemcpy(d_data.pulses, h_data.pulse_shapes->data(),
+        h_data.pulse_shapes->size() * sizeof(EcalPulseShape),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.covariances, vcovariances.data(),
-        vcovariances.size() * sizeof(EcalPulseCovariance),
+    cudaMemcpy(d_data.covariances, h_data.pulse_covariances->data(),
+        h_data.pulse_covariances->size() * sizeof(EcalPulseCovariance),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.rechits, &(*rechits.begin()),
-        rechits.size() * sizeof(EcalUncalibratedRecHit),
+    cudaMemcpy(d_data.rechits, &(*h_data.rechits->begin()),
+        h_data.rechits->size() * sizeof(EcalUncalibratedRecHit),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.noisecors, noisecors.data(),
-        noisecors.size() * sizeof(SampleMatrix),
+    cudaMemcpy(d_data.noisecors, h_data.noisecors->data(),
+        h_data.noisecors->size() * sizeof(SampleMatrix),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.sample_mask, h_data.sample_mask,
+        sizeof(EcalSampleMask),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.EBTimeCorrAmplitudeBins, 
+        h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.data(),
+        sizeof(float) * h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.size(),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.EBTimeCorrShiftBins, 
+        h_data.time_bias_corrections->EBTimeCorrShiftBins.data(),
+        sizeof(float) * h_data.time_bias_corrections->EBTimeCorrShiftBins.size(),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.EETimeCorrAmplitudeBins, 
+        h_data.time_bias_corrections->EETimeCorrAmplitudeBins.data(),
+        sizeof(float) * h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.EETimeCorrShiftBins, 
+        h_data.time_bias_corrections->EETimeCorrShiftBins.data(),
+        sizeof(float) * h_data.time_bias_corrections->EETimeCorrShiftBins.size(),
         cudaMemcpyHostToDevice);
     ecal::cuda::assert_if_error();
 
@@ -637,7 +752,7 @@ void scatter(EcalDigiCollection const& digis,
     std::cout << "ecal::multifit::scatter()" << std::endl;
 #endif
     int nthreads_per_block = 256;
-    int nblocks = (digis.size() + nthreads_per_block - 1) / nthreads_per_block;
+    int nblocks = (h_data.digis->size() + nthreads_per_block - 1) / nthreads_per_block;
     kernel_reconstruct<<<nblocks, nthreads_per_block>>>(
         d_data.digis_data,
         d_data.ids,
@@ -649,7 +764,16 @@ void scatter(EcalDigiCollection const& digis,
         d_data.covariances,
         d_data.rechits,
         d_data.noisecors,
-        digis.size()
+        d_data.sample_mask,
+        d_data.EBTimeCorrAmplitudeBins, 
+        h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.size(),
+        d_data.EBTimeCorrShiftBins, 
+        h_data.time_bias_corrections->EBTimeCorrShiftBins.size(),
+        d_data.EETimeCorrAmplitudeBins, 
+        h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
+        d_data.EETimeCorrShiftBins, 
+        h_data.time_bias_corrections->EETimeCorrShiftBins.size(),
+        h_data.digis->size()
     );
     cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
@@ -657,8 +781,8 @@ void scatter(EcalDigiCollection const& digis,
     //
     // transfer the results back
     // 
-    cudaMemcpy(&(*rechits.begin()), d_data.rechits,
-        rechits.size() * sizeof(EcalUncalibratedRecHit),
+    cudaMemcpy(&(*h_data.rechits->begin()), d_data.rechits,
+        h_data.rechits->size() * sizeof(EcalUncalibratedRecHit),
         cudaMemcpyDeviceToHost);
 
     // 

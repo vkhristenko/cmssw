@@ -3,6 +3,9 @@
 
 #include <cmath>
 
+#include "DataFormats/Math/interface/approx_exp.h"
+#include "DataFormats/Math/interface/approx_log.h"
+
 // a workaround for std::abs not being a constexpr function
 namespace ecal {
 
