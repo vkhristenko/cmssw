@@ -95,6 +95,36 @@ public:
     return nt2;
   }
 
+  std::tuple<std::vector<int>, std::vector<float>, int> enumerate() {
+    int constexpr max_size = 256;
+    int constexpr max_pulses = 500; // see HcalPulseShapes.cc for #shapes
+
+    std::vector<int> vhashes(max_pulses);
+    std::vector<int> keys;
+    std::vector<float> data;
+    int npulses = 0;
+    for (auto const& p : theShapes) {
+      int key = p.first;
+      auto value = p.second;
+      keys.push_back(key);
+      data.insert(data.end(), value->data().begin(), value->data().end());
+
+      // if the size of the current pulse shape is < 256
+      // pad zeroes to the end
+      if (value->data().size() < max_size) 
+        for (auto i=value->data().size(); i<max_size; ++i)
+          data.push_back(0);
+
+      npulses++;
+    }
+
+    // invert the keys array to get a mapping: key -> pos
+    for (auto i=0; i<npulses; ++i)
+      vhashes[keys[i]] = i;
+
+    return {vhashes, data, npulses};
+  }
+
   std::map<int, Shape const*> const& get_all_shapes() const 
   { return theShapes; }
 
