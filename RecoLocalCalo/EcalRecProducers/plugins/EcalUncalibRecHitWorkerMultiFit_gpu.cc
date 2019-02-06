@@ -386,6 +386,22 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
             aPulseCov  = &pulsecovariances->endcap(hashedIndex);
         }
 
+        EcalTBWeights::EcalTDCId tdcid{1};
+        auto const& weightMap = wgts->getMap();
+        EcalTBWeights::EcalTBWeightMap::const_iterator wit;
+        wit = weightMap.find(std::make_pair(*gid, tdcid));
+        if (wit == weightMap.end()) {
+            edm::LogError("EcalUncalibRecHitError") 
+                << "No weights found for EcalGroupId: "
+                << gid->id() << " and  Eca    lTDCId: " << tdcid
+                << "\n  skipping digi with     id: " << detid.rawId();
+            // TODO: digis array will need to be properly updated if
+            // this digi does not need to be sent to the device
+            assert(0);
+        }
+        EcalWeightSet const& wset = wit.second;
+
+
         vpedestals.push_back(*aped);
         vgains.push_back(*aGain);
         vxtals.push_back(*gid);
