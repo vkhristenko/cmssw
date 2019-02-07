@@ -66,6 +66,7 @@ class EcalUncalibRecHitMultiFitAlgo
 #include "CondFormats/EcalObjects/interface/EcalPedestals.h"
 #include "CondFormats/EcalObjects/interface/EcalGainRatios.h"
 #include "CondFormats/EcalObjects/interface/EcalTimeBiasCorrections.h"
+#include "CondFormats/EcalObjects/interface/EcalWeightSet.h"
 //#include "RecoLocalCalo/EcalRecAlgos/interface/PulseChiSqSNNLS.h"
 
 
@@ -81,6 +82,10 @@ class EcalTimeBiasCorrections;
 namespace ecal { namespace multifit {
 
 enum TimeAlgo {noMethod, ratioMethod, weightsMethod};
+
+using EMatrix = Eigen::Matrix<double,
+    EcalWeightSet::EcalWeightMatrix::rep_type::kRows,
+    EcalWeightSet::EcalWeightMatrix::rep_type::kCols>;
 
 struct device_data {
     uint16_t *digis_data = nullptr;
@@ -101,6 +106,7 @@ struct device_data {
     int EETimeCorrAmplitudeBins_size;
     float *EETimeCorrShiftBins = nullptr;
     int EETimeCorrShiftBins_size;
+    EMatrix *weights = nullptr;
 };
 
 struct host_data {
@@ -114,6 +120,7 @@ struct host_data {
     SampleMatrixGainArray const *noisecors;
     EcalSampleMask const *sample_mask;
     EcalTimeBiasCorrections const *time_bias_corrections;
+    std::vector<EMatrix> const* weights;
 };
 
 void scatter(host_data&, device_data&);

@@ -368,6 +368,7 @@ void kernel_reconstruct(uint16_t const *digis,
                               int EETimeCorrAmplitudeBins_size,
                               float const* EETimeCorrShiftBins,
                               int EETimeCorrShiftBins_size,
+                              EMatrix const* weights,
                               unsigned int size) {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -719,6 +720,10 @@ void scatter(EcalDigiCollection const& digis,
         h_data.time_bias_corrections->EETimeCorrShiftBins.data(),
         sizeof(float) * h_data.time_bias_corrections->EETimeCorrShiftBins.size(),
         cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.weights,
+        h_data.weights->data(),
+        sizeof(EMatrix) * h_data.weights->size(),
+        cudaMemcpyHostToDevice);
     ecal::cuda::assert_if_error();
 
 #ifdef DEBUG
@@ -773,6 +778,7 @@ void scatter(EcalDigiCollection const& digis,
         h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
         d_data.EETimeCorrShiftBins, 
         h_data.time_bias_corrections->EETimeCorrShiftBins.size(),
+        d_data.weights,
         h_data.digis->size()
     );
     cudaDeviceSynchronize();
