@@ -13,6 +13,7 @@
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/PulseChiSqSNNLS_gpu.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitRatioMethodAlgo_gpu.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitTimeWeightsAlgo_gpu.h"
 
 //#define DEBUG
 
@@ -513,7 +514,7 @@ void kernel_reconstruct(uint16_t const *digis,
                                            noisecors, fullpulse, fullpulsecov, 
                                            activeBX);
             auto& uncalibRecHit = rechits[idx];
-            TimeAlgo timealgo_ = ratioMethod;
+            TimeAlgo timealgo_ = weightsMethod;
             // TODO: this needs to be propogated
             float itimeconst = 0;
             // TODO: this needs to be propogated
@@ -622,7 +623,24 @@ void kernel_reconstruct(uint16_t const *digis,
                         }
                     }
                 } // if not barrel
-            } // if timeAlgo_ ==
+            }  else if (timealgo_ == weightsMethod) {
+                // 10 is the # pulses used
+                double amplitudes[10];
+                for (unsigned int i=0; i<10; i++)
+                    amplitudes[i] = uncalibRecHit.outOfTimeAmplitude(i);
+                EMatrix const& weights_0 = weights[2*idx];
+                EMatrix const& weights_1 = weights[2*idx+1];
+                EcalUncalibRecHitTimeWeightsAlgo weightsMethod;
+                double timerh = weightsMethod.time(edf, amplitudes, aped, aGain, 
+                    fullpulse, weights_0, weights_1);
+                uncalibRecHit.setJitter(timerh);
+                uncalibRecHit.setJitterError(0.);
+            }// if timeAlgo_ ==
+
+            if (edf.hasSwitchToGain6()) 
+                uncalibRecHit.setFlagBit(EcalUncalibratedRecHit::kHasSwitchToGain6);
+            if (edf.hasSwitchToGain1())
+                uncalibRecHit.setFlagBit(EcalUncalibratedRecHit::kHasSwitchToGain1);
         }
     }
 }
