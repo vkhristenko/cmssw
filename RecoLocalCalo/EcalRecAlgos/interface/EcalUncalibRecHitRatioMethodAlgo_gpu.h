@@ -267,7 +267,8 @@ void EcalUncalibRecHitRatioMethodAlgo::computeTime(
     NullChi2 = (sumAA - sumA * sumA / sum1) / sum0;
   } else {
     // not enough samples to reconstruct the pulse
-    return;
+//     calculatedRechit_.timeMax = -1;
+    return; //---- AM
   }
 
   // Make all possible Ratio's based on any pair of samples i and j
@@ -284,13 +285,15 @@ void EcalUncalibRecHitRatioMethodAlgo::computeTime(
   Ratio ratios_[EcalDataFrame::MAXSAMPLES * (EcalDataFrame::MAXSAMPLES - 1) / 2];
   unsigned int ratios_size = 0;
 
-  double Rlim[amplitudeFitParameters_size];
+//   double Rlim[amplitudeFitParameters_size];
+  double Rlim[EcalDataFrame::MAXSAMPLES];
   for (unsigned int k = 1; k != EcalDataFrame::MAXSAMPLES; ++k)
     Rlim[k] = myMath::fast_expf(double(k) / beta) - 0.001;
 
   double relErr2[EcalDataFrame::MAXSAMPLES];
   double invampl[EcalDataFrame::MAXSAMPLES];
-  for (unsigned int i = 0; i < amplitudeFitParameters_size; i++) {
+  for (unsigned int i = 0; i < EcalDataFrame::MAXSAMPLES; i++) {
+//     for (unsigned int i = 0; i < amplitudeFitParameters_size; i++) {
     invampl[i] = (useless_[i]) ? 0 : 1. / amplitudes_[i];
     relErr2[i] = (useless_[i]) ? 0 : (amplitudeErrors_[i] * invampl[i]) *
                                          (amplitudeErrors_[i] * invampl[i]);
@@ -326,8 +329,10 @@ void EcalUncalibRecHitRatioMethodAlgo::computeTime(
         double err3 = (0.289 * 0.289) * (invampl[j] * invampl[j]);
 
         double totalError = std::sqrt(err1 + err2 + err3);
-
+//         double totalError = std::sqrt(err1 + err2);
+        
         // don't include useless ratios
+//         if (totalError < 1.0) {
         if (totalError < 1.0 && Rtmp > 0.001 && Rtmp < Rlim[j - i]) {
           Ratio currentRatio = { i, (j - i), Rtmp, totalError };
           ratios_[ratios_size++] = currentRatio;
@@ -337,8 +342,11 @@ void EcalUncalibRecHitRatioMethodAlgo::computeTime(
   }
 
   // No useful ratios, return zero amplitude and no time measurement
-  if (0 == ratios_size) return;
-
+  if (0 == ratios_size) {
+//     calculatedRechit_.timeMax = -2;
+    return; //---- AM
+  }
+  
   //  std::array < Tmax, C::MAXSAMPLES*(C::MAXSAMPLES-1)/2 > times_;
   Tmax timesAB_[EcalDataFrame::MAXSAMPLES * (EcalDataFrame::MAXSAMPLES - 1) / 2];
   unsigned int timesAB_size = 0;
@@ -411,8 +419,11 @@ void EcalUncalibRecHitRatioMethodAlgo::computeTime(
   }
 
   // no reasonable time measurements!
-  if (0 == timesAB_size) return;
-
+  if (0 == timesAB_size) {
+//     calculatedRechit_.timeMax = -3;
+    return ;  //---- AM
+  }
+  
   // find minimum chi2
   double chi2min = 1.0e+9;
   //double timeMinimum = 5;
@@ -462,12 +473,14 @@ void EcalUncalibRecHitRatioMethodAlgo::computeTime(
     double chi2AlphaBeta = (sumAA - sumAf * sumAf / sumff) / sum0;
     if (chi2AlphaBeta > NullChi2) {
       // null hypothesis is better
-      return;
+//       calculatedRechit_.timeMax = 1;
+      return; //---- AM
     }
 
   } else {
     // no visible pulse here
-    return;
+//     calculatedRechit_.timeMax = 2;
+    return; //---- AM
   }
 
   // if we got to this point, we have a reconstructied Tmax
