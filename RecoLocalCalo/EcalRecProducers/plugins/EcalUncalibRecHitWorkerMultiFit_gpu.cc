@@ -142,6 +142,8 @@ EcalUncalibRecHitWorkerMultiFitGPU::EcalUncalibRecHitWorkerMultiFitGPU(const edm
     sizeof(float) * MAX_TIME_BIAS_CORRECTIONS);
   cudaMalloc((void**)&d_data.EETimeCorrShiftBins,
     sizeof(float) * MAX_TIME_BIAS_CORRECTIONS);
+  cudaMalloc((void**)&d_data.weights,
+    sizeof(ecal::multifit::EMatrix)*2*MAX_CHANNELS);
   ecal::cuda::assert_if_error();
 }
 
@@ -164,6 +166,7 @@ EcalUncalibRecHitWorkerMultiFitGPU::~EcalUncalibRecHitWorkerMultiFitGPU() {
         cudaFree(d_data.EBTimeCorrShiftBins);
         cudaFree(d_data.EETimeCorrAmplitudeBins);
         cudaFree(d_data.EETimeCorrShiftBins);
+        cudaFree(d_data.weights);
         ecal::cuda::assert_if_error();
     }
 }
@@ -352,6 +355,7 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
     std::vector<EcalXtalGroupId> vxtals;
     std::vector<EcalPulseShape> vpulseshapes;
     std::vector<EcalPulseCovariance> vcovariances;
+    std::vector<ecal::multifit::EMatrix> vweights;
     const SampleMatrixGainArray &noisecors = noisecor(barrel);
 
     // 
@@ -363,6 +367,7 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
     vxtals.reserve(digis.size());
     vpulseshapes.reserve(digis.size());
     vcovariances.reserve(digis.size());
+    vweights.reserve(2*digis.size());
     for (auto const& digi : digis) {
         DetId detid(digi.id());
         const EcalPedestals::Item * aped = nullptr;
@@ -386,6 +391,35 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
             aPulseCov  = &pulsecovariances->endcap(hashedIndex);
         }
 
+        EcalTBWeights::EcalTDCId tdcid{1};
+        auto const& weightMap = wgts->getMap();
+        EcalTBWeights::EcalTBWeightMap::const_iterator wit;
+        wit = weightMap.find(std::make_pair(*gid, tdcid));
+        if (wit == weightMap.end()) {
+            edm::LogError("EcalUncalibRecHitError") 
+                << "No weights found for EcalGroupId: "
+                << gid->id() << " and  Eca    lTDCId: " << tdcid
+                << "\n  skipping digi with     id: " << detid.rawId();
+            // TODO: digis array will need to be properly updated if
+            // this digi does not need to be sent to the device
+            assert(0);
+        }
+        EcalWeightSet const& wset = wit->second;
+        auto const& mat1 = wset.getWeightsBeforeGainSwitch();
+        auto const& mat2 = wset.getWeightsAfterGainSwitch();
+        ecal::multifit::EMatrix m1,m2;
+        for (unsigned int irow=0; 
+             irow<EcalWeightSet::EcalWeightMatrix::rep_type::kRows;
+             irow++)
+            for (unsigned int icol=0;
+                 icol<EcalWeightSet::EcalWeightMatrix::rep_type::kCols;
+                 icol++) {
+                m1(irow, icol) = mat1(irow, icol);
+                m2(irow, icol) = mat2(irow, icol);
+            }
+        vweights.push_back(m1);
+        vweights.push_back(m2);
+
         vpedestals.push_back(*aped);
         vgains.push_back(*aGain);
         vxtals.push_back(*gid);
@@ -405,7 +439,8 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
     //
     ecal::multifit::host_data h_data{&digis, &result, &vpedestals, &vgains,
                                      &vxtals, &vpulseshapes, &vcovariances,
-                                     &noisecors, &sample_mask, &(*timeCorrBias_)};
+                                     &noisecors, &sample_mask, &(*timeCorrBias_),
+                                     &vweights};
     ecal::multifit::scatter(h_data, d_data);
     /*
     ecal::multifit::scatter(digis, result, 
