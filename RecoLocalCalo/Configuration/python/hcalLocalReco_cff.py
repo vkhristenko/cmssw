@@ -11,11 +11,19 @@ hbheprereco = _phase1_hbheprereco.clone(
         TrianglePeakTS = cms.uint32(4),
     )
 )
+from RecoLocalCalo.HcalRecProducers.HBHEPhase1ReconstructorGPU_cfi import hbheprerecogpu as _phase1_hbheprerecogpu
+hbheprerecogpu = _phase1_hbheprerecogpu.clone(
+    processQIE11 = cms.bool(False),
+    tsFromDB = cms.bool(True),
+    pulseShapeParametersQIE8 = dict(
+        TrianglePeakTS = cms.uint32(4),
+    )   
+)
 
 from RecoLocalCalo.HcalRecProducers.HcalHitReconstructor_ho_cfi import *
 from RecoLocalCalo.HcalRecProducers.HcalHitReconstructor_hf_cfi import *
 from RecoLocalCalo.HcalRecProducers.HcalHitReconstructor_zdc_cfi import *
-hcalLocalRecoSequence = cms.Sequence(hbheprereco+hfreco+horeco+zdcreco)
+hcalLocalRecoSequence = cms.Sequence(hbheprereco+hbheprerecogpu+hfreco+horeco+zdcreco)
 
 from RecoLocalCalo.HcalRecProducers.hfprereco_cfi import hfprereco
 from RecoLocalCalo.HcalRecProducers.HFPhase1Reconstructor_cfi import hfreco as _phase1_hfreco
@@ -32,6 +40,7 @@ run2_HF_2017.toReplaceWith( hcalLocalRecoSequence, _phase1_hcalLocalRecoSequence
 run2_HF_2017.toReplaceWith( hfreco, _phase1_hfreco )
 from Configuration.Eras.Modifier_run2_HCAL_2017_cff import run2_HCAL_2017
 run2_HCAL_2017.toReplaceWith( hbheprereco, _phase1_hbheprereco )
+run2_HCAL_2017.toReplaceWith( hbheprerecogpu, _phase1_hbheprerecogpu )
 
 _plan1_hcalLocalRecoSequence = _phase1_hcalLocalRecoSequence.copy()
 _plan1_hcalLocalRecoSequence += hbheplan1
@@ -46,6 +55,7 @@ run2_HECollapse_2018.toReplaceWith(hcalLocalRecoSequence, _collapse_hcalLocalRec
 
 _phase2_hcalLocalRecoSequence = hcalLocalRecoSequence.copy()
 _phase2_hcalLocalRecoSequence.remove(hbheprereco)
+_phase2_hcalLocalRecoSequence.remove(hbheprerecogpu)
 
 from Configuration.Eras.Modifier_phase2_hcal_cff import phase2_hcal
 phase2_hcal.toReplaceWith( hcalLocalRecoSequence, _phase2_hcalLocalRecoSequence )
