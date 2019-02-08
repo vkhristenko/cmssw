@@ -514,7 +514,7 @@ void kernel_reconstruct(uint16_t const *digis,
                                            noisecors, fullpulse, fullpulsecov, 
                                            activeBX);
             auto& uncalibRecHit = rechits[idx];
-            TimeAlgo timealgo_ = weightsMethod;
+            TimeAlgo timealgo_ = ratioMethod; //---- AM: the default is the ratiomethod, not  weightsMethod;
             // TODO: this needs to be propogated
             float itimeconst = 0;
             // TODO: this needs to be propogated
@@ -539,6 +539,8 @@ void kernel_reconstruct(uint16_t const *digis,
                                        EETimeCorrAmplitudeBins_size,
                                        EETimeCorrShiftBins,
                                        EETimeCorrShiftBins_size);
+                        
+//                     theTimeCorrectionEE = 0.; //---- AM: DEBUG TEST    
                     uncalibRecHit.setJitter( crh.timeMax - 5 + theTimeCorrectionEE);
                     uncalibRecHit.setJitterError( 
                         std::sqrt(std::pow(crh.timeError,2) + 
