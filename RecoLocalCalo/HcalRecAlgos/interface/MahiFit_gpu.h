@@ -186,7 +186,7 @@ class MahiFit
   static constexpr float timeLimit_ = 12.5;
 
   // Python-configurables
-  bool dynamicPed_ {true};
+  bool dynamicPed_ {false};
   float ts4Thresh_ {0.0};
   float chiSqSwitch_{15.0}; 
 
@@ -198,7 +198,7 @@ class MahiFit
   float timeSigmaHPD_{5.0}; 
   float timeSigmaSiPM_{2.5};
 
-  int activeBXs_[3] = {-1, 0, 1};
+  int activeBXs_[8] = {-3, -2, -1, 0, 1, 2, 3, 4};
 
   int nMaxItersMin_{500}; 
   int nMaxItersNNLS_{500}; 
@@ -206,8 +206,8 @@ class MahiFit
   float deltaChiSqThresh_{1e-3}; 
   float nnlsThresh_{1e-11}; 
 
-  unsigned int bxSizeConf_{3};
-  int bxOffsetConf_{1}; // -(min_element({-1, 0, 1}))
+  unsigned int bxSizeConf_{8};
+  int bxOffsetConf_{3}; // -(min_element({-3, -2, -1, 0, 1, 2, 3, 4}))
 
   //for pulse shapes
   int cntsetPulseShape_;
