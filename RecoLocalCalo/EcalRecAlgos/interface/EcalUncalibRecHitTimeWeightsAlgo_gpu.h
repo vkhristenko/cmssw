@@ -103,12 +103,23 @@ class EcalUncalibRecHitTimeWeightsAlgo
       }
     }
 
+//     for (unsigned int isample = 0; isample<nsample; ++isample) {
+//       std::cout << " gpu: pedSubSamples(" << isample << ") = " << pedSubSamples(isample) << std::endl;
+//     }
+    
     // Compute parameters
     double amplitude_(-1.), jitter_(-1.);
+    
+//     auto param = iGainSwitch==0
+//     ? weights_0 * pedSubSamples
+//     : weights_1 * pedSubSamples;
+    
     auto param = iGainSwitch==0
-        ? weights_0 * pedSubSamples
-        : weights_1 * pedSubSamples;
-//    ROOT::Math::SVector <double,3> param = (*(weights[iGainSwitch])) * pedSubSamples;
+                ? weights_0 * pedSubSamples
+                : weights_1 * pedSubSamples;
+    
+    
+    //    ROOT::Math::SVector <double,3> param = (*(weights[iGainSwitch])) * pedSubSamples;
     amplitude_ = param(
         /*EcalUncalibRecHitRecAbsAlgo<EcalDataFrame>::iAmplitude*/ 0);
     if (amplitude_) 
