@@ -15,6 +15,8 @@
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitRatioMethodAlgo_gpu.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitTimeWeightsAlgo_gpu.h"
 
+#include "cuda.h"
+
 //#define DEBUG
 
 namespace ecal { namespace multifit {
@@ -208,7 +210,7 @@ EcalUncalibRecHitMultiFitAlgo::makeRecHit(const EcalDataFrame& dataFrame,
       noisecov = SampleMatrix::Zero();
       // noisecors is type var[2] is an array of 2
       // size needs to be propogated (on cpu it was std::array)
-      for (unsigned int gainidx=0; gainidx<2; ++gainidx) {
+      for (unsigned int gainidx=0; gainidx<3; ++gainidx) {
         SampleGainVector mask = gainidx*SampleGainVector::Ones();
         SampleVector pedestal = (gainsNoise.array()==mask.array()).cast<SampleVector::value_type>();
         if (pedestal.maxCoeff()>0.) {
@@ -647,7 +649,7 @@ void kernel_reconstruct(uint16_t const *digis,
     }
 }
 
-void scatter(host_data& h_data, device_data& d_data) {
+void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
 
 /*
 void scatter(EcalDigiCollection const& digis,
@@ -776,13 +778,13 @@ void scatter(EcalDigiCollection const& digis,
 #ifdef DEBUG
     std::cout << "ecal::multifit::scatter()" << std::endl;
 #endif
-    int nthreads_per_block = 256;
+    int nthreads_per_block = conf.threads.x;
     int nblocks = (h_data.digis->size() + nthreads_per_block - 1) / nthreads_per_block;
-    kernel_reconstruct<<<nblocks, nthreads_per_block>>>(
+  /*  kernel_reconstruct<<<nblocks, nthreads_per_block>>>(
         d_data.digis_data,
-        d_data.ids,
+        d_data.ids,*/
         /* d_rechits, */
-        d_data.pedestals,
+/*        d_data.pedestals,
         d_data.gains,
         d_data.xtals,
         d_data.pulses,
@@ -800,7 +802,7 @@ void scatter(EcalDigiCollection const& digis,
         h_data.time_bias_corrections->EETimeCorrShiftBins.size(),
         d_data.weights,
         h_data.digis->size()
-    );
+    );*/
     cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
