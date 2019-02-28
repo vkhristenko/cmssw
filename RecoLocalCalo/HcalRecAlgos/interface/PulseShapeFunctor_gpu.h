@@ -25,7 +25,7 @@ namespace FitterFuncs {
 		               unsigned int nSamplesToFit);
     
      __device__
-     double EvalPulse(const double *pars, const unsigned nPar);
+     void EvalPulse(const double *pars);
      
      __device__
      void setDefaultcntNANinfit(){ cntNANinfit =0; }
@@ -55,11 +55,7 @@ namespace FitterFuncs {
      void setinverttimeSig2(double x) { inverttimeSig2_ = x; }
 
      __device__
-     double singlePulseShapeFunc( const double *x );
-     __device__
-     double doublePulseShapeFunc( const double *x );
-     __device__
-     double triplePulseShapeFunc( const double *x );
+     void singlePulseShapeFunc( const double *x );
 
      __device__
      void getPulseShape(double fillPulseShape[HcalConst::maxSamples]) { 

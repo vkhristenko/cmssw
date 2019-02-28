@@ -26,9 +26,6 @@ struct MahiNnlsWorkspace {
   //holds data samples
   SampleVector amplitudes;
 
-  //holds inverse covariance matrix
-  SampleMatrix invCovMat;
-
   //holds diagonal noise terms
   SampleVector noiseTerms;
 
@@ -39,36 +36,19 @@ struct MahiNnlsWorkspace {
   //varied in time
   FullSampleMatrix pulseCovArray[MaxPVSize];
 
-  //holds full pulse shape template
-  FullSampleVector pulseShapeArray[MaxPVSize];
-
-  //holds full pulse shape derivatives
-  FullSampleVector pulseDerivArray[MaxPVSize];
-
-  //holders for calculating pulse shape & covariance matrices
-  double pulseN[MaxSVSize];
-  double pulseM[MaxSVSize];
-  double pulseP[MaxSVSize];
-
   //holds matrix of pulse shape templates for each BX
   SamplePulseMatrix pulseMat;
 
   //holds matrix of pulse shape derivatives for each BX
   SamplePulseMatrix pulseDerivMat;
 
-  //holds residual vector
-  PulseVector residuals;
-
   //for FNNLS algorithm
   unsigned int nP;
   PulseVector ampVec;
 
-  PulseVector ampvecpermtest;
-
   SamplePulseMatrix invcovp;
   PulseMatrix aTaMat; // A-transpose A (matrix)
   PulseVector aTbVec; // A-transpose b (vector)
-  PulseVector updateWork; // w (vector)
 
   SampleDecompLLT covDecomp;
   PulseDecompLDLT pulseDecomp;
@@ -157,7 +137,7 @@ class MahiFit
 			FullSampleMatrix &pulseCov) const;
 
   __device__
-  double calculateArrivalTime() const;
+  float calculateArrivalTime() const;
   __device__
   double calculateChiSq() const;
   __device__
@@ -192,7 +172,7 @@ class MahiFit
 
   bool applyTimeSlew_{true}; 
   /* HcalTimeSlew::BiasSetting */ int slewFlavor_{1};
-  double tsDelay1GeV_{10.0};
+  float tsDelay1GeV_{10.0};
 
   float meanTime_{0.0};
   float timeSigmaHPD_{5.0}; 
