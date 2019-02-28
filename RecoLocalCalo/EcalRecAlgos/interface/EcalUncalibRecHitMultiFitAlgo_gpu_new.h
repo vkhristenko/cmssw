@@ -59,7 +59,7 @@ class EcalUncalibRecHitMultiFitAlgo
 #include <vector>
 
 #include "DataFormats/EcalRecHit/interface/EcalRecHitCollections.h"
-#include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes_gpu.h"
 
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitRecAbsAlgo.h"
 
@@ -80,7 +80,7 @@ class EcalPulseCovariance;
 class EcalSampleMask;
 class EcalTimeBiasCorrections;
 
-namespace ecal { namespace multifit {
+namespace ecal { namespace multifit { namespace v1 {
 
 enum TimeAlgo {noMethod, ratioMethod, weightsMethod};
 
@@ -91,14 +91,30 @@ using EMatrix = Eigen::Matrix<double,
 struct device_data {
     uint16_t *digis_data = nullptr;
     uint32_t *ids = nullptr;
-    EcalPedestal *pedestals = nullptr;
-    EcalMGPAGainRatio *gains = nullptr;
+    SampleVector* amplitudes = nullptr;
+    SampleGainVector* gainsNoise = nullptr;
+    SampleGainVector* gainsPedestal = nullptr;
+//    EcalPedestal *pedestals = nullptr;
+    float* mean_x12 = nullptr;
+    float* rms_x12 = nullptr;
+    float* mean_x6 = nullptr;
+    float* rms_x6 = nullptr;
+    float* mean_x1 = nullptr;
+    float* rms_x1 = nullptr;
+//    EcalMGPAGainRatio *gains = nullptr;
+    float* gain12Over6 = nullptr;
+    float* gain6Over1 = nullptr;
     EcalXtalGroupId *xtals = nullptr;
     EcalPulseShape *pulses = nullptr;
+    FulllSampleVector* epulses = nullptr;
     EcalPulseCovariance *covariances = nullptr;
+    FullSampleMatrix* pulse_covariances = nullptr;
     EcalUncalibratedRecHit *rechits = nullptr;
-    SampleMatrix *noisecors = nullptr;
+    SampleMatrix *noisecorrs = nullptr; // array of 3
     EcalSampleMask *sample_mask = nullptr;
+    SampleMatrix* noisecov = nullptr;
+    PulseMatrixType* pulse_matrix = nullptr;
+    BXVectorType* bxs = nullptr;
     float *EBTimeCorrAmplitudeBins = nullptr;
     int EBTimeCorrAmplitudeBins_size;
     float *EBTimeCorrShiftBins = nullptr;
@@ -118,18 +134,35 @@ struct conf_data {
     xyz threads;
 };
 
+struct pedestal_data {
+    std::vector<float> mean_x12;
+    std::vector<float> rms_x12;
+    std::vector<float> mean_x6;
+    std::vector<float> rms_x6;
+    std::vector<float> mean_x1;
+    std::vector<float> rms_x1;
+};
+
+struct mgpagain_ratio_data {
+    std::vector<float> gain12Over6;
+    std::vector<float> gain6Over1;
+};
+
 struct host_data {
     EcalDigiCollection const *digis;
     EcalUncalibratedRecHitCollection *rechits;
-    std::vector<EcalPedestal> const *pedestals;
-    std::vector<EcalMGPAGainRatio> const *gains;
+//    std::vector<EcalPedestal> const *pedestals;
+    pedestal_data const& ped_data,
+//    std::vector<EcalMGPAGainRatio> const *gains;
+    mgpagain_ratio_data const& gainratio_data,
     std::vector<EcalXtalGroupId> const *xtals;
     std::vector<EcalPulseShape> const *pulse_shapes;
     std::vector<EcalPulseCovariance> const *pulse_covariances;
-    SampleMatrixGainArray const *noisecors;
+    SampleMatrixGainArray const *noisecorrs;
     EcalSampleMask const *sample_mask;
     EcalTimeBiasCorrections const *time_bias_corrections;
     std::vector<EMatrix> const* weights;
+    BXVectorType const* bxs;
 };
 
 void scatter(host_data&, device_data&, conf_data const&);
@@ -146,6 +179,6 @@ void scatter(EcalDigiCollection const&,
              device_data&);
 */
 
-}}
+}}}
 
 #endif

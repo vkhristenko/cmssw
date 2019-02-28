@@ -2,12 +2,12 @@ import FWCore.ParameterSet.Config as cms
 
 from RecoLocalCalo.EcalRecProducers.ecalPulseShapeParameters_cff import *
 
-ecalMultiFitUncalibRecHitgpu = cms.EDProducer("EcalUncalibRecHitProducerGPU",
+ecalMultiFitUncalibRecHitgpu = cms.EDProducer("EcalUncalibRecHitProducerGPUNew",
     EBdigiCollection = cms.InputTag("ecalDigis","ebDigis"),
     EEdigiCollection = cms.InputTag("ecalDigis","eeDigis"),
-    EBhitCollection = cms.string("EcalUncalibRecHitsEBgpu"),
-    EEhitCollection = cms.string('EcalUncalibRecHitsEEgpu'),
-    algo = cms.string("EcalUncalibRecHitWorkerMultiFitGPU"),
+    EBhitCollection = cms.string("EcalUncalibRecHitsEBgpunew"),
+    EEhitCollection = cms.string('EcalUncalibRecHitsEEgpunew'),
+    algo = cms.string("EcalUncalibRecHitWorkerMultiFitGPUNew"),
     algoPSet = cms.PSet(
       # for multifit method
       EcalPulseShapeParameters = cms.PSet( ecal_pulse_shape_parameters ),

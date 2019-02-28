@@ -27,10 +27,9 @@
 #include "CondFormats/EcalObjects/interface/EcalSamplesCorrelation.h"
 #include "CondFormats/EcalObjects/interface/EcalPulseShapes.h"
 #include "CondFormats/EcalObjects/interface/EcalPulseCovariances.h"
-#include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes_gpu.h"
 
-#include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitMultiFitAlgo_gpu.h"
-#include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitMultiFitAlgo_gpu_cputest.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitMultiFitAlgo_gpu_new.h"
 
 namespace edm {
         class Event;
@@ -39,12 +38,12 @@ namespace edm {
         class ParameterSetDescription;
 }
 
-class EcalUncalibRecHitWorkerMultiFitGPU final : public EcalUncalibRecHitWorkerBaseClass {
+class EcalUncalibRecHitWorkerMultiFitGPUNew final : public EcalUncalibRecHitWorkerBaseClass {
 
         public:
-                EcalUncalibRecHitWorkerMultiFitGPU(const edm::ParameterSet&, edm::ConsumesCollector& c);
-		EcalUncalibRecHitWorkerMultiFitGPU() {};
-                ~EcalUncalibRecHitWorkerMultiFitGPU() override;
+                EcalUncalibRecHitWorkerMultiFitGPUNew(const edm::ParameterSet&, edm::ConsumesCollector& c);
+		EcalUncalibRecHitWorkerMultiFitGPUNew() {};
+                ~EcalUncalibRecHitWorkerMultiFitGPUNew() override;
         private:
                 void set(const edm::EventSetup& es) override;
                 void set(const edm::Event& evt) override;
@@ -148,8 +147,8 @@ class EcalUncalibRecHitWorkerMultiFitGPU final : public EcalUncalibRecHitWorkerB
                 //
                 // TODO: tmp solution for now: can we do better
                 //
-                ecal::multifit::device_data d_data;
-                ecal::multifit::conf_data conf;
+                ecal::multifit::v1::device_data d_data;
+                ecal::multifit::v1::conf_data conf;
 };
 
 #endif

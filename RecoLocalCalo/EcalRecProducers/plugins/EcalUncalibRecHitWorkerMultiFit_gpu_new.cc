@@ -29,7 +29,7 @@
 #define MAX_CHANNELS 50000
 #define MAX_TIME_BIAS_CORRECTIONS 100
 
-EcalUncalibRecHitWorkerMultiFitGPU::EcalUncalibRecHitWorkerMultiFitGPU(const edm::ParameterSet&ps,edm::ConsumesCollector& c) :
+EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(const edm::ParameterSet&ps,edm::ConsumesCollector& c) :
   EcalUncalibRecHitWorkerBaseClass(ps,c)
 {
 
@@ -123,20 +123,62 @@ EcalUncalibRecHitWorkerMultiFitGPU::EcalUncalibRecHitWorkerMultiFitGPU(const edm
     MAX_CHANNELS * EcalDataFrame::MAXSAMPLES * sizeof(uint16_t));
   cudaMalloc((void**)&d_data.ids,
     MAX_CHANNELS * sizeof(uint32_t));
-  cudaMalloc((void**)&d_data.pedestals,
-    MAX_CHANNELS * sizeof(EcalPedestal));
-  cudaMalloc((void**)&d_data.gains, 
-    MAX_CHANNELS * sizeof(EcalMGPAGainRatio));
+  cudaMalloc((void**)&d_data.amplitudes,
+    MAX_CHANNELS * sizeof(ecal::multifit::SampleVector));
+  cudaMalloc((void**)&d_data.gainsNoise,
+    MAX_CHANNELS * sizeof(ecal::multifit::SampleGainVector));
+  cudaMalloc((void**)&d_data.gainsPedestal,
+    MAX_CHANNELS * sizeof(ecal::multifit::SampleGainVector));
+
+//  cudaMalloc((void**)&d_data.pedestals,
+//    MAX_CHANNELS * sizeof(EcalPedestal));
+
+  cudaMalloc((void**)&d_data.mean_x12,
+    MAX_CHANNELS * sizeof(float));
+  cudaMalloc((void**)&d_data.rms_x12,
+    MAX_CHANNELS * sizeof(float));
+  cudaMalloc((void**)&d_data.mean_x6,
+    MAX_CHANNELS * sizeof(float));
+  cudaMalloc((void**)&d_data.rms_x6,
+    MAX_CHANNELS * sizeof(float));
+  cudaMalloc((void**)&d_data.mean_x1,
+    MAX_CHANNELS * sizeof(float));
+  cudaMalloc((void**)&d_data.rms_x1,
+    MAX_CHANNELS * sizeof(float));
+
+//  cudaMalloc((void**)&d_data.gains, 
+//    MAX_CHANNELS * sizeof(EcalMGPAGainRatio));
+
+  cudaMalloc((void**)&d_data.gain12Over6,
+    MAX_CHANNELS * sizeof(float));
+  cudaMalloc((void**)&d_data.gain6Over1,
+    MAX_CHANNELS * sizeof(float));
+
   cudaMalloc((void**)&d_data.xtals,
     MAX_CHANNELS * sizeof(EcalXtalGroupId));
+
   cudaMalloc((void**)&d_data.pulses,
     MAX_CHANNELS * sizeof(EcalPulseShape));
+  cudaMalloc((void**)&d_data.epulses,
+    MAX_CHANNELS * sizeof(ecal::multifit::FullSampleVector));
+
   cudaMalloc((void**)&d_data.covariances,
     MAX_CHANNELS * sizeof(EcalPulseCovariance));
+  cudaMalloc((void**)&d_data.pulse_covariances,
+    MAX_CHANNELS * sizeof(ecal::multifit::FullSampleMatrix));
+
   cudaMalloc((void**)&d_data.rechits,
     MAX_CHANNELS * sizeof(EcalUncalibratedRecHit));
-  cudaMalloc((void**)&d_data.noisecors,
-    MAX_CHANNELS * sizeof(SampleMatrix));
+
+  cudaMalloc((void**)&d_data.noisecorrs,
+    h_data.noisecorrs->size() * sizeof(ecal::multifit::SampleMatrixD));
+  cudaMalloc((void**)&d_data.noisecov,
+    MAX_CHANNELS * sizeof(ecal::multifit::SampleMatrix));
+  cudaMalloc((void**)&d_data.pulse_matrix,
+    MAX_CHANNELS * sizeof(ecal::multifit::PUlseMatrixType));
+  cudaMalloc((void**)&d_data.bxs,
+    sizeof(ecal::multifit::BXVectorType));
+
   cudaMalloc((void**)&d_data.sample_mask, sizeof(EcalSampleMask));
   cudaMalloc((void**)&d_data.EBTimeCorrAmplitudeBins,
     sizeof(float) * MAX_TIME_BIAS_CORRECTIONS);
@@ -151,21 +193,44 @@ EcalUncalibRecHitWorkerMultiFitGPU::EcalUncalibRecHitWorkerMultiFitGPU(const edm
   ecal::cuda::assert_if_error();
 }
 
-EcalUncalibRecHitWorkerMultiFitGPU::~EcalUncalibRecHitWorkerMultiFitGPU() {
+EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() {
     //
     // TODO
     //
     if (d_data.digis_data) {
         cudaFree(d_data.digis_data);
         cudaFree(d_data.ids);
-        cudaFree(d_data.pedestals);
-        cudaFree(d_data.gains);
+        cudaFree(d_data.amplitudes);
+        cudaFree(d_data.gainsNoise);
+        cudaFree(d_data.gainsPedestal);
+
+//        cudaFree(d_data.pedestals);
+        cudaFree(d_data.mean_x12);
+        cudaFree(d_data.rms_x12);
+        cudaFree(d_data.mean_x6);
+        cudaFree(d_data.rms_x6);
+        cudaFree(d_data.mean_x1);
+        cudaFree(d_data.rms_x1);
+
+//        cudaFree(d_data.gains);
+        cudaFree(d_data.gain12Over6);
+        cudaFree(d_data.gain6Over1);
+
         cudaFree(d_data.xtals);
         cudaFree(d_data.pulses);
+        cudaFree(d_data.epulses);
+
         cudaFree(d_data.covariances);
+        cudaFree(d_data.pulse_covariances);
+
         cudaFree(d_data.rechits);
         cudaFree(d_data.noisecors);
         cudaFree(d_data.sample_mask);
+
+        cudaFree(d_data.noisecov);
+        cudaFree(d_data.pulse_matrix);
+        cudaFree(d_data.bxs);
+
         cudaFree(d_data.EBTimeCorrAmplitudeBins);
         cudaFree(d_data.EBTimeCorrShiftBins);
         cudaFree(d_data.EETimeCorrAmplitudeBins);
@@ -176,7 +241,7 @@ EcalUncalibRecHitWorkerMultiFitGPU::~EcalUncalibRecHitWorkerMultiFitGPU() {
 }
 
 void
-EcalUncalibRecHitWorkerMultiFitGPU::set(const edm::EventSetup& es)
+EcalUncalibRecHitWorkerMultiFitGPUNew::set(const edm::EventSetup& es)
 {
 
         // common setup
@@ -225,7 +290,7 @@ EcalUncalibRecHitWorkerMultiFitGPU::set(const edm::EventSetup& es)
 }
 
 void
-EcalUncalibRecHitWorkerMultiFitGPU::set(const edm::Event& evt)
+EcalUncalibRecHitWorkerMultiFitGPUNew::set(const edm::Event& evt)
 {
 
   unsigned int bunchspacing = 450;
@@ -263,7 +328,7 @@ EcalUncalibRecHitWorkerMultiFitGPU::set(const edm::Event& evt)
  *
  * @return Jitter (in clock cycles) which will be added to UncalibRechit.setJitter(), 0 if no correction is applied.
  */
-double EcalUncalibRecHitWorkerMultiFitGPU::timeCorrection(
+double EcalUncalibRecHitWorkerMultiFitGPUNew::timeCorrection(
     float ampli,
 	const std::vector<float>& amplitudeBins,
     const std::vector<float>& shiftBins) {
@@ -316,7 +381,7 @@ double EcalUncalibRecHitWorkerMultiFitGPU::timeCorrection(
 }
 
 void
-EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
+EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
                 const EcalDigiCollection & digis,
                 EcalUncalibratedRecHitCollection & result )
 {
@@ -354,8 +419,11 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
     //
     // gather conditions to send to device
     //
-    std::vector<EcalPedestal> vpedestals;
-    std::vector<EcalMGPAGainRatio> vgains;
+//    std::vector<EcalPedestal> vpedestals;
+//    std::vector<EcalMGPAGainRatio> vgains;
+    ecal::multifit::v1::pedestal_data ped_data;
+    ecal::multifit::v1::mgpagain_ratio_data gainratio_data;
+
     std::vector<EcalXtalGroupId> vxtals;
     std::vector<EcalPulseShape> vpulseshapes;
     std::vector<EcalPulseCovariance> vcovariances;
@@ -366,8 +434,21 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
     // TODO: employ hashed index on the device directly!
     // need  to resort conditions in the order of digis
     //
-    vpedestals.reserve(digis.size());
-    vgains.reserve(digis.size());
+//    vpedestals.reserve(digis.size());
+//    vgains.reserve(digis.size());
+    ped_data.mean_x12.reserve(digis.size());
+    ped_data.rms_x12.reserve(digis.size());
+    ped_data.mean_x6.reserve(digis.size());
+    ped_data.rms_x6.reserve(digis.size());
+    ped_data.mean_x1.reserve(digis.size());
+    ped_data.rms_x1.reserve(digis.size());
+
+    gainratio_data.gain12Over6.reserve(digis.size());
+    gainratio_data.gain6Over1.reserve(digis.size());
+
+    ecal::multifit::v1::BXVectorType bxs;
+    bxs << -5, -4, -3, -2, -1, 0, 1, 2, 3, 4;
+
     vxtals.reserve(digis.size());
     vpulseshapes.reserve(digis.size());
     vcovariances.reserve(digis.size());
@@ -424,8 +505,18 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
         vweights.push_back(m1);
         vweights.push_back(m2);
 
-        vpedestals.push_back(*aped);
-        vgains.push_back(*aGain);
+//        vpedestals.push_back(*aped);
+//        vgains.push_back(*aGain);
+        ped_data.mean_x12.push_back(aped->mean_x12);
+        ped_data.rms_12.push_back(aped->rms_x12);
+        ped_data.mean_x6.push_back(aped->mean_x6);
+        ped_data.rms_x6.push_back(aped->rms_x6);
+        ped_data.mean_x1.push_back(aped->mean_x1);
+        ped_data.rms_x1.push_back(aped->rms_x1);
+
+        gainratio_data.gain12Over6.push_back(aGain->gain12over6());
+        gainratio_data.gain6Over1.push_back(aGain->gain6Over1());
+
         vxtals.push_back(*gid);
         vpulseshapes.push_back(*aPulse);
         vcovariances.push_back(*aPulseCov);
@@ -441,10 +532,11 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
     // 
     // launch
     //
-    ecal::multifit::host_data h_data{&digis, &result, &vpedestals, &vgains,
+    ecal::multifit::host_data h_data{&digis, &result,
+                                     ped_data, gainratio_data,
                                      &vxtals, &vpulseshapes, &vcovariances,
                                      &noisecors, &sample_mask, &(*timeCorrBias_),
-                                     &vweights};
+                                     &vweights, &bxs};
     ecal::multifit::scatter(h_data, d_data, conf);
     /*
     ecal::multifit::scatter(digis, result, 
@@ -699,7 +791,7 @@ EcalUncalibRecHitWorkerMultiFitGPU::run( const edm::Event & evt,
 }
 
 edm::ParameterSetDescription 
-EcalUncalibRecHitWorkerMultiFitGPU::getAlgoDescription() {
+EcalUncalibRecHitWorkerMultiFitGPUNew::getAlgoDescription() {
   
   edm::ParameterSetDescription psd0;
   psd0.addNode((edm::ParameterDescription<std::vector<double>>("EBPulseShapeTemplate", {1.13979e-02, 7.58151e-01, 1.00000e+00, 8.87744e-01, 6.73548e-01, 4.74332e-01, 3.19561e-01, 2.15144e-01, 1.47464e-01, 1.01087e-01, 6.93181e-02, 4.75044e-02}, true) and
@@ -804,6 +896,6 @@ EcalUncalibRecHitWorkerMultiFitGPU::getAlgoDescription() {
 
 #include "FWCore/Framework/interface/MakerMacros.h"
 #include "RecoLocalCalo/EcalRecProducers/interface/EcalUncalibRecHitWorkerFactory.h"
-DEFINE_EDM_PLUGIN( EcalUncalibRecHitWorkerFactory, EcalUncalibRecHitWorkerMultiFitGPU, "EcalUncalibRecHitWorkerMultiFitGPU" );
+DEFINE_EDM_PLUGIN( EcalUncalibRecHitWorkerFactory, EcalUncalibRecHitWorkerMultiFitGPUNew, "EcalUncalibRecHitWorkerMultiFitGPUNew" );
 #include "RecoLocalCalo/EcalRecProducers/interface/EcalUncalibRecHitFillDescriptionWorkerFactory.h"
-DEFINE_EDM_PLUGIN( EcalUncalibRecHitFillDescriptionWorkerFactory, EcalUncalibRecHitWorkerMultiFitGPU, "EcalUncalibRecHitWorkerMultiFitGPU" );
+DEFINE_EDM_PLUGIN( EcalUncalibRecHitFillDescriptionWorkerFactory, EcalUncalibRecHitWorkerMultiFitGPUNew, "EcalUncalibRecHitWorkerMultiFitGPUNew" );

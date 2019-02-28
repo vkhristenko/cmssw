@@ -208,7 +208,7 @@ EcalUncalibRecHitMultiFitAlgo::makeRecHit(const EcalDataFrame& dataFrame,
     }
     else {
       noisecov = SampleMatrix::Zero();
-      // noisecors is type var[2] is an array of 2
+      // noisecors is an array of 3
       // size needs to be propogated (on cpu it was std::array)
       for (unsigned int gainidx=0; gainidx<3; ++gainidx) {
         SampleGainVector mask = gainidx*SampleGainVector::Ones();
