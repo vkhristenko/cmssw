@@ -1,4 +1,4 @@
-#include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitMultiFitAlgo_gpu.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitMultiFitAlgo_gpu_new.h"
 
 #include "DataFormats/EcalDigi/interface/EcalDigiCollections.h"
 #include "CondFormats/EcalObjects/interface/EcalPedestals.h"
@@ -6,6 +6,7 @@
 #include "CondFormats/EcalObjects/interface/EcalXtalGroupId.h"
 #include "CondFormats/EcalObjects/interface/EcalPulseShapes.h"
 #include "CondFormats/EcalObjects/interface/EcalPulseCovariances.h"
+#include "CondFormats/EcalObjects/interface/EcalSampleMask.h"
 
 #include <iostream>
 
@@ -33,7 +34,7 @@ void kernel_prep_1d(EcalPulseShape const* shapes_in,
                     float const* mean_x12,
                     float const* mean_x6,
                     float const* gain6Over1,
-                    float const* gain12Over1,
+                    float const* gain12Over6,
                     int nchannels) {
     constexpr bool dynamicPedestal = false;
     constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
@@ -46,7 +47,7 @@ void kernel_prep_1d(EcalPulseShape const* shapes_in,
         int sample = threadIdx.x % nsamples;
         for (int isample=sample; isample<EcalPulseShape::TEMPLATESAMPLES; 
             isample+=nsamples)
-            shapes_out[ch](isample + 7) = shapes_in[ch]->pdfval[isample];
+            shapes_out[ch](isample + 7) = shapes_in[ch].pdfval[isample];
 
         //
         // amplitudes
@@ -61,18 +62,18 @@ void kernel_prep_1d(EcalPulseShape const* shapes_in,
         if (gainId==0 || gainId==3) {
             pedestal = mean_x1[ch];
             gainratio = gain6Over1[ch] * gain12Over6[ch];
-            gainsNoise[sample] = 2;
-            gainsPedestal[isample] = dynamicPedestal ? 2 : -1;
+            gainsNoise[ch](sample) = 2;
+            gainsPedestal[ch](sample) = dynamicPedestal ? 2 : -1;
         } else if (gainId==1) {
             pedestal = mean_x12[ch];
             gainratio = 1.;
-            gainsNoise[sample] = 0;
-            gainsPedesatl[sample] = dynamicPedestal ? 0 : -1;
+            gainsNoise[ch](sample) = 0;
+            gainsPedestal[ch](sample) = dynamicPedestal ? 0 : -1;
         } else if (gainId==2) {
             pedestal = mean_x6[ch];
             gainratio = gain12Over6[ch];
-            gainsNoise[sample]  = 1;
-            gainsPedestal[sample] = dynamicPedestal ? 1 : -1;
+            gainsNoise[ch](sample)  = 1;
+            gainsPedestal[ch](sample) = dynamicPedestal ? 1 : -1;
         }
 
         // TODO: compile time constant -> branch should be non-divergent
@@ -96,7 +97,7 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                     SampleMatrixD const* noisecorrs,
                     float const* rms_x12,
                     float const* rms_x6,
-                    float const* rms-x1,
+                    float const* rms_x1,
                     float const* gain12Over6,
                     float const* gain6Over1,
                     SampleMatrix* noisecov,
@@ -109,10 +110,11 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
     constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
     constexpr float addPedestalUncertainty = 0.f;
     constexpr bool dynamicPedestal = false;
+    constexpr int template_samples = EcalPulseShape::TEMPLATESAMPLES;
 
-    for (int iy=ty, ix=tx; ix<=TEMPLATESAMPLES && iy<=TEMPALTESAMPLES; 
+    for (int iy=ty, ix=tx; ix<=template_samples && iy<=template_samples; 
         ix+=nsamples, iy+=nsamples)
-        pulse_cov_out[ch](iy+7, ix+7) = pulse_cov_in[ch]->covval[iy][ix];
+        pulse_cov_out[ch](iy+7, ix+7) = pulse_cov_in[ch].covval[iy][ix];
     
     bool hasGainSwitch = false;
     // non-divergent branch
@@ -133,7 +135,7 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
 
         //
         gainidx=1;
-        char mask = gainidx;
+        mask = gainidx;
         pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
         noise_value += gain12Over6[ch]*gain12Over6[ch]
             *rms_x6[ch]*rms_x6[ch]*pedestal*noisecorrs[1](ty, tx);
@@ -146,7 +148,7 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
         
         //
         gainidx=2;
-        char mask = gainidx;
+        mask = gainidx;
         pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
         float tmp = gain6Over1[ch] * gain12Over6[ch];
         noise_value += tmp*tmp * rms_x1[ch]*rms_x1[ch]
@@ -157,19 +159,19 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                 * pedestal;
         }
 
-        noisecov(ty, tx) = noise_value;
+        noisecov[ch](ty, tx) = noise_value;
     } else {
         auto rms = rms_x12[ch];
-        float noise_value = rms*rms * noisecorr0(ty, tx);
+        float noise_value = rms*rms * noisecorrs[0](ty, tx);
         if (!dynamicPedestal && addPedestalUncertainty>0.f)
             noise_value += addPedestalUncertainty*addPedestalUncertainty;
-        noisecov(ty, tx) = noise_value;
+        noisecov[ch](ty, tx) = noise_value;
     }
 
     // pulse matrix
     int bx = (*bxs)(tx);
     int offset = 7 - 3 - bx;
-    float value = full_pulse_shape[ch](offset + ty);
+    float value = pulse_shape[ch](offset + ty);
     pulse_matrix[ch](ty, tx) = value;
 }
 
@@ -274,8 +276,8 @@ void scatter(EcalDigiCollection const& digis,
         h_data.rechits->size() * sizeof(EcalUncalibratedRecHit),
         cudaMemcpyHostToDevice);
 
-    cudaMemcpy(d_data.noisecors, h_data.noisecors->data(),
-        h_data.noisecors->size() * sizeof(SampleMatrix),
+    cudaMemcpy(d_data.noisecorrs, h_data.noisecorrs->data(),
+        h_data.noisecorrs->size() * sizeof(SampleMatrixD),
         cudaMemcpyHostToDevice);
 
     cudaMemcpy(d_data.sample_mask, h_data.sample_mask,
@@ -324,7 +326,7 @@ void scatter(EcalDigiCollection const& digis,
         d_data.mean_x12,
         d_data.mean_x6,
         d_data.gain6Over1,
-        d_data.gain12Over1,
+        d_data.gain12Over6,
         h_data.digis->size());
     cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
@@ -332,7 +334,7 @@ void scatter(EcalDigiCollection const& digis,
     //
     // 2d preparation kernel
     //
-    int blocks_2d = h_data.digis()->size();
+    int blocks_2d = h_data.digis->size();
     dim3 threads_2d{10, 10};
     kernel_prep_2d<<<blocks_2d, threads_2d>>>(
         d_data.covariances, d_data.pulse_covariances,

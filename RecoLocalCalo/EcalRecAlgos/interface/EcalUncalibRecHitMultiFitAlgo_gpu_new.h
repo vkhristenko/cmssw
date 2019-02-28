@@ -1,5 +1,5 @@
-#ifndef RecoLocalCalo_EcalRecAlgos_EcalUncalibRecHitMultiFitAlgo_gpu_HH
-#define RecoLocalCalo_EcalRecAlgos_EcalUncalibRecHitMultiFitAlgo_gpu_HH
+#ifndef RecoLocalCalo_EcalRecAlgos_EcalUncalibRecHitMultiFitAlgo_gpu_new_HH
+#define RecoLocalCalo_EcalRecAlgos_EcalUncalibRecHitMultiFitAlgo_gpu_new_HH
 
 /** \class EcalUncalibRecHitMultiFitAlgo
   *  Amplitude reconstucted by the multi-template fit
@@ -106,11 +106,11 @@ struct device_data {
     float* gain6Over1 = nullptr;
     EcalXtalGroupId *xtals = nullptr;
     EcalPulseShape *pulses = nullptr;
-    FulllSampleVector* epulses = nullptr;
+    FullSampleVector* epulses = nullptr;
     EcalPulseCovariance *covariances = nullptr;
     FullSampleMatrix* pulse_covariances = nullptr;
     EcalUncalibratedRecHit *rechits = nullptr;
-    SampleMatrix *noisecorrs = nullptr; // array of 3
+    SampleMatrixD* noisecorrs = nullptr; // array of 3
     EcalSampleMask *sample_mask = nullptr;
     SampleMatrix* noisecov = nullptr;
     PulseMatrixType* pulse_matrix = nullptr;
@@ -152,9 +152,9 @@ struct host_data {
     EcalDigiCollection const *digis;
     EcalUncalibratedRecHitCollection *rechits;
 //    std::vector<EcalPedestal> const *pedestals;
-    pedestal_data const& ped_data,
+    pedestal_data const& ped_data;
 //    std::vector<EcalMGPAGainRatio> const *gains;
-    mgpagain_ratio_data const& gainratio_data,
+    mgpagain_ratio_data const& gainratio_data;
     std::vector<EcalXtalGroupId> const *xtals;
     std::vector<EcalPulseShape> const *pulse_shapes;
     std::vector<EcalPulseCovariance> const *pulse_covariances;

@@ -1,5 +1,5 @@
-#ifndef RecoLocalCalo_EcalRecProducers_EcalUncalibRecHitRecWorkerGlobal_hh
-#define RecoLocalCalo_EcalRecProducers_EcalUncalibRecHitRecWorkerGlobal_hh
+#ifndef RecoLocalCalo_EcalRecProducers_EcalUncalibRecHitRecWorkerGlobal_gpu_new_hh
+#define RecoLocalCalo_EcalRecProducers_EcalUncalibRecHitRecWorkerGlobal_gpu_new_hh
 
 /** \class EcalUncalibRecHitRecGlobalAlgo                                                                                                                                           
  *  Template used to compute amplitude, pedestal using a weights method                                                                                                            
