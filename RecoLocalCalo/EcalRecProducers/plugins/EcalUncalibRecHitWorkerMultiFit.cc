@@ -375,6 +375,7 @@ EcalUncalibRecHitWorkerMultiFit::run( const edm::Event & evt,
             auto & uncalibRecHit = result.back();
             
             // === time computation ===
+//             std::cout << " EcalUncalibRecHitWorkerMultiFit::run  -->     timealgo_ = " << timealgo_ << " ratioMethod = " << ratioMethod << std::endl;
             if (timealgo_ == ratioMethod) {
                 // ratio method
                 constexpr float clockToNsConstant = 25.;
@@ -387,6 +388,7 @@ EcalUncalibRecHitWorkerMultiFit::run( const edm::Event & evt,
                     double theTimeCorrectionEE = timeCorrection(uncalibRecHit.amplitude(),
                                                                 timeCorrBias_->EETimeCorrAmplitudeBins, timeCorrBias_->EETimeCorrShiftBins);
                     
+//                     theTimeCorrectionEE = 0.; //---- AM: DEBUG TEST
                     uncalibRecHit.setJitter( crh.timeMax - 5 + theTimeCorrectionEE);
                     uncalibRecHit.setJitterError( std::sqrt(std::pow(crh.timeError,2) + std::pow(EEtimeConstantTerm_*invClockToNs,2)) );
                     
@@ -480,6 +482,8 @@ EcalUncalibRecHitWorkerMultiFit::run( const edm::Event & evt,
                 
                 weights[0] = &mat1;
                 weights[1] = &mat2;
+//                 weights[1] = &mat1;
+//                 weights[0] = &mat2;
                 
                 double timerh;
                 if (detid.subdetId()==EcalEndcap) { 

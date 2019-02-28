@@ -9,13 +9,15 @@ struct EcalPulseShape {
 
 public:
 
-  static const int TEMPLATESAMPLES = 12;
+  static constexpr int TEMPLATESAMPLES = 12;
 
-  EcalPulseShape();
+  constexpr EcalPulseShape() {}
   
-  float pdfval[TEMPLATESAMPLES];
+  float pdfval[TEMPLATESAMPLES] = {0,0,0,0,
+                                   0,0,0,0,
+                                   0,0,0,0};
   
-  float val(int isample) const { return pdfval[isample]; }
+  constexpr float val(int isample) const { return pdfval[isample]; }
 
   COND_SERIALIZABLE;
 

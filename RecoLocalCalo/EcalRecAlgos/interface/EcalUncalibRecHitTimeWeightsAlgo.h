@@ -97,6 +97,10 @@ template<class C> class EcalUncalibRecHitTimeWeightsAlgo
       }
     }
 
+//     for (unsigned int isample = 0; isample<nsample; ++isample) {
+//       std::cout << " cpu: pedSubSamples(" << isample << ") = " << pedSubSamples(isample) << std::endl;
+//     }
+    
     // Compute parameters
     double amplitude_(-1.), jitter_(-1.);
     ROOT::Math::SVector <double,3> param = (*(weights[iGainSwitch])) * pedSubSamples;
@@ -104,6 +108,10 @@ template<class C> class EcalUncalibRecHitTimeWeightsAlgo
     if (amplitude_) jitter_ = -param(EcalUncalibRecHitRecAbsAlgo<C>::iTime) / amplitude_;
     else jitter_ = 0.;
   
+//     
+//     enum { nWeightsRows = 3, iAmplitude = 0, iPedestal = 1, iTime = 2 };
+//     
+    
     return jitter_;
   }
 

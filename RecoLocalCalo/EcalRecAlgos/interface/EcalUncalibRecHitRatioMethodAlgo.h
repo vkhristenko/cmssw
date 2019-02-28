@@ -10,6 +10,7 @@
 
 #include "Math/SVector.h"
 #include "Math/SMatrix.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitRecAbsAlgo.h"
 #include "CondFormats/EcalObjects/interface/EcalSampleMask.h"
 #include <vector>
@@ -22,11 +23,6 @@
 #define RANDOM_MAGIC
 
 #include <random>
-
-namespace myMath {
-inline float fast_expf(float x) { return unsafe_expf<6>(x); }
-inline float fast_logf(float x) { return unsafe_logf<7>(x); }
-}
 
 template <class C> class EcalUncalibRecHitRatioMethodAlgo {
  public:

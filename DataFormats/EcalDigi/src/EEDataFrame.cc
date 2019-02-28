@@ -7,4 +7,3 @@ std::ostream& operator<<(std::ostream& s, const EEDataFrame& digi) {
     s << "  " << digi.sample(i) << std::endl;
   return s;
 }
-
