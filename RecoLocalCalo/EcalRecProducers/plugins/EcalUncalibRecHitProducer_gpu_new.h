@@ -30,6 +30,8 @@ class EcalUncalibRecHitProducerGPUNew : public edm::stream::EDProducer<> {
 
                 std::string ebHitCollection_; 
                 std::string eeHitCollection_; 
+                std::string ebHitCollection_soa_;
+                std::string eeHitCollection_soa_;
 		
                 EcalUncalibRecHitWorkerBaseClass * worker_;
 };

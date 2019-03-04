@@ -5,7 +5,7 @@
 #include <ostream>
 
 #ifdef __CUDA_ARCH__
-  __constant__
+  static __constant__
 #else
   constexpr
 #endif

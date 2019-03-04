@@ -13,6 +13,8 @@
 #include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 
+#include "RecoLocalCalo/EcalRecAlgos/interface/inplace_fnnls.h"
+
 #include "cuda.h"
 
 //#define DEBUG
@@ -175,6 +177,152 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
     pulse_matrix[ch](ty, tx) = value;
 }
 
+__device__
+bool update_covariance(SampleMatrix const& noisecov,
+                       FullSampleMatrix const& full_pulse_cov,
+                       SampleMatrix& inverse_cov,
+                       BXVectorType const& bxs,
+                       SampleDecompLLT& covariance_decomposition,
+                       SampleVector const& amplitudes) {
+    constexpr int nsamples = SampleVector::RowsAtCompileTime;
+    constexpr int npulses = BXVectorType::RowsAtCompileTime;
+
+    inverse_cov = noisecov;
+
+    for (unsigned int ipulse=0; ipulse<npulses; ipulse++) {
+        if (amplitudes.coeff(ipulse) == 0) 
+            continue;
+
+        int bx = bxs.coeff(ipulse);
+        int first_sample_t = std::max(0, bx+3);
+        int offset = 7 - 3 - bx;
+
+        float value = amplitudes.coeff(ipulse);
+        float value_sq = value*value;
+
+        unsigned int nsample_pulse = nsamples - first_sample_t;
+        inverse_cov.block(first_sample_t, first_sample_t, 
+                          nsample_pulse, nsample_pulse)
+            += value_sq * full_pulse_cov.block(first_sample_t + offset,
+                                               first_sample_t + offset,
+                                               nsample_pulse,
+                                               nsample_pulse);
+    }
+
+    covariance_decomposition.compute(inverse_cov);
+    return true;
+}
+
+__device__
+float compute_chi2(SampleDecompLLT& covariance_decomposition,
+                   PulseMatrixType const& pulse_matrix,
+                   SampleVector const& amplitudes,
+                   SampleVector const& samples) {
+    return covariance_decomposition.matrixL()
+        .solve(pulse_matrix * amplitudes - samples)
+        .squaredNorm();
+}
+
+///
+/// launch ctx parameters are (nchannels / block, blocks)
+/// TODO: trivial impl for now, there must be a way to improve
+///
+/// Conventions:
+///   - amplitudes -> solution vector, what we are fitting for
+///   - samples -> raw detector responses
+///   - passive constraint - satisfied constraint
+///   - active constraint - unsatisfied (yet) constraint
+///
+__global__
+void kernel_minimize(SampleMatrix const* noisecov,
+                     FullSampleMatrix const* full_pulse_cov,
+                     BXVectorType const* bxs,
+                     SampleVector const* samples,
+                     SampleVector* amplitudes,
+                     float* energies,
+                     PulseMatrixType* pulse_matrix, 
+                     bool* statuses,
+                     float* chi2s,
+                     int nchannels,
+                     int max_iterations) {
+    int idx = threadIdx.x + blockDim.x*blockIdx.x;
+    if (idx < nchannels) {
+        bool status = false;
+        int iter = 0;
+        SampleDecompLLT covariance_decomposition;
+        SampleMatrix inverse_cov;
+        int npassive = 0;
+        amplitudes[idx] = SampleVector::Zero();
+        float chi2 = 0;
+        while (true) {
+            if (iter >= max_iterations)
+                break;
+
+            // TODO
+            status = update_covariance(
+                noisecov[idx], 
+                full_pulse_cov[idx],
+                inverse_cov,
+                *bxs,
+                covariance_decomposition,
+                amplitudes[idx]);
+            if (!status) 
+                break;
+
+            // TODO
+            SampleMatrix A = covariance_decomposition.matrixL()
+                .solve(pulse_matrix[idx]);
+            SampleVector b = covariance_decomposition.matrixL()
+                .solve(samples[idx]);
+            
+            status = inplace_fnnls(
+                A, b, amplitudes[idx],
+                npassive);
+                
+            if (!status)
+                break;
+
+            // TODO
+            float chi2_now = compute_chi2(
+                covariance_decomposition,
+                pulse_matrix[idx],
+                amplitudes[idx],
+                samples[idx]);
+            float deltachi2 = chi2_now - chi2;
+            if (ecal::abs(deltachi2) < 1e-3)
+                break;
+
+            chi2 = chi2_now;
+            ++iter;
+        }
+
+        float energy = amplitudes[idx](5);
+        energies[idx] = energy; // according to bxs vector bxs[5] = 0
+        statuses[idx] = status;
+        chi2s[idx] = chi2;
+    }
+}
+
+///
+/// Build an Ecal RecHit.
+/// TODO: Use SoA data structures on the host directly
+/// the reason for removing this from minimize kernel is to isolate the minimize + 
+/// again, building an aos rec hit involves strides... -> bad memory access pattern
+///
+__global__
+void kernel_build_rechit(
+    float const* energies,
+    float const* chi2s,
+    uint32_t* dids,
+    EcalUncalibratedRecHit* rechits,
+    int nchannels) {
+    int idx = threadIdx.x + blockDim.x * blockIdx.x;
+    if (idx < nchannels) {
+        rechits[idx] = EcalUncalibratedRecHit{dids[idx], energies[idx],
+            0, 0, chi2s[idx], 0};
+    }
+}
+
 void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
 
 /*
@@ -272,9 +420,6 @@ void scatter(EcalDigiCollection const& digis,
     cudaMemcpy(d_data.covariances, h_data.pulse_covariances->data(),
         h_data.pulse_covariances->size() * sizeof(EcalPulseCovariance),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.rechits, &(*h_data.rechits->begin()),
-        h_data.rechits->size() * sizeof(EcalUncalibratedRecHit),
-        cudaMemcpyHostToDevice);
 
     cudaMemcpy(d_data.noisecorrs, h_data.noisecorrs->data(),
         h_data.noisecorrs->size() * sizeof(SampleMatrixD),
@@ -310,16 +455,19 @@ void scatter(EcalDigiCollection const& digis,
 
     int nthreads_per_block = conf.threads.x;
     int nblocks = (h_data.digis->size() + nthreads_per_block - 1) / nthreads_per_block;
+
+    std::cout << "new impl running\n";
+    
     // 
     // 1d preparation kernel
     //
-    int nchannels_per_block = 32;
-    int threads_1d = 10 * nchannels_per_block;
-    int blocks_1d = threads_1d > h_data.digis->size() 
+    unsigned int nchannels_per_block = 32;
+    unsigned int threads_1d = 10 * nchannels_per_block;
+    unsigned int blocks_1d = threads_1d > 10*h_data.digis->size() 
         ? 1 : (h_data.digis->size() + threads_1d - 1) / threads_1d;
     kernel_prep_1d<<<blocks_1d, threads_1d>>>(
         d_data.pulses, d_data.epulses,
-        d_data.digis_data, d_data.amplitudes,
+        d_data.digis_data, d_data.samples,
         d_data.gainsNoise,
         d_data.gainsPedestal,
         d_data.mean_x1,
@@ -353,6 +501,34 @@ void scatter(EcalDigiCollection const& digis,
     ecal::cuda::assert_if_error();
 //    kernel_minimize<<<>>>();
 
+    unsigned int threads_min = conf.threads.x;
+    unsigned int blocks_min = threads_min > h_data.digis->size()
+        ? 1 : (h_data.digis->size() + threads_min - 1) / threads_min;
+    kernel_minimize<<<blocks_min, threads_min>>>(
+        d_data.noisecov,
+        d_data.pulse_covariances,
+        d_data.bxs,
+        d_data.samples,
+        d_data.amplitudes,
+        d_data.energies,
+        d_data.pulse_matrix,
+        d_data.statuses,
+        d_data.chi2,
+        h_data.digis->size(),
+        50);
+    cudaDeviceSynchronize();
+    ecal::cuda::assert_if_error();
+/*
+    kernel_build_rechit<<<blocks_min, threads_min>>>(
+        d_data.energies,
+        d_data.chi2,
+        d_data.ids,
+        d_data.rechits,
+        h_data.digis->size());
+    cudaDeviceSynchronize();
+    ecal::cuda::assert_if_error();
+    */
+
   /*  kernel_reconstruct<<<nblocks, nthreads_per_block>>>(
         d_data.digis_data,
         d_data.ids,*/
@@ -379,10 +555,23 @@ void scatter(EcalDigiCollection const& digis,
 
     //
     // transfer the results back
-    // 
-    cudaMemcpy(&(*h_data.rechits->begin()), d_data.rechits,
-        h_data.rechits->size() * sizeof(EcalUncalibratedRecHit),
-        cudaMemcpyDeviceToHost);
+    //
+    cudaMemcpy(&(*h_data.rechits_soa.amplitude.begin()),
+               d_data.energies,
+               h_data.rechits_soa.amplitude.size() * sizeof(float),
+               cudaMemcpyDeviceToHost);
+    cudaMemcpy(&(*h_data.rechits_soa.chi2.begin()),
+               d_data.chi2,
+               h_data.rechits_soa.chi2.size() * sizeof(float),
+               cudaMemcpyDeviceToHost);
+    cudaMemcpy(&(*h_data.rechits_soa.did.begin()),
+               d_data.ids,
+               h_data.rechits_soa.did.size() * sizeof(uint32_t),
+               cudaMemcpyDeviceToHost);
+
+//    cudaMemcpy(&(*h_data.rechits->begin()), d_data.rechits,
+//        h_data.rechits->size() * sizeof(EcalUncalibratedRecHit),
+//        cudaMemcpyDeviceToHost);
 
     // 
     // free all the device ptrs

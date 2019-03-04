@@ -67,6 +67,7 @@ class EcalUncalibRecHitMultiFitAlgo
 #include "CondFormats/EcalObjects/interface/EcalGainRatios.h"
 #include "CondFormats/EcalObjects/interface/EcalTimeBiasCorrections.h"
 #include "CondFormats/EcalObjects/interface/EcalWeightSet.h"
+#include "DataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
 //#include "RecoLocalCalo/EcalRecAlgos/interface/PulseChiSqSNNLS.h"
 
 #include <cuda.h>
@@ -91,7 +92,7 @@ using EMatrix = Eigen::Matrix<double,
 struct device_data {
     uint16_t *digis_data = nullptr;
     uint32_t *ids = nullptr;
-    SampleVector* amplitudes = nullptr;
+    SampleVector* samples = nullptr;
     SampleGainVector* gainsNoise = nullptr;
     SampleGainVector* gainsPedestal = nullptr;
 //    EcalPedestal *pedestals = nullptr;
@@ -124,6 +125,12 @@ struct device_data {
     float *EETimeCorrShiftBins = nullptr;
     int EETimeCorrShiftBins_size;
     EMatrix *weights = nullptr;
+
+    // rechits
+    bool* statuses = nullptr;
+    SampleVector* amplitudes = nullptr;
+    float* energies = nullptr;
+    float* chi2 = nullptr;
 };
 
 struct xyz {
@@ -150,7 +157,6 @@ struct mgpagain_ratio_data {
 
 struct host_data {
     EcalDigiCollection const *digis;
-    EcalUncalibratedRecHitCollection *rechits;
 //    std::vector<EcalPedestal> const *pedestals;
     pedestal_data const& ped_data;
 //    std::vector<EcalMGPAGainRatio> const *gains;
@@ -163,6 +169,7 @@ struct host_data {
     EcalTimeBiasCorrections const *time_bias_corrections;
     std::vector<EMatrix> const* weights;
     BXVectorType const* bxs;
+    ecal::UncalibratedRecHit<ecal::Tag::soa>& rechits_soa;
 };
 
 void scatter(host_data&, device_data&, conf_data const&);

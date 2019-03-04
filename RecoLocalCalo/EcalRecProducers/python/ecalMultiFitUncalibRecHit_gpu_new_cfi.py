@@ -6,7 +6,9 @@ ecalMultiFitUncalibRecHitgpu = cms.EDProducer("EcalUncalibRecHitProducerGPUNew",
     EBdigiCollection = cms.InputTag("ecalDigis","ebDigis"),
     EEdigiCollection = cms.InputTag("ecalDigis","eeDigis"),
     EBhitCollection = cms.string("EcalUncalibRecHitsEBgpunew"),
+    EBhitCollection_soa = cms.string("EcalUncalibRecHitsEBgpunew"),
     EEhitCollection = cms.string('EcalUncalibRecHitsEEgpunew'),
+    EEhitCollection_soa = cms.string('EcalUncalibRecHitsEEgpunew'),
     algo = cms.string("EcalUncalibRecHitWorkerMultiFitGPUNew"),
     algoPSet = cms.PSet(
       # for multifit method

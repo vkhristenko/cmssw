@@ -12,6 +12,7 @@
 <use   name="rootminuit"/>
 <use   name="eigen"/>
 <use   name="cuda"/>
+<use name="DataFormats/EcalRecHitSoA"/>
 <flags CUDA_FLAGS="-Xptxas -O2,-v"/>
 
 <export>

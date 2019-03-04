@@ -780,11 +780,11 @@ void scatter(EcalDigiCollection const& digis,
 #endif
     int nthreads_per_block = conf.threads.x;
     int nblocks = (h_data.digis->size() + nthreads_per_block - 1) / nthreads_per_block;
-  /*  kernel_reconstruct<<<nblocks, nthreads_per_block>>>(
+    kernel_reconstruct<<<nblocks, nthreads_per_block>>>(
         d_data.digis_data,
-        d_data.ids,*/
+        d_data.ids,
         /* d_rechits, */
-/*        d_data.pedestals,
+        d_data.pedestals,
         d_data.gains,
         d_data.xtals,
         d_data.pulses,
@@ -802,7 +802,7 @@ void scatter(EcalDigiCollection const& digis,
         h_data.time_bias_corrections->EETimeCorrShiftBins.size(),
         d_data.weights,
         h_data.digis->size()
-    );*/
+    );
     cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 

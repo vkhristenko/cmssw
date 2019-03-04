@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "RecoLocalCalo/EcalRecProducers/plugins/EcalUncalibRecHitProducer_gpu.h"
+#include "RecoLocalCalo/EcalRecProducers/plugins/EcalUncalibRecHitProducer_gpu_new.h"
 #include "FWCore/Framework/interface/ConsumesCollector.h"
 #include "FWCore/ParameterSet/interface/ConfigurationDescriptions.h"
 
@@ -25,8 +25,13 @@ EcalUncalibRecHitProducerGPUNew::EcalUncalibRecHitProducerGPUNew(const edm::Para
 {
         ebHitCollection_  = ps.getParameter<std::string>("EBhitCollection");
         eeHitCollection_  = ps.getParameter<std::string>("EEhitCollection");
+        ebHitCollection_soa_ = ps.getParameter<std::string>("EBhitCollection_soa");
+        eeHitCollection_soa_ = ps.getParameter<std::string>("EEhitCollection_soa");
+
         produces< EBUncalibratedRecHitCollection >(ebHitCollection_);
         produces< EEUncalibratedRecHitCollection >(eeHitCollection_);
+        produces<ecal::SoAUncalibratedRecHitCollection>(ebHitCollection_soa_);
+        produces<ecal::SoAUncalibratedRecHitCollection>(eeHitCollection_soa_);
 
 	ebDigiCollectionToken_ = consumes<EBDigiCollection>(ps.getParameter<edm::InputTag>("EBdigiCollection"));
 	
@@ -52,8 +57,10 @@ void EcalUncalibRecHitProducerGPUNew::fillDescriptions(edm::ConfigurationDescrip
     edm::ParameterSetDescription desc;
     desc.add<edm::InputTag>("EBdigiCollection", edm::InputTag("ecalDigis","ebDigis"));
     desc.add<std::string>("EEhitCollection", "EcalUncalibRecHitsEE");
+    desc.add<std::string>("EEhitCollection_soa", "EcalUncalibRecHitsEE_soa");
     desc.add<edm::InputTag>("EEdigiCollection", edm::InputTag("ecalDigis","eeDigis"));
     desc.add<std::string>("EBhitCollection", "EcalUncalibRecHitsEB");
+    desc.add<std::string>("EBhitCollection_soa", "EcalUncalibRecHItsEB_soa");
 
     auto itInfos = infos.begin();
     assert(itInfos != infos.end());
@@ -78,8 +85,10 @@ void EcalUncalibRecHitProducerGPUNew::fillDescriptions(edm::ConfigurationDescrip
     edm::ParameterSetDescription desc;
     desc.add<edm::InputTag>("EBdigiCollection", edm::InputTag("ecalDigis","ebDigis"));
     desc.add<std::string>("EEhitCollection", "EcalUncalibRecHitsEE");
+    desc.add<std::string>("EEhitCollection_soa", "EcalUncalibRecHitsEE_soa");
     desc.add<edm::InputTag>("EEdigiCollection", edm::InputTag("ecalDigis","eeDigis"));
     desc.add<std::string>("EBhitCollection", "EcalUncalibRecHitsEB");
+    desc.add<std::string>("EBhitCollection_soa", "EcalUncalibRecHitsEB_soa");
     desc.add<std::string>("algo", itInfos->name_);
     desc.add<edm::ParameterSetDescription>("algoPSet", fdWorker->getAlgoDescription()); 
     
@@ -119,17 +128,27 @@ EcalUncalibRecHitProducerGPUNew::produce(edm::Event& evt, const edm::EventSetup&
         auto ebUncalibRechits = std::make_unique<EBUncalibratedRecHitCollection>();
         auto eeUncalibRechits = std::make_unique<EEUncalibratedRecHitCollection>();
 
+        auto eb_rechits_soa = 
+            std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>();
+        auto ee_rechits_soa = 
+            std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>();
+
         // loop over EB digis
         if (ebDigis)
-            worker_->run(evt, *ebDigis, *ebUncalibRechits);
+            worker_->run(evt, *ebDigis, *eb_rechits_soa);
+//            worker_->run(evt, *ebDigis, *ebUncalibRechits);
 
         // loop over EB digis
         if (eeDigis)
-            worker_->run(evt, *eeDigis, *eeUncalibRechits);
+            worker_->run(evt, *eeDigis, *ee_rechits_soa);
+//            worker_->run(evt, *eeDigis, *eeUncalibRechits);
+
 
         // put the collection of recunstructed hits in the event
         evt.put(std::move(ebUncalibRechits), ebHitCollection_);
         evt.put(std::move(eeUncalibRechits), eeHitCollection_);
+        evt.put(std::move(eb_rechits_soa), ebHitCollection_soa_);
+        evt.put(std::move(ee_rechits_soa), eeHitCollection_soa_);
 }
 
 #include "FWCore/Framework/interface/MakerMacros.h"                                                                                                            

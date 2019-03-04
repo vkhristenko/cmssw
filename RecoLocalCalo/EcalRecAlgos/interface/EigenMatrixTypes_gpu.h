@@ -27,6 +27,7 @@ typedef Eigen::Matrix<data_type,FullSampleVectorSize,FullSampleVectorSize> FullS
 typedef Eigen::Matrix<data_type,Eigen::Dynamic,Eigen::Dynamic,0,PulseVectorSize,PulseVectorSize> PulseMatrix;
 typedef Eigen::Matrix<data_type,SampleVectorSize,Eigen::Dynamic,0,SampleVectorSize,PulseVectorSize> SamplePulseMatrix;
 typedef Eigen::LLT<SampleMatrix> SampleDecompLLT;
+typedef Eigen::LLT<SampleMatrixD> SampleDecompLLTD;
 typedef Eigen::LLT<PulseMatrix> PulseDecompLLT;
 typedef Eigen::LDLT<PulseMatrix> PulseDecompLDLT;
 

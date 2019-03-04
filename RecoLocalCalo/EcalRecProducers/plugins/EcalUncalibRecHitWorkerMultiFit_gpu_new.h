@@ -48,6 +48,9 @@ class EcalUncalibRecHitWorkerMultiFitGPUNew final : public EcalUncalibRecHitWork
                 void set(const edm::EventSetup& es) override;
                 void set(const edm::Event& evt) override;
                 void run(const edm::Event& evt, const EcalDigiCollection & digis, EcalUncalibratedRecHitCollection & result) override;
+                void run(const edm::Event& evt,
+                         const EcalDigiCollection& digis,
+                         ecal::SoAUncalibratedRecHitCollection& result) override;
 	public:	
 		edm::ParameterSetDescription getAlgoDescription() override;
         private:
