@@ -24,6 +24,7 @@ namespace ecal { namespace multifit { namespace v1 {
 ///
 /// assume kernel launch configuration is 
 /// (MAXSAMPLES * nchannels, blocks)
+/// TODO: is there a point to split this kernel further to separate reductions
 /// 
 __global__
 void kernel_prep_1d(EcalPulseShape const* shapes_in,
@@ -37,12 +38,35 @@ void kernel_prep_1d(EcalPulseShape const* shapes_in,
                     float const* mean_x6,
                     float const* gain6Over1,
                     float const* gain12Over6,
+                    bool* hasSwitchToGain6,
+                    bool* hasSwitchToGain1,
+                    bool* isSaturated,
+                    float* energies,
+                    bool gainSwitchUseMaxSample,
                     int nchannels) {
     constexpr bool dynamicPedestal = false;
     constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
     int tx = threadIdx.x + blockIdx.x*blockDim.x;
+    int nchannels_per_block = blockDim.x / nsamples;
+    int total_threads = nchannels * nsamples;
     int ch = tx / nsamples;
+
     if (ch < nchannels) {
+        // array of 10 x channels per block
+        // TODO: any other way of doing simple reduction
+        // assume bool is 1 byte, should be quite safe
+        extern __shared__ char shared_mem[];
+        bool* shr_hasSwitchToGain6 = reinterpret_cast<bool*>(
+            shared_mem);
+        bool* shr_hasSwitchToGain1 = shr_hasSwitchToGain6 + 
+            nchannels_per_block*nsamples;
+        bool* shr_hasSwitchToGain0 = shr_hasSwitchToGain1 + 
+            nchannels_per_block*nsamples;
+        bool* shr_isSaturated = shr_hasSwitchToGain0 + 
+            nchannels_per_block*nsamples;
+        char* shr_counts = reinterpret_cast<char*>(
+            shr_isSaturated) + nchannels_per_block*nsamples;
+        
         //
         // pulse shape template
         //
@@ -59,6 +83,60 @@ void kernel_prep_1d(EcalPulseShape const* shapes_in,
         float amplitude = 0.f;
         float pedestal = 0.f;
         float gainratio = 0.f;
+
+        shr_hasSwitchToGain6[threadIdx.x] = gainId == EcalMgpaBitwiseGain6;
+        shr_hasSwitchToGain1[threadIdx.x] = gainId == EcalMgpaBitwiseGain1;
+        shr_hasSwitchToGain0[threadIdx.x] = gainId == EcalMgpaBitwiseGain0 ? 1 : 0;
+        shr_counts[threadIdx.x] = 0;
+        __syncthreads();
+        
+        // non-divergent branch (except for the last 4 threads)
+        if (threadIdx.x<=blockDim.x-5) {
+#pragma unroll
+            for (int i=0; i<5; i++)
+                shr_counts[threadIdx.x] += 
+                    shr_hasSwitchToGain0[threadIdx.x+i];
+        }
+        shr_isSaturated[threadIdx.x] = shr_counts[threadIdx.x] == 5;
+
+        //
+        // unrolled reductions
+        // TODO
+        //
+        if (sample < 5) {
+            shr_hasSwitchToGain6[threadIdx.x] |= 
+                shr_hasSwitchToGain6[threadIdx.x + 5];
+            shr_hasSwitchToGain1[threadIdx.x] |= 
+                shr_hasSwitchToGain1[threadIdx.x + 5];
+        }
+        __syncthreads();
+        
+        if (sample<2) {
+            // note, both threads per channel take value [3] twice to avoid another if
+            shr_hasSwitchToGain6[threadIdx.x] |= 
+                shr_hasSwitchToGain6[threadIdx.x+2] | 
+                shr_hasSwitchToGain6[threadIdx.x+3];
+            shr_hasSwitchToGain1[threadIdx.x] |= 
+                shr_hasSwitchToGain1[threadIdx.x+2] | 
+                shr_hasSwitchToGain1[threadIdx.x+3];
+
+            // sample < 2 -> first 2 threads of each channel will be used here
+            // => 0 -> will compare 3 and 4
+            // => 1 -> will compare 4 and 5
+            shr_isSaturated[threadIdx.x+3] |= shr_isSaturated[threadIdx.x+4];
+        }
+        __syncthreads();
+
+        if (sample==0) {
+            shr_hasSwitchToGain6[threadIdx.x] |= shr_hasSwitchToGain6[threadIdx.x+1];
+            shr_hasSwitchToGain1[threadIdx.x] |= shr_hasSwitchToGain1[threadIdx.x+1];
+
+            hasSwitchToGain6[ch] = shr_hasSwitchToGain6[threadIdx.x];
+            hasSwitchToGain1[ch] = shr_hasSwitchToGain1[threadIdx.x];
+
+            shr_isSaturated[threadIdx.x+3] |= shr_isSaturated[threadIdx.x+4];
+            isSaturated[ch] = shr_isSaturated[threadIdx.x+3];
+        }
 
         // TODO: divergent branch
         if (gainId==0 || gainId==3) {
@@ -82,9 +160,32 @@ void kernel_prep_1d(EcalPulseShape const* shapes_in,
         if (dynamicPedestal)
             amplitude = static_cast<float>(adc) * gainratio;
         else
-            amplitude = static_cast<float>(adc - pedestal) * gainratio;
+            amplitude = (static_cast<float>(adc) - pedestal) * gainratio;
 
         amplitudes[ch][sample] = amplitude;
+
+#ifdef ECAL_RECO_CUDA_DEBUG
+        printf("%d %d %d %d %f %f %f\n", tx, ch, sample, adc, amplitude,
+            pedestal, gainratio);
+        if (adc==0)
+            printf("adc is zero\n");
+#endif
+
+        // TODO this needs to be fixed
+        float max_amplitude = 1;
+        float shape_value = 1;
+
+        if (sample == 0) {
+            // note, no syncing as the same thread will be accessing here
+            bool hasGainSwitch = shr_hasSwitchToGain6[threadIdx.x]
+                | shr_hasSwitchToGain1[threadIdx.x]
+                | shr_isSaturated[threadIdx.x+3];
+            // TODO: divergent branch (groups of 10 will enter)
+            if (hasGainSwitch && gainSwitchUseMaxSample) {
+                // thread for sample=0 will access the right guys
+                energies[ch] = max_amplitude / shape_value;
+            }
+        }
     }
 }
 
@@ -105,60 +206,89 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                     SampleMatrix* noisecov,
                     PulseMatrixType* pulse_matrix,
                     FullSampleVector const* pulse_shape,
-                    BXVectorType const* bxs) {
+                    BXVectorType const* bxs,
+                    bool const* hasSwitchToGain6,
+                    bool const* hasSwitchToGain1,
+                    bool const* isSaturated) {
     int ch = blockIdx.x;
     int tx = threadIdx.x;
     int ty = threadIdx.y;
     constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
     constexpr float addPedestalUncertainty = 0.f;
     constexpr bool dynamicPedestal = false;
+    constexpr bool simplifiedNoiseModelForGainSwitch = true;
     constexpr int template_samples = EcalPulseShape::TEMPLATESAMPLES;
 
     for (int iy=ty, ix=tx; ix<=template_samples && iy<=template_samples; 
         ix+=nsamples, iy+=nsamples)
         pulse_cov_out[ch](iy+7, ix+7) = pulse_cov_in[ch].covval[iy][ix];
     
-    bool hasGainSwitch = false;
-    // non-divergent branch
+    bool tmp0 = hasSwitchToGain6[ch];
+    bool tmp1 = hasSwitchToGain1[ch];
+    bool tmp2 = isSaturated[ch];
+    bool hasGainSwitch = tmp0 | tmp1 | tmp2;
+    // non-divergent branch for all threads per block
     if (hasGainSwitch) {
         // TODO: did not include simplified noise model
         float noise_value = 0;
-        // 
-        int gainidx=0;
-        char mask = gainidx;
-        int pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
-        noise_value += /* gainratio is 1*/ rms_x12[ch]*rms_x12[ch]
-            *pedestal*noisecorrs[0](ty, tx);
-        // non-divergent branch
-        if (!dynamicPedestal && addPedestalUncertainty>0.f) {
-            noise_value += /* gainratio is 1 */
-                addPedestalUncertainty*addPedestalUncertainty*pedestal;
-        }
 
-        //
-        gainidx=1;
-        mask = gainidx;
-        pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
-        noise_value += gain12Over6[ch]*gain12Over6[ch]
-            *rms_x6[ch]*rms_x6[ch]*pedestal*noisecorrs[1](ty, tx);
-        // non-divergent branch
-        if (!dynamicPedestal && addPedestalUncertainty>0.f) {
+        // non-divergent branch - all threads per block
+        // TODO: all of these constants indicate that 
+        // that these parts could be splitted into completely different 
+        // kernels and run one of them only depending on the config
+        if (simplifiedNoiseModelForGainSwitch) {
+            int isample_max = 5; // according to cpu defs
+            int gainidx = gainNoise[ch][isample_max];
+
+            // non-divergent branches
+            if (gainidx==0)
+                noise_value = rms_x12[ch]*rms_x12[ch]*noisecorrs[0](ty, tx);
+            if (gainidx==1) 
+                noise_value = gain12Over6[ch]*gain12Over6[ch] * rms_x6[ch]*rms_x6[ch]
+                    *noisecorrs[1](ty, tx);
+            if (gainidx==2)
+                noise_value = gain6Over1[ch]*gain6Over1[ch] * rms_x1[ch]*rms_x1[ch]
+                    *noisecorrs[2](ty, tx);
+            if (!dynamicPedestal && addPedestalUncertainty>0.f)
+                noise_value += addPedestalUncertainty*addPedestalUncertainty;
+        } else {
+            // 
+            int gainidx=0;
+            char mask = gainidx;
+            int pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
+            noise_value += /* gainratio is 1*/ rms_x12[ch]*rms_x12[ch]
+                *pedestal*noisecorrs[0](ty, tx);
+            // non-divergent branch
+            if (!dynamicPedestal && addPedestalUncertainty>0.f) {
+                noise_value += /* gainratio is 1 */
+                    addPedestalUncertainty*addPedestalUncertainty*pedestal;
+            }
+
+            //
+            gainidx=1;
+            mask = gainidx;
+            pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
             noise_value += gain12Over6[ch]*gain12Over6[ch]
-                *addPedestalUncertainty*addPedestalUncertainty
-                *pedestal;
-        }
-        
-        //
-        gainidx=2;
-        mask = gainidx;
-        pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
-        float tmp = gain6Over1[ch] * gain12Over6[ch];
-        noise_value += tmp*tmp * rms_x1[ch]*rms_x1[ch]
-            *pedestal*noisecorrs[2](ty, tx);
-        // non-divergent branch
-        if (!dynamicPedestal && addPedestalUncertainty>0.f) {
-            noise_value += tmp*tmp * addPedestalUncertainty*addPedestalUncertainty
-                * pedestal;
+                *rms_x6[ch]*rms_x6[ch]*pedestal*noisecorrs[1](ty, tx);
+            // non-divergent branch
+            if (!dynamicPedestal && addPedestalUncertainty>0.f) {
+                noise_value += gain12Over6[ch]*gain12Over6[ch]
+                    *addPedestalUncertainty*addPedestalUncertainty
+                    *pedestal;
+            }
+            
+            //
+            gainidx=2;
+            mask = gainidx;
+            pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
+            float tmp = gain6Over1[ch] * gain12Over6[ch];
+            noise_value += tmp*tmp * rms_x1[ch]*rms_x1[ch]
+                *pedestal*noisecorrs[2](ty, tx);
+            // non-divergent branch
+            if (!dynamicPedestal && addPedestalUncertainty>0.f) {
+                noise_value += tmp*tmp * addPedestalUncertainty*addPedestalUncertainty
+                    * pedestal;
+            }
         }
 
         noisecov[ch](ty, tx) = noise_value;
@@ -243,10 +373,22 @@ void kernel_minimize(SampleMatrix const* noisecov,
                      PulseMatrixType* pulse_matrix, 
                      bool* statuses,
                      float* chi2s,
+                     bool* isSaturated,
+                     bool* hasSwitchToGain6,
+                     bool* hasSwitchToGain1,
                      int nchannels,
-                     int max_iterations) {
+                     int max_iterations, 
+                     bool gainSwitchUseMaxSample) {
     int idx = threadIdx.x + blockDim.x*blockIdx.x;
     if (idx < nchannels) {
+        bool hasGainSwitch = isSaturated[idx] 
+            | hasSwitchToGain6[idx]
+            | hasSwitchToGain1[idx];
+        // TODO: gainSwitchUseMaxSimple depends on eb/ee
+        // in principle can be splitted/removed into different kernels
+        // for ee non-divergent branch
+        if (hasGainSwitch && gainSwitchUseMaxSample)
+            return;
         bool status = false;
         int iter = 0;
         SampleDecompLLT covariance_decomposition;
@@ -254,6 +396,7 @@ void kernel_minimize(SampleMatrix const* noisecov,
         int npassive = 0;
         amplitudes[idx] = SampleVector::Zero();
         float chi2 = 0;
+        float chi2_now = 0;
         while (true) {
             if (iter >= max_iterations)
                 break;
@@ -283,20 +426,51 @@ void kernel_minimize(SampleMatrix const* noisecov,
                 break;
 
             // TODO
-            float chi2_now = compute_chi2(
+            chi2_now = compute_chi2(
                 covariance_decomposition,
                 pulse_matrix[idx],
                 amplitudes[idx],
                 samples[idx]);
             float deltachi2 = chi2_now - chi2;
-            if (ecal::abs(deltachi2) < 1e-3)
-                break;
-
             chi2 = chi2_now;
             ++iter;
+
+            if (ecal::abs(deltachi2) < 1e-3)
+                break;
         }
 
         float energy = amplitudes[idx](5);
+#ifdef ECAL_RECO_CUDA_DEBUG
+        printf("%d %d %f %f %f\n", idx, iter, energy, chi2, chi2_now);
+        if (iter==1 && energy==0) {
+            printf("%d sol amplitudes %f %f %f %f %f %f %f %f %f %f\n", 
+                idx,
+                amplitudes[idx](0),
+                amplitudes[idx](1),
+                amplitudes[idx](2),
+                amplitudes[idx](3),
+                amplitudes[idx](4),
+                amplitudes[idx](5),
+                amplitudes[idx](6),
+                amplitudes[idx](7),
+                amplitudes[idx](8),
+                amplitudes[idx](9)
+            );
+            printf("%d samples %f %f %f %f %f %f %f %f %f %f\n", 
+                idx,
+                samples[idx](0),
+                samples[idx](1),
+                samples[idx](2),
+                samples[idx](3),
+                samples[idx](4),
+                samples[idx](5),
+                samples[idx](6),
+                samples[idx](7),
+                samples[idx](8),
+                samples[idx](9)
+            );
+        }
+#endif
         energies[idx] = energy; // according to bxs vector bxs[5] = 0
         statuses[idx] = status;
         chi2s[idx] = chi2;
@@ -340,6 +514,10 @@ void scatter(EcalDigiCollection const& digis,
     auto const& digis_data = h_data.digis->data();
     using digis_type = std::vector<uint16_t>;
     using dids_type = std::vector<uint32_t>;
+    bool barrel = 
+        DetId{h_data.digis->begin()->id()}
+            .subdetId() == EcalBarrel;
+    bool gainSwitchUseMaxSample = barrel; // accodring to the cpu setup
     
     //
     // TODO: remove per event alloc/dealloc -> do once at the start
@@ -456,16 +634,19 @@ void scatter(EcalDigiCollection const& digis,
     int nthreads_per_block = conf.threads.x;
     int nblocks = (h_data.digis->size() + nthreads_per_block - 1) / nthreads_per_block;
 
-    std::cout << "new impl running\n";
-    
     // 
     // 1d preparation kernel
     //
     unsigned int nchannels_per_block = 32;
     unsigned int threads_1d = 10 * nchannels_per_block;
     unsigned int blocks_1d = threads_1d > 10*h_data.digis->size() 
-        ? 1 : (h_data.digis->size() + threads_1d - 1) / threads_1d;
-    kernel_prep_1d<<<blocks_1d, threads_1d>>>(
+        ? 1 : (h_data.digis->size()*10 + threads_1d - 1) / threads_1d;
+    int shared_bytes = nchannels_per_block * EcalDataFrame::MAXSAMPLES * (
+        sizeof(bool) + sizeof(bool) + sizeof(bool) + sizeof(bool) + sizeof(char)
+    );
+    std::cout << "nchannels = " << h_data.digis->size() << std::endl;
+    std::cout << "shared memory per block = " << shared_bytes << "B\n";
+    kernel_prep_1d<<<blocks_1d, threads_1d, shared_bytes>>>(
         d_data.pulses, d_data.epulses,
         d_data.digis_data, d_data.samples,
         d_data.gainsNoise,
@@ -475,9 +656,16 @@ void scatter(EcalDigiCollection const& digis,
         d_data.mean_x6,
         d_data.gain6Over1,
         d_data.gain12Over6,
+        d_data.hasSwitchToGain6,
+        d_data.hasSwitchToGain1,
+        d_data.isSaturated,
+        d_data.energies,
+        gainSwitchUseMaxSample,
         h_data.digis->size());
     cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
+
+    std::cout << " after kernel prep 1d\n";
 
     //
     // 2d preparation kernel
@@ -496,9 +684,14 @@ void scatter(EcalDigiCollection const& digis,
         d_data.noisecov,
         d_data.pulse_matrix,
         d_data.epulses,
-        d_data.bxs);
+        d_data.bxs,
+        d_data.hasSwitchToGain6,
+        d_data.hasSwitchToGain1,
+        d_data.isSaturated);
     cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
+
+    std::cout << "after kernel prep 2d\n";
 //    kernel_minimize<<<>>>();
 
     unsigned int threads_min = conf.threads.x;
@@ -514,8 +707,12 @@ void scatter(EcalDigiCollection const& digis,
         d_data.pulse_matrix,
         d_data.statuses,
         d_data.chi2,
+        d_data.isSaturated,
+        d_data.hasSwitchToGain6,
+        d_data.hasSwitchToGain1,
         h_data.digis->size(),
-        50);
+        50,
+        gainSwitchUseMaxSample);
     cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 /*

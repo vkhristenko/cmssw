@@ -131,6 +131,10 @@ struct device_data {
     SampleVector* amplitudes = nullptr;
     float* energies = nullptr;
     float* chi2 = nullptr;
+
+    bool* hasSwitchToGain6 = nullptr;
+    bool* hasSwitchToGain1 = nullptr;
+    bool* isSaturated = nullptr;
 };
 
 struct xyz {

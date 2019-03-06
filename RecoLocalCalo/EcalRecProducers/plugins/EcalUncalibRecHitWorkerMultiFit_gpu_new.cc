@@ -198,6 +198,12 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
     sizeof(float)*MAX_CHANNELS);
   cudaMalloc((void**)&d_data.energies,
     sizeof(float)*MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.hasSwitchToGain6,
+    sizeof(bool) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.hasSwitchToGain1,
+    sizeof(bool) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.isSaturated,
+    sizeof(bool) * MAX_CHANNELS);
   ecal::cuda::assert_if_error();
 }
 
@@ -248,6 +254,9 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.statuses);
         cudaFree(d_data.chi2);
         cudaFree(d_data.energies);
+        cudaFree(d_data.hasSwitchToGain6);
+        cudaFree(d_data.hasSwitchToGain1);
+        cudaFree(d_data.isSaturated);
         ecal::cuda::assert_if_error();
     }
 }
