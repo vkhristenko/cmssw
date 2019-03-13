@@ -11,7 +11,7 @@ constexpr int FullSampleVectorSize = 19;
 constexpr int PulseVectorSize = 12;
 constexpr int NGains = 3;
 
-using data_type = float;
+using data_type = double;
 
 typedef Eigen::Matrix<data_type, SampleVectorSize, SampleVectorSize> PulseMatrixType;
 typedef Eigen::Matrix<char, SampleVectorSize, 1> BXVectorType;

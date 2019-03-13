@@ -285,6 +285,7 @@ EcalUncalibRecHitWorkerMultiFit::run( const edm::Event & evt,
     FullSampleMatrix fullpulsecov(FullSampleMatrix::Zero());
 
     result.reserve(result.size() + digis.size());
+    std::cout << "dumping cpu quantities\n";
     for (auto itdg = digis.begin(); itdg != digis.end(); ++itdg)
     {
         DetId detid(itdg->id());
@@ -349,7 +350,8 @@ EcalUncalibRecHitWorkerMultiFit::run( const edm::Event & evt,
         }
 
         // === amplitude computation ===
-
+        // TODO
+        lastSampleBeforeSaturation = -2;
         if ( lastSampleBeforeSaturation == 4 ) { // saturation on the expected max sample
             result.emplace_back((*itdg).id(), 4095*12, 0, 0, 0);
             auto & uncalibRecHit = result.back();

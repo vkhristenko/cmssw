@@ -7,6 +7,7 @@ namespace ecal { namespace multifit { namespace v1 {
 
 using matrix_t = SampleMatrix;
 using vector_t = SampleVector;
+using permutation_t = Eigen::PermutationMatrix<SampleMatrix::RowsAtCompileTime>;
 
 __device__
 bool
@@ -14,14 +15,20 @@ inplace_fnnls(matrix_t const& A,
               vector_t const& b,
               vector_t& x,
               int& npassive,
+              BXVectorType& activeBXs,
+              permutation_t& permutation,
+              PulseMatrixType& pulse_matrix,
               const double eps = 1e-11,
-              const unsigned int max_iterations = 1000);
+              const unsigned int max_iterations = 500);
 
 __device__
 bool inplace_fnnls(matrix_t const& A,
                    vector_t const& b,
                    vector_t& x,
                    int& npassive,
+                   BXVectorType& activeBXs,
+                   permutation_t& permutation,
+                   PulseMatrixType& pulse_matrix,
                    const double eps,
                    const unsigned int max_iterations) {
   matrix_t AtA = A.transpose() * A;
@@ -29,45 +36,56 @@ bool inplace_fnnls(matrix_t const& A,
   vector_t s;
   vector_t w;
 
-  Eigen::PermutationMatrix<vector_t::RowsAtCompileTime> permutation;
-  permutation.setIdentity();
-
 // main loop
   Eigen::Index w_max_idx_prev = 0;
-  float w_max_prev = 0;
-  for (auto iter = 0; iter < max_iterations; ++iter) {
-    const auto nActive = vector_t::RowsAtCompileTime - npassive;
+  matrix_t::Scalar w_max_prev = 0;
+  double eps_to_use = eps;
+  int iter = 0;
+  while (true) {
+      if (iter > 100) {
+          printf("%d %d\n", threadIdx.x, iter);
+      }
+//  for (int iter = 0; iter < max_iterations; ++iter) {
+    if (iter>0 || npassive==0) {
+        const auto nActive = vector_t::RowsAtCompileTime - npassive;
 
-    if(!nActive)
-      break;
+        if(!nActive)
+          break;
 
-    w.tail(nActive) = Atb.tail(nActive) - (AtA * x).tail(nActive);
+        w.tail(nActive) = Atb.tail(nActive) - (AtA * x).tail(nActive);
 
-    // get the index of w that gives the maximum gain
-    Eigen::Index w_max_idx;
-    const auto max_w = w.tail(nActive).maxCoeff(&w_max_idx);
+        // get the index of w that gives the maximum gain
+        Eigen::Index w_max_idx;
+        const auto max_w = w.tail(nActive).maxCoeff(&w_max_idx);
 
-    // check for convergence
-    if (max_w < eps || w_max_idx==w_max_idx_prev && max_w==w_max_prev)
-      break;
+        // check for convergence
+        if (max_w < eps_to_use || (w_max_idx==w_max_idx_prev && max_w==w_max_prev))
+          break;
 
-    w_max_prev = max_w;
-    w_max_idx_prev = w_max_idx;
+        // worst case
+        if (iter >= 500)
+            break;
 
-    // need to translate the index into the right part of the vector
-    w_max_idx += npassive;
+        w_max_prev = max_w;
+        w_max_idx_prev = w_max_idx;
 
-    // swap AtA to avoid copy
-    AtA.col(npassive).swap(AtA.col(w_max_idx));
-    AtA.row(npassive).swap(AtA.row(w_max_idx));
-    // swap Atb to match with AtA
-    Eigen::numext::swap(Atb.coeffRef(npassive), Atb.coeffRef(w_max_idx));
-    Eigen::numext::swap(x.coeffRef(npassive), x.coeffRef(w_max_idx));
-    // swap the permutation matrix to reorder the solution in the end
-    Eigen::numext::swap(permutation.indices()[npassive],
-                        permutation.indices()[w_max_idx]);
+        // need to translate the index into the right part of the vector
+        w_max_idx += npassive;
 
-    ++npassive;
+        // swap AtA to avoid copy
+        AtA.col(npassive).swap(AtA.col(w_max_idx));
+        AtA.row(npassive).swap(AtA.row(w_max_idx));
+        // swap Atb to match with AtA
+        Eigen::numext::swap(Atb.coeffRef(npassive), Atb.coeffRef(w_max_idx));
+        Eigen::numext::swap(x.coeffRef(npassive), x.coeffRef(w_max_idx));
+        // swap the permutation matrix to reorder the solution in the end
+        Eigen::numext::swap(permutation.indices()[npassive],
+                            permutation.indices()[w_max_idx]);
+        Eigen::numext::swap(activeBXs.coeffRef(npassive), activeBXs.coeffRef(w_max_idx));
+        pulse_matrix.col(npassive).swap(pulse_matrix.col(w_max_idx));
+
+        ++npassive;
+    }
 
 // inner loop
     while (true) {
@@ -76,6 +94,7 @@ bool inplace_fnnls(matrix_t const& A,
       s.head(npassive) =
           AtA.topLeftCorner(npassive, npassive).llt().solve(Atb.head(npassive));
 
+      // if all coefficients are positive, done for this iteration
       if (s.head(npassive).minCoeff() > 0.) {
         x.head(npassive) = s.head(npassive);
         break;
@@ -95,10 +114,11 @@ bool inplace_fnnls(matrix_t const& A,
         }
       }
 
+      /*
       if (std::numeric_limits<double>::max() == alpha) {
         x.head(npassive) = s.head(npassive);
         break;
-      }
+      }*/
 
       x.head(npassive) += alpha * (s.head(npassive) - x.head(npassive));
       x[alpha_idx] = 0;
@@ -112,11 +132,17 @@ bool inplace_fnnls(matrix_t const& A,
       // swap the permutation matrix to reorder the solution in the end
       Eigen::numext::swap(permutation.indices()[npassive],
                           permutation.indices()[alpha_idx]);
-
+      Eigen::numext::swap(activeBXs.coeffRef(npassive), 
+                          activeBXs.coeffRef(alpha_idx));
+      pulse_matrix.col(npassive).swap(pulse_matrix.col(alpha_idx));
     }
+
+    // TODO as in cpu NNLS version
+    iter++;
+    if (iter % 16 == 0)
+        eps_to_use *= 2;
   }
   
-  x = x.transpose() * permutation.transpose();  
   return true;
 }
 

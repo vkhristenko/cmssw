@@ -14,6 +14,7 @@
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 
 #include "RecoLocalCalo/EcalRecAlgos/interface/inplace_fnnls.h"
+//#include "RecoLocalCalo/EcalRecAlgos/interface/kernel_minimize_cpu_test.h"
 
 #include "cuda.h"
 
@@ -104,37 +105,48 @@ void kernel_prep_1d(EcalPulseShape const* shapes_in,
         // TODO
         //
         if (sample < 5) {
-            shr_hasSwitchToGain6[threadIdx.x] |= 
+            shr_hasSwitchToGain6[threadIdx.x] = 
+                shr_hasSwitchToGain6[threadIdx.x] ||
                 shr_hasSwitchToGain6[threadIdx.x + 5];
-            shr_hasSwitchToGain1[threadIdx.x] |= 
+            shr_hasSwitchToGain1[threadIdx.x] =
+                shr_hasSwitchToGain1[threadIdx.x] ||
                 shr_hasSwitchToGain1[threadIdx.x + 5];
         }
         __syncthreads();
         
         if (sample<2) {
             // note, both threads per channel take value [3] twice to avoid another if
-            shr_hasSwitchToGain6[threadIdx.x] |= 
-                shr_hasSwitchToGain6[threadIdx.x+2] | 
+            shr_hasSwitchToGain6[threadIdx.x] = 
+                shr_hasSwitchToGain6[threadIdx.x] ||
+                shr_hasSwitchToGain6[threadIdx.x+2] || 
                 shr_hasSwitchToGain6[threadIdx.x+3];
-            shr_hasSwitchToGain1[threadIdx.x] |= 
-                shr_hasSwitchToGain1[threadIdx.x+2] | 
+            shr_hasSwitchToGain1[threadIdx.x] =
+                shr_hasSwitchToGain1[threadIdx.x] ||
+                shr_hasSwitchToGain1[threadIdx.x+2] || 
                 shr_hasSwitchToGain1[threadIdx.x+3];
 
             // sample < 2 -> first 2 threads of each channel will be used here
             // => 0 -> will compare 3 and 4
             // => 1 -> will compare 4 and 5
-            shr_isSaturated[threadIdx.x+3] |= shr_isSaturated[threadIdx.x+4];
+            shr_isSaturated[threadIdx.x+3] = 
+                shr_isSaturated[threadIdx.x+3] || shr_isSaturated[threadIdx.x+4];
         }
         __syncthreads();
 
         if (sample==0) {
-            shr_hasSwitchToGain6[threadIdx.x] |= shr_hasSwitchToGain6[threadIdx.x+1];
-            shr_hasSwitchToGain1[threadIdx.x] |= shr_hasSwitchToGain1[threadIdx.x+1];
+            shr_hasSwitchToGain6[threadIdx.x] = 
+                shr_hasSwitchToGain6[threadIdx.x] || 
+                shr_hasSwitchToGain6[threadIdx.x+1];
+            shr_hasSwitchToGain1[threadIdx.x] = 
+                shr_hasSwitchToGain1[threadIdx.x] ||
+                shr_hasSwitchToGain1[threadIdx.x+1];
 
             hasSwitchToGain6[ch] = shr_hasSwitchToGain6[threadIdx.x];
             hasSwitchToGain1[ch] = shr_hasSwitchToGain1[threadIdx.x];
 
-            shr_isSaturated[threadIdx.x+3] |= shr_isSaturated[threadIdx.x+4];
+            shr_isSaturated[threadIdx.x+3] = 
+                shr_isSaturated[threadIdx.x+3] || 
+                shr_isSaturated[threadIdx.x+4];
             isSaturated[ch] = shr_isSaturated[threadIdx.x+3];
         }
 
@@ -178,8 +190,8 @@ void kernel_prep_1d(EcalPulseShape const* shapes_in,
         if (sample == 0) {
             // note, no syncing as the same thread will be accessing here
             bool hasGainSwitch = shr_hasSwitchToGain6[threadIdx.x]
-                | shr_hasSwitchToGain1[threadIdx.x]
-                | shr_isSaturated[threadIdx.x+3];
+                || shr_hasSwitchToGain1[threadIdx.x]
+                || shr_isSaturated[threadIdx.x+3];
             // TODO: divergent branch (groups of 10 will enter)
             if (hasGainSwitch && gainSwitchUseMaxSample) {
                 // thread for sample=0 will access the right guys
@@ -219,14 +231,21 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
     constexpr bool simplifiedNoiseModelForGainSwitch = true;
     constexpr int template_samples = EcalPulseShape::TEMPLATESAMPLES;
 
+    // only ty == 0 and 1 will go for a second iteration
+    for (int iy=ty; iy<template_samples; iy+=nsamples)
+        for (int ix=tx; ix<template_samples; ix+=nsamples)
+            pulse_cov_out[ch](iy+7, ix+7) = pulse_cov_in[ch].covval[iy][ix];
+
+    /*
     for (int iy=ty, ix=tx; ix<=template_samples && iy<=template_samples; 
         ix+=nsamples, iy+=nsamples)
         pulse_cov_out[ch](iy+7, ix+7) = pulse_cov_in[ch].covval[iy][ix];
+        */
     
     bool tmp0 = hasSwitchToGain6[ch];
     bool tmp1 = hasSwitchToGain1[ch];
     bool tmp2 = isSaturated[ch];
-    bool hasGainSwitch = tmp0 | tmp1 | tmp2;
+    bool hasGainSwitch = tmp0 || tmp1 || tmp2;
     // non-divergent branch for all threads per block
     if (hasGainSwitch) {
         // TODO: did not include simplified noise model
@@ -247,8 +266,9 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                 noise_value = gain12Over6[ch]*gain12Over6[ch] * rms_x6[ch]*rms_x6[ch]
                     *noisecorrs[1](ty, tx);
             if (gainidx==2)
-                noise_value = gain6Over1[ch]*gain6Over1[ch] * rms_x1[ch]*rms_x1[ch]
-                    *noisecorrs[2](ty, tx);
+                noise_value = gain12Over6[ch]*gain12Over6[ch]
+                    * gain6Over1[ch]*gain6Over1[ch] * rms_x1[ch]*rms_x1[ch]
+                    * noisecorrs[2](ty, tx);
             if (!dynamicPedestal && addPedestalUncertainty>0.f)
                 noise_value += addPedestalUncertainty*addPedestalUncertainty;
         } else {
@@ -307,6 +327,66 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
     pulse_matrix[ch](ty, tx) = value;
 }
 
+void eigen_solve_submatrix(SampleMatrix& mat, 
+                           SampleVector& invec, 
+                           SampleVector& outvec, unsigned NP) {
+    using namespace Eigen;
+    switch( NP ) { // pulse matrix is always square.
+    case 10: {   
+        Matrix<SampleMatrix::Scalar,10,10> temp = mat.topLeftCorner<10,10>();
+        outvec.head<10>() = temp.ldlt().solve(invec.head<10>());
+        break;
+    }   
+    case 9: {
+        Matrix<SampleMatrix::Scalar,9,9> temp = mat.topLeftCorner<9,9>();
+        outvec.head<9>() = temp.ldlt().solve(invec.head<9>());
+        break;
+    }   
+    case 8: {   
+        Matrix<SampleMatrix::Scalar,8,8> temp = mat.topLeftCorner<8,8>();
+        outvec.head<8>() = temp.ldlt().solve(invec.head<8>());
+        break;
+    }   
+    case 7: {   
+        Matrix<SampleMatrix::Scalar,7,7> temp = mat.topLeftCorner<7,7>();
+        outvec.head<7>() = temp.ldlt().solve(invec.head<7>());
+        break;
+    }   
+    case 6: {   
+        Matrix<SampleMatrix::Scalar,6,6> temp = mat.topLeftCorner<6,6>();
+        outvec.head<6>() = temp.ldlt().solve(invec.head<6>());
+        break;
+    }   
+    case 5: {   
+        Matrix<SampleMatrix::Scalar,5,5> temp = mat.topLeftCorner<5,5>();
+        outvec.head<5>() = temp.ldlt().solve(invec.head<5>());
+        break;
+    }   
+    case 4: {   
+        Matrix<SampleMatrix::Scalar,4,4> temp = mat.topLeftCorner<4,4>();
+        outvec.head<4>() = temp.ldlt().solve(invec.head<4>());
+        break;
+    }   
+    case 3: {   
+        Matrix<SampleMatrix::Scalar,3,3> temp = mat.topLeftCorner<3,3>();
+        outvec.head<3>() = temp.ldlt().solve(invec.head<3>());
+        break;
+    }   
+    case 2: {   
+        Matrix<SampleMatrix::Scalar,2,2> temp = mat.topLeftCorner<2,2>();
+        outvec.head<2>() = temp.ldlt().solve(invec.head<2>());
+        break;
+    }   
+    case 1: {   
+        Matrix<SampleMatrix::Scalar,1,1> temp = mat.topLeftCorner<1,1>();
+        outvec.head<1>() = temp.ldlt().solve(invec.head<1>());
+        break;
+    }    
+    default:
+        return;
+    }
+}
+
 __device__
 bool update_covariance(SampleMatrix const& noisecov,
                        FullSampleMatrix const& full_pulse_cov,
@@ -327,8 +407,8 @@ bool update_covariance(SampleMatrix const& noisecov,
         int first_sample_t = std::max(0, bx+3);
         int offset = 7 - 3 - bx;
 
-        float value = amplitudes.coeff(ipulse);
-        float value_sq = value*value;
+        auto const value = amplitudes.coeff(ipulse);
+        auto const value_sq = value*value;
 
         unsigned int nsample_pulse = nsamples - first_sample_t;
         inverse_cov.block(first_sample_t, first_sample_t, 
@@ -344,7 +424,7 @@ bool update_covariance(SampleMatrix const& noisecov,
 }
 
 __device__
-float compute_chi2(SampleDecompLLT& covariance_decomposition,
+SampleVector::Scalar compute_chi2(SampleDecompLLT& covariance_decomposition,
                    PulseMatrixType const& pulse_matrix,
                    SampleVector const& amplitudes,
                    SampleVector const& samples) {
@@ -373,17 +453,17 @@ void kernel_minimize(SampleMatrix const* noisecov,
                      PulseMatrixType* pulse_matrix, 
                      bool* statuses,
                      float* chi2s,
-                     bool* isSaturated,
-                     bool* hasSwitchToGain6,
-                     bool* hasSwitchToGain1,
+                     bool const* isSaturated,
+                     bool const* hasSwitchToGain6,
+                     bool const* hasSwitchToGain1,
                      int nchannels,
                      int max_iterations, 
                      bool gainSwitchUseMaxSample) {
     int idx = threadIdx.x + blockDim.x*blockIdx.x;
     if (idx < nchannels) {
         bool hasGainSwitch = isSaturated[idx] 
-            | hasSwitchToGain6[idx]
-            | hasSwitchToGain1[idx];
+            || hasSwitchToGain6[idx]
+            || hasSwitchToGain1[idx];
         // TODO: gainSwitchUseMaxSimple depends on eb/ee
         // in principle can be splitted/removed into different kernels
         // for ee non-divergent branch
@@ -395,8 +475,14 @@ void kernel_minimize(SampleMatrix const* noisecov,
         SampleMatrix inverse_cov;
         int npassive = 0;
         amplitudes[idx] = SampleVector::Zero();
-        float chi2 = 0;
-        float chi2_now = 0;
+        SampleVector::Scalar chi2 = 0, chi2_now = 0;
+
+        // TODO 
+        BXVectorType activeBXs = *bxs;
+        permutation_t permutation;
+        permutation.setIdentity();
+
+        // loop until ocnverge
         while (true) {
             if (iter >= max_iterations)
                 break;
@@ -406,7 +492,7 @@ void kernel_minimize(SampleMatrix const* noisecov,
                 noisecov[idx], 
                 full_pulse_cov[idx],
                 inverse_cov,
-                *bxs,
+                activeBXs,
                 covariance_decomposition,
                 amplitudes[idx]);
             if (!status) 
@@ -420,7 +506,7 @@ void kernel_minimize(SampleMatrix const* noisecov,
             
             status = inplace_fnnls(
                 A, b, amplitudes[idx],
-                npassive);
+                npassive, activeBXs, permutation, pulse_matrix[idx]);
                 
             if (!status)
                 break;
@@ -431,14 +517,19 @@ void kernel_minimize(SampleMatrix const* noisecov,
                 pulse_matrix[idx],
                 amplitudes[idx],
                 samples[idx]);
-            float deltachi2 = chi2_now - chi2;
+            auto deltachi2 = chi2_now - chi2;
             chi2 = chi2_now;
             ++iter;
+
+            if (iter > 10) {
+                printf("%d %d %f\n", threadIdx.x, iter, chi2);
+            }
 
             if (ecal::abs(deltachi2) < 1e-3)
                 break;
         }
 
+        amplitudes[idx] = amplitudes[idx].transpose() * permutation.transpose();
         float energy = amplitudes[idx](5);
 #ifdef ECAL_RECO_CUDA_DEBUG
         printf("%d %d %f %f %f\n", idx, iter, energy, chi2, chi2_now);
@@ -518,7 +609,8 @@ void scatter(EcalDigiCollection const& digis,
         DetId{h_data.digis->begin()->id()}
             .subdetId() == EcalBarrel;
     bool gainSwitchUseMaxSample = barrel; // accodring to the cpu setup
-    
+    gainSwitchUseMaxSample = false;
+
     //
     // TODO: remove per event alloc/dealloc -> do once at the start
     //
@@ -692,11 +784,94 @@ void scatter(EcalDigiCollection const& digis,
     ecal::cuda::assert_if_error();
 
     std::cout << "after kernel prep 2d\n";
-//    kernel_minimize<<<>>>();
+
+//#define ECAL_RECO_DEBUG_CPU4GPU
+#ifdef ECAL_RECO_DEBUG_CPU4GPU
+
+    // debug quantities before launching minimization
+    std::vector<SampleVector> samples(h_data.digis->size());
+    std::vector<PulseMatrixType> pulse_matrices(h_data.digis->size());
+    std::vector<SampleMatrix> noisecovs(h_data.digis->size());
+    std::vector<FullSampleMatrix> pulse_covariances(h_data.digis->size());
+    std::vector<SampleVector> amplitudes(h_data.digis->size());
+    std::vector<float> energies(h_data.digis->size());
+    std::vector<char> statuses(h_data.digis->size());
+    std::vector<float> chi2s(h_data.digis->size());
+    std::vector<char> isSaturated(h_data.digis->size());
+    std::vector<char> hasSwitchToGain6(h_data.digis->size());
+    std::vector<char> hasSwitchToGain1(h_data.digis->size());
+    cudaMemcpy(samples.data(), d_data.samples,
+        h_data.digis->size() * sizeof(SampleVector),
+        cudaMemcpyDeviceToHost);
+    cudaMemcpy(pulse_matrices.data(), d_data.pulse_matrix,
+        pulse_matrices.size() * sizeof(PulseMatrixType),
+        cudaMemcpyDeviceToHost);
+    cudaMemcpy(noisecovs.data(), d_data.noisecov,
+        noisecovs.size() * sizeof(SampleMatrix),
+        cudaMemcpyDeviceToHost);
+    cudaMemcpy(pulse_covariances.data(), d_data.pulse_covariances,
+        pulse_covariances.size() * sizeof(FullSampleMatrix),
+        cudaMemcpyDeviceToHost);
+    cudaMemcpy(isSaturated.data(), 
+        d_data.isSaturated,
+        isSaturated.size() * sizeof(bool),
+        cudaMemcpyDeviceToHost);
+    cudaMemcpy(hasSwitchToGain6.data(), d_data.hasSwitchToGain6,
+        hasSwitchToGain6.size() * sizeof(bool),
+        cudaMemcpyDeviceToHost);
+    cudaMemcpy(hasSwitchToGain1.data(), d_data.hasSwitchToGain1,
+        hasSwitchToGain1.size() * sizeof(bool),
+        cudaMemcpyDeviceToHost);
+
+    //std::cout << "dumping gpu quantities\n";
+
+    cpu::kernel_minimize(
+        noisecovs.data(),
+        pulse_covariances.data(),
+        h_data.bxs,
+        samples.data(),
+        amplitudes.data(),
+        energies.data(),
+        pulse_matrices.data(),
+        reinterpret_cast<bool*>(statuses.data()),
+        chi2s.data(),
+        reinterpret_cast<bool*>(isSaturated.data()),
+        reinterpret_cast<bool*>(hasSwitchToGain6.data()),
+        reinterpret_cast<bool*>(hasSwitchToGain1.data()),
+        h_data.digis->size(),
+        50,
+        gainSwitchUseMaxSample
+    );
+
+    /*
+    for (unsigned int i=0; i<samples.size(); i++) {
+        auto const& sample_vector = samples[i];
+        auto const& pulse_matrix = pulse_matrices[i];
+        auto const& noisecov = noisecovs[i];
+        auto const& pulse_cov = pulse_covariances[i];
+
+        std::cout << "*** samples ***\n"
+            << sample_vector << std::endl;
+        std::cout << "*** pulse matrix ***\n"
+            << pulse_matrix << std::endl;
+        std::cout << "*** noisecov ***\n"
+            << noisecov << std::endl;
+        std::cout << "*** pulse cov ***\n"
+            << pulse_cov << std::endl;
+    }
+    */
+
+#endif
+
+    cudaEvent_t start_event;
+    cudaEvent_t end_event;
+    cudaEventCreate(&start_event);
+    cudaEventCreate(&end_event);
 
     unsigned int threads_min = conf.threads.x;
     unsigned int blocks_min = threads_min > h_data.digis->size()
         ? 1 : (h_data.digis->size() + threads_min - 1) / threads_min;
+    cudaEventRecord(start_event, 0);
     kernel_minimize<<<blocks_min, threads_min>>>(
         d_data.noisecov,
         d_data.pulse_covariances,
@@ -713,8 +888,14 @@ void scatter(EcalDigiCollection const& digis,
         h_data.digis->size(),
         50,
         gainSwitchUseMaxSample);
+    cudaEventRecord(end_event, 0);
+    cudaEventSynchronize(end_event);
+    float ms;
+    cudaEventElapsedTime(&ms, start_event, end_event);
+    std::cout << "elapsed time = " << ms << std::endl;
     cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
+    
 /*
     kernel_build_rechit<<<blocks_min, threads_min>>>(
         d_data.energies,
@@ -753,6 +934,8 @@ void scatter(EcalDigiCollection const& digis,
     //
     // transfer the results back
     //
+//    h_data.rechits_soa.amplitude = std::move(energies);
+//    h_data.rechits_soa.chi2 = std::move(chi2s);
     cudaMemcpy(&(*h_data.rechits_soa.amplitude.begin()),
                d_data.energies,
                h_data.rechits_soa.amplitude.size() * sizeof(float),

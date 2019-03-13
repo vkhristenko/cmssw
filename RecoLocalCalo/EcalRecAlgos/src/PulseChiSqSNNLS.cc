@@ -96,6 +96,7 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples, const SampleMatrix &sam
   //construct dynamic pedestals if applicable
   int ngains = gains.maxCoeff()+1;
   int nPedestals = 0;
+  /*
   for (int gainidx=0; gainidx<ngains; ++gainidx) {
     SampleGainVector mask = gainidx*SampleGainVector::Ones();
     SampleVector pedestal = (gains.array()==mask.array()).cast<SampleVector::value_type>();
@@ -106,9 +107,10 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples, const SampleMatrix &sam
       _pulsemat.resize(Eigen::NoChange, npulse+nPedestals);
       _pulsemat.col(npulse+nPedestals-1) = pedestal;
     }
-  }
+  }*/
   
   //construct negative step functions for saturated or potentially slew-rate-limited samples
+  /*
   for (int isample=0; isample<SampleVector::RowsAtCompileTime; ++isample) {
     if (badSamples.coeff(isample)>0) {
       SampleVector step = SampleVector::Zero();
@@ -121,7 +123,7 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples, const SampleMatrix &sam
       _pulsemat.resize(Eigen::NoChange, npulse+nPedestals);
       _pulsemat.col(npulse+nPedestals-1) = step;
     }
-  }
+  }*/
   
   _npulsetot = npulse + nPedestals;
   
@@ -129,10 +131,11 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples, const SampleMatrix &sam
   _errvec = PulseVector::Zero(_npulsetot);  
   _nP = 0;
   _chisq = 0.;
-  
+ 
+  /*
   if (_bxs.rows()==1 && std::abs(_bxs.coeff(0))<100) {
     _ampvec.coeffRef(0) = _sampvec.coeff(_bxs.coeff(0) + 5);
-  }
+  }*/
   
   aTamat.resize(_npulsetot,_npulsetot);
 
@@ -158,6 +161,7 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples, const SampleMatrix &sam
   _ampvecmin = _ampvec;
   _bxsmin = _bxs;
   
+  return status;
   if (!status) return status;
   
   if(!_computeErrors) return status;
@@ -235,7 +239,24 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples, const SampleMatrix &sam
 bool PulseChiSqSNNLS::Minimize(const SampleMatrix &samplecov, const FullSampleMatrix &fullpulsecov) {
 
   const unsigned int npulse = _bxs.rows();
+
+//#define ECAL_RECO_DEBUG
+#ifdef ECAL_RECO_DEBUG
+
+      std::cout << "*** samples ***\n";
+      std::cout << _sampvec << std::endl;
+
+      std::cout << "*** pulse matrix ***\n";
+      std::cout << _pulsemat << std::endl;
+
+      std::cout << "*** noisecov ***\n";
+      std::cout << samplecov << std::endl;
+      
+      std::cout << "*** pulse cov ***\n";
+      std::cout << fullpulsecov << std::endl;
   
+#endif
+
   int iter = 0;
   bool status = false;
   while (true) {    
@@ -246,6 +267,10 @@ bool PulseChiSqSNNLS::Minimize(const SampleMatrix &samplecov, const FullSampleMa
       }
       break;
     }    
+
+#ifdef ECAL_RECO_DEBUG
+        std::cout << "iter = " << iter << std::endl;
+#endif
     
     status = updateCov(samplecov,fullpulsecov);    
     if (!status) break; 
@@ -257,6 +282,13 @@ bool PulseChiSqSNNLS::Minimize(const SampleMatrix &samplecov, const FullSampleMa
       status = OnePulseMinimize();
     }
     if (!status) break;
+
+#ifdef ECAL_RECO_DEBUG
+
+        std::cout << "*** solution ***\n";
+        std::cout << _ampvec << std::endl;
+
+#endif
         
     double chisqnow = ComputeChiSq();
     double deltachisq = chisqnow-_chisq;
@@ -267,7 +299,7 @@ bool PulseChiSqSNNLS::Minimize(const SampleMatrix &samplecov, const FullSampleMa
     }
     ++iter;    
   }  
-  
+
   return status;  
   
 }
@@ -278,23 +310,59 @@ bool PulseChiSqSNNLS::updateCov(const SampleMatrix &samplecov, const FullSampleM
   const unsigned int npulse = _bxs.rows();
 
   _invcov = samplecov; //
-  
+
+#ifdef ECAL_RECO_DEBUG
+  std::cout << "*** inverse cov before ***\n";
+  std::cout << _invcov << std::endl;
+
+  std::cout << "*** amplitudes ***\n";
+  std::cout << _ampvec << std::endl;
+
+  std::cout << "*** bxs ***\n";
+  std::cout << _bxs << std::endl;
+#endif
+ 
   for (unsigned int ipulse=0; ipulse<npulse; ++ipulse) {
     if (_ampvec.coeff(ipulse)==0.) continue;
     int bx = _bxs.coeff(ipulse);
     if (std::abs(bx)>=100) continue; //no contribution to covariance from pedestal or saturation/slew step correction
+
+#ifdef ECAL_RECO_DEBUG
+    std::cout << "*** ipulse = " << ipulse << " ***\n";
+    std::cout << "*** bx = " << bx << " ***\n";
+#endif
     
     int firstsamplet = std::max(0,bx + 3);
     int offset = 7-3-bx;
+
+#ifdef ECAL_RECO_DEBUG
+    std::cout << "*** firstsamplet = " << firstsamplet << " ***\n";
+    std::cout << "*** offset = " << offset << " ***\n";
+#endif
     
     const double ampveccoef = _ampvec.coeff(ipulse);
     const double ampsq = ampveccoef*ampveccoef;
+
+#ifdef ECAL_RECO_DEBUG
+    std::cout << "*** ampveccoef = " << ampveccoef << " ***\n";
+    std::cout << "*** ampsq = " << ampsq << " ***\n";
+#endif
     
     const unsigned int nsamplepulse = nsample-firstsamplet;    
+
+#ifdef ECAL_RECO_DEBUG
+    std::cout << "*** nsamplepulse = " << nsamplepulse << " ***\n";
+#endif
+
     _invcov.block(firstsamplet,firstsamplet,nsamplepulse,nsamplepulse) += 
       ampsq*fullpulsecov.block(firstsamplet+offset,firstsamplet+offset,nsamplepulse,nsamplepulse);   
   }
-  
+
+#ifdef ECAL_RECO_DEBUG
+  std::cout << "*** inverse cov after ***\n";
+  std::cout << _invcov << std::endl;
+#endif
+
   _covdecomp.compute(_invcov);
   
   bool status = true;
@@ -330,6 +398,17 @@ bool PulseChiSqSNNLS::NNLS() {
   invcovp = _covdecomp.matrixL().solve(_pulsemat);
   aTamat.noalias() = invcovp.transpose().lazyProduct(invcovp);
   aTbvec.noalias() = invcovp.transpose().lazyProduct(_covdecomp.matrixL().solve(_sampvec));
+
+#ifdef ECAL_RECO_DEBUG
+
+
+      std::cout << "*** matrix A ***\n";
+      std::cout << aTamat << std::endl;
+
+      std::cout << "*** vector b ***\n";
+      std::cout << aTbvec << std::endl;
+
+#endif
   
   int iter = 0;
   Index idxwmax = 0;

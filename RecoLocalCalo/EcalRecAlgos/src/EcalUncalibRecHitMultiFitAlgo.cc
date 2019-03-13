@@ -32,7 +32,7 @@ EcalUncalibratedRecHit EcalUncalibRecHitMultiFitAlgo::makeRecHit(const EcalDataF
   
   const unsigned int nsample = EcalDataFrame::MAXSAMPLES;
   
-  double maxamplitude = -std::numeric_limits<double>::max();
+//  double maxamplitude = -std::numeric_limits<double>::max();
   const unsigned int iSampleMax = 5;
   const unsigned int iFullPulseMax = 9;
   
@@ -96,11 +96,12 @@ EcalUncalibratedRecHit EcalUncalibRecHitMultiFitAlgo::makeRecHit(const EcalDataF
     }
         
     amplitudes[iSample] = amplitude;
-    
+   
+    /*
     if (iSample==iSampleMax) {
       maxamplitude = amplitude;
       pedval = pedestal;
-    }
+    }*/
         
   }
 
@@ -110,6 +111,7 @@ EcalUncalibratedRecHit EcalUncalibRecHitMultiFitAlgo::makeRecHit(const EcalDataF
   //special handling for gain switch, where sample before maximum is potentially affected by slew rate limitation
   //optionally apply a stricter criteria, assuming slew rate limit is only reached in case where maximum sample has gain switched but previous sample has not
   //option 1: use simple max-sample algorithm
+  /*
   if (hasGainSwitch && _gainSwitchUseMaxSample) {
     double maxpulseamplitude = maxamplitude / fullpulse[iFullPulseMax];
     EcalUncalibratedRecHit rh( dataFrame.id(), maxpulseamplitude, pedval, 0., 0., flags );
@@ -121,7 +123,7 @@ EcalUncalibratedRecHit EcalUncalibRecHitMultiFitAlgo::makeRecHit(const EcalDataF
       }
     }
     return rh;
-  }
+  }*/
 
   //option2: A floating negative single-sample offset is added to the fit
   //such that the affected sample is treated only as a lower limit for the true amplitude
@@ -209,6 +211,9 @@ EcalUncalibratedRecHit EcalUncalibRecHitMultiFitAlgo::makeRecHit(const EcalDataF
   
   EcalUncalibratedRecHit rh( dataFrame.id(), amplitude , pedval, jitter, chisq, flags );
   rh.setAmplitudeError(amperr);
+  if (amplitude<0) {
+      std::cout << "amplitude = " << amplitude << std::endl;
+  }
   
   if (!usePrefit) {
     for (unsigned int ipulse=0; ipulse<_pulsefunc.BXs().rows(); ++ipulse) {
