@@ -121,93 +121,20 @@ namespace FitterFuncs{
     return;
   }
 
-  __device__
-  double PulseShapeFunctor::EvalPulse(const double *pars, const unsigned nPars) {
-
-      unsigned i =0, j=0;
-
-      const double pedestal=pars[nPars-1];
-
-      //Stop crashes
-      for(i =0; i < nPars; ++i ) if( edm::isNotFinite(pars[i]) ){ ++ cntNANinfit; return 1e10; }
-      
-      //calculate chisquare
-      double chisq  = 0;
-      const unsigned parBy2=(nPars-1)/2;
-      //      std::array<float,HcalConst::maxSamples> pulse_shape_;
-
-      if(addPulseJitter_) {
-	int time = (pars[0]+timeShift_-timeMean_)*HcalConst::invertnsPerBx;
-	//Interpolate the fit (Quickly)
-	funcShape(pulse_shape_, pars[0],pars[1],psFit_slew[time]);
-	for (j=0; j<nSamplesToFit_; ++j) {
-	  psFit_erry2[j]  += pulse_shape_[j]*pulse_shape_[j]*pulseJitter_;
-	  pulse_shape_sum_[j] = pulse_shape_[j] + pedestal;
-	}
-
-	for (i=1; i<parBy2; ++i) {
-	  time = (pars[i*2]+timeShift_-timeMean_)*HcalConst::invertnsPerBx;
-	  //Interpolate the fit (Quickly)
-	  funcShape(pulse_shape_, pars[i*2],pars[i*2+1],psFit_slew[time]);
-	  // add an uncertainty from the pulse (currently noise * pulse height =>Ecal uses full cov)
-	 /////
-	  for (j=0; j<nSamplesToFit_; ++j) {
-	    psFit_erry2[j] += pulse_shape_[j]*pulse_shape_[j]*pulseJitter_;
-	    pulse_shape_sum_[j] += pulse_shape_[j];
-	  }	    
-	}
-      }
-      else{
-	int time = (pars[0]+timeShift_-timeMean_)*HcalConst::invertnsPerBx;
-	//Interpolate the fit (Quickly)
-	funcShape(pulse_shape_, pars[0],pars[1],psFit_slew[time]);
-	for(j=0; j<nSamplesToFit_; ++j)
-	  pulse_shape_sum_[j] = pulse_shape_[j] + pedestal;
-
-	for (i=1; i<parBy2; ++i) {
-	  time = (pars[i*2]+timeShift_-timeMean_)*HcalConst::invertnsPerBx;
-	  //Interpolate the fit (Quickly)
-	  funcShape(pulse_shape_, pars[i*2],pars[i*2+1],psFit_slew[time]);
-	  // add an uncertainty from the pulse (currently noise * pulse height =>Ecal uses full cov)
-	  for(j=0; j<nSamplesToFit_; ++j)
-	    pulse_shape_sum_[j] += pulse_shape_[j];
-	}
-      }
-
-      for (i=0;i<nSamplesToFit_; ++i)
-	{
-	  const double d = psFit_y[i]- pulse_shape_sum_[i];
-	  chisq += d*d/psFit_erry2[i];
-	}
-
-      if(pedestalConstraint_) {
-	 //Add the pedestal Constraint to chi2
-         chisq += invertpedSig2_*(pedestal - pedMean_)*(pedestal - pedMean_);
-      }
-        //Add the time Constraint to chi2
-      if(timeConstraint_) {
-	for(j=0; j< parBy2; ++j ){
-	  int time = (pars[j*2]+timeShift_-timeMean_)*(double)HcalConst::invertnsPerBx;
-	  double time1 = -100.+time*HcalConst::nsPerBX;
-	  chisq += inverttimeSig2_*(pars[j*2] - timeMean_ - time1)*(pars[j*2] - timeMean_ - time1);
-	}
-      }
-      return chisq;
-   }
 
   __device__
-  double PulseShapeFunctor::singlePulseShapeFunc( const double *x ) {
-    return EvalPulse(x,3);
+  void PulseShapeFunctor::EvalPulse(const double *pars) {
+
+    int time = (pars[0]+timeShift_-timeMean_)*HcalConst::invertnsPerBx;
+    funcShape(pulse_shape_, pars[0],pars[1],psFit_slew[time]);
+
+    return;
+
   }
   
   __device__
-  double PulseShapeFunctor::doublePulseShapeFunc( const double *x ) {
-    return EvalPulse(x,5);
-  }
-  
-  __device__
-  double PulseShapeFunctor::triplePulseShapeFunc( const double *x ) {
-    return EvalPulse(x,7);
+  void PulseShapeFunctor::singlePulseShapeFunc(const double * x) {
+    return EvalPulse(x);
   }
 
 }
