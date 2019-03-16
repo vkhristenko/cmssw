@@ -350,8 +350,6 @@ EcalUncalibRecHitWorkerMultiFit::run( const edm::Event & evt,
         }
 
         // === amplitude computation ===
-        // TODO
-        lastSampleBeforeSaturation = -2;
         if ( lastSampleBeforeSaturation == 4 ) { // saturation on the expected max sample
             result.emplace_back((*itdg).id(), 4095*12, 0, 0, 0);
             auto & uncalibRecHit = result.back();

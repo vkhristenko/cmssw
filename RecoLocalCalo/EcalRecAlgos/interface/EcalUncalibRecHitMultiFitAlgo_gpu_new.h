@@ -135,6 +135,7 @@ struct device_data {
     bool* hasSwitchToGain6 = nullptr;
     bool* hasSwitchToGain1 = nullptr;
     bool* isSaturated = nullptr;
+    char* state_flags = nullptr;
 };
 
 struct xyz {

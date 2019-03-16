@@ -96,7 +96,6 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples, const SampleMatrix &sam
   //construct dynamic pedestals if applicable
   int ngains = gains.maxCoeff()+1;
   int nPedestals = 0;
-  /*
   for (int gainidx=0; gainidx<ngains; ++gainidx) {
     SampleGainVector mask = gainidx*SampleGainVector::Ones();
     SampleVector pedestal = (gains.array()==mask.array()).cast<SampleVector::value_type>();
@@ -107,10 +106,9 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples, const SampleMatrix &sam
       _pulsemat.resize(Eigen::NoChange, npulse+nPedestals);
       _pulsemat.col(npulse+nPedestals-1) = pedestal;
     }
-  }*/
+  }
   
   //construct negative step functions for saturated or potentially slew-rate-limited samples
-  /*
   for (int isample=0; isample<SampleVector::RowsAtCompileTime; ++isample) {
     if (badSamples.coeff(isample)>0) {
       SampleVector step = SampleVector::Zero();
@@ -123,7 +121,7 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples, const SampleMatrix &sam
       _pulsemat.resize(Eigen::NoChange, npulse+nPedestals);
       _pulsemat.col(npulse+nPedestals-1) = step;
     }
-  }*/
+  }
   
   _npulsetot = npulse + nPedestals;
   
@@ -132,10 +130,9 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples, const SampleMatrix &sam
   _nP = 0;
   _chisq = 0.;
  
-  /*
   if (_bxs.rows()==1 && std::abs(_bxs.coeff(0))<100) {
     _ampvec.coeffRef(0) = _sampvec.coeff(_bxs.coeff(0) + 5);
-  }*/
+  }
   
   aTamat.resize(_npulsetot,_npulsetot);
 
@@ -161,7 +158,6 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples, const SampleMatrix &sam
   _ampvecmin = _ampvec;
   _bxsmin = _bxs;
   
-  return status;
   if (!status) return status;
   
   if(!_computeErrors) return status;
@@ -237,6 +233,13 @@ bool PulseChiSqSNNLS::DoFit(const SampleVector &samples, const SampleMatrix &sam
 }
 
 bool PulseChiSqSNNLS::Minimize(const SampleMatrix &samplecov, const FullSampleMatrix &fullpulsecov) {
+
+#ifdef ECAL_RECO_DEBUG
+    std::cout << "cpu checking\n";
+    std::cout << "noisecov max=" << samplecov.maxCoeff()
+              << " min=" << samplecov.minCoeff()
+              << std::endl;
+#endif
 
   const unsigned int npulse = _bxs.rows();
 
