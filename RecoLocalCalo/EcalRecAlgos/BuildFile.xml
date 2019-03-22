@@ -11,6 +11,8 @@
 <use   name="root"/>
 <use   name="rootminuit"/>
 <use   name="eigen"/>
+<use   name="cuda"/>
+<use   name="DataFormats/EcaRecHitSoA"/>
 
 <export>
   <lib   name="1"/>
