@@ -9,12 +9,16 @@
 #include "CondFormats/EcalObjects/interface/EcalSampleMask.h"
 
 #include <iostream>
+#include <limits>
 
 #include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 
 #include "RecoLocalCalo/EcalRecAlgos/interface/inplace_fnnls.h"
 //#include "RecoLocalCalo/EcalRecAlgos/interface/kernel_minimize_cpu_test.h"
+
+#include "DataFormats/Math/interface/approx_exp.h"
+#include "DataFormats/Math/interface/approx_log.h"
 
 #include "cuda.h"
 
@@ -390,7 +394,10 @@ void kernel_time_compute_nullhypot(SampleVector::Scalar const* sample_values,
                                    SampleVector::Scalar const* sample_value_errors,
                                    bool const* useless_sample_values,
                                    SampleVector::Scalar* chi2s,
+                                   SampleVector::Scalar* sum0s,
+                                   SampleVector::Scalar* sumAAs,
                                    int const nchannels) {
+    using ScalarType = SampleVector::Scalar;
     constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
 
     // indices
@@ -452,16 +459,40 @@ void kernel_time_compute_nullhypot(SampleVector::Scalar const* sample_values,
             auto const sum1 = s_sum1[ltx] + s_sum1[ltx+1] - s_sum1[ltx+3];
             auto const sumA = s_sumA[ltx] + s_sumA[ltx+1] - s_sumA[ltx+3];
             auto const sumAA = s_sumAA[ltx] + s_sumAA[ltx+1] - s_sumAA[ltx+3];
-            auto const chi2 = (sumAA - sumA * sumA / sum1) / sum0;
+            auto const chi2 = sum0>0 
+                ? (sumAA - sumA * sumA / sum1) / sum0
+                : static_cast<ScalarType>(0);
             chi2s[ch] = chi2;
+            sum0s[ch] = sum0;
+            sumAAs[ch] = sumAA;
         }
     }
 }
 #endif
 
+constexpr float fast_expf(float x) { return unsafe_expf<6>(x); }
+constexpr float fast_logf(float x) { return unsafe_logf<7>(x); }
+
+#define RUN_MAKERATIO
 #ifdef RUN_MAKERATIO
+//
+// launch ctx parameters are 
+// 45 threads per channel, X channels per block, Y blocks
+// 45 comes from: 10 samples for i <- 0 to 9 and for j <- i+1 to 9
+// TODO: it might be much beter to use 32 threads per channel instead of 45
+// to simplify the synchronization
+//
 __global__
-void kernel_time_compute_makeratio() {
+void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
+                                   SampleVector::Scalar const* sample_value_errors,
+                                   bool const* useless_sample_values,
+                                   char const* pedestal_nums,
+                                   SampleVector::Scalar const* amplitudeFitParameters,
+                                   SampleVector::Scalar const* sumAAsNullHypot,
+                                   SampleVector::Scalar const* sum0sNullHypot,
+                                   SampleVector::Scalar* tMaxAlphaBetas,
+                                   SampleVector::Scalar* tMaxErrorAlphaBetas,
+                                   int const nchannels) {
     using ScalarType = SampleVector::Scalar;
 
     // constants
@@ -475,6 +506,14 @@ void kernel_time_compute_makeratio() {
     int const ltx = threadIdx.x % nthreads_per_channel;
     int const ch_start = ch*nsamples;
     int const lch_start = lch*nsamples;
+    int nchannels_per_block = blockDim.x / nthreads_per_channel;
+
+    extern __shared__ char smem[];
+    ScalarType* shr_chi2s = reinterpret_cast<ScalarType*>(smem);
+    ScalarType* shr_time_wgt = shr_chi2s + blockDim.x;
+    ScalarType* shr_time_max = shr_time_wgt + blockDim.x;
+
+    if (ch >= nchannels) return;
 
     // map tx -> (sample_i, sample_j)
     int sample_i, sample_j = 0;
@@ -511,95 +550,108 @@ void kernel_time_compute_makeratio() {
     auto const tx_i = ch_start + sample_i;
     auto const tx_j = ch_start + sample_j;
 
-
-    // TODO divergent branch
-    if (useless_sample_values[tx_i] || useless_sample_values[tx_j]
-        || sample_values[tx_i]<=1 || sample_values[tx_j]<=1)
-        return;
+    //
+    // note, given the way we partition the block, with 45 threads per channel
+    // we will end up with inactive threads which need to be dragged along
+    // through the synching point
+    // 
+    bool const condToExit = ch >= nchannels
+        ? true
+        : useless_sample_values[tx_i] 
+          || useless_sample_values[tx_j]
+          || sample_values[tx_i]<=1 || sample_values[tx_j]<=1;
 
     //
     // see cpu implementation for explanation
     // 
-    auto const rtmp = sample_values[tx_i] / sample_values[tx_j];
-    auto const invampl_i = 1.0 / sample_values[tx_i];
-    auto const relErr2_i = sample_value_errors[tx_i]*sample_value_errors[tx_i]*
-        invampl_i*invampl_i;
-    auto const invampl_j = 1.0 / sample_values[tx_j];
-    auto const relErr2_j = sample_value_errors[tx_j]*sample_value_errors[tx_j]*
-        invampl_j*invampl_j;
-    auto const err1 = rtmp * rtmp * (relErr2_i + relErr2_j);
-    auto const err2 = sample_value_errors[tx_j]*
-        (sample_values[tx_i] - sample_values[tx_j])*(invampl_j*invampl_j);
-    // TODO non-divergent branch for a block
-    // at this point, pedestal_nums[ch] can be either 0, 1 or 2
-    if (pedestal_nums[ch]==2)
-        err2 *= 0.5;
-    auto const err3 = (0.289*0.289) * (invampl_j*invampl_j);
-    auto const total_error = std::sqrt(err1 + err2 + err3);
+    ScalarType chi2 = std::numeric_limits<ScalarType>::max();
+    ScalarType tmax = 0;
+    ScalarType tmaxerr = 0;
+    if (!condToExit) {
+        auto const rtmp = sample_values[tx_i] / sample_values[tx_j];
+        auto const invampl_i = 1.0 / sample_values[tx_i];
+        auto const relErr2_i = sample_value_errors[tx_i]*sample_value_errors[tx_i]*
+            invampl_i*invampl_i;
+        auto const invampl_j = 1.0 / sample_values[tx_j];
+        auto const relErr2_j = sample_value_errors[tx_j]*sample_value_errors[tx_j]*
+            invampl_j*invampl_j;
+        auto const err1 = rtmp * rtmp * (relErr2_i + relErr2_j);
+        auto err2 = sample_value_errors[tx_j]*
+            (sample_values[tx_i] - sample_values[tx_j])*(invampl_j*invampl_j);
+        // TODO non-divergent branch for a block if each block has 1 channel
+        // otherwise non-divergent for groups of 45 threads
+        // at this point, pedestal_nums[ch] can be either 0, 1 or 2
+        if (pedestal_nums[ch]==2)
+            err2 *= 0.5;
+        auto const err3 = (0.289*0.289) * (invampl_j*invampl_j);
+        auto const total_error = std::sqrt(err1 + err2 + err3);
 
-    auto const alpha = amplitudeFitParameters[0];
-    auto const beta = amplitudeFitParameters[1];
-    auto const alphabeta = alpha * beta;
-    auto const invalphabeta = 1.0 / alphabeta;
+        auto const alpha = amplitudeFitParameters[0];
+        auto const beta = amplitudeFitParameters[1];
+        auto const alphabeta = alpha * beta;
+        auto const invalphabeta = 1.0 / alphabeta;
 
-    // variables instead of a struct
-    auto const ratio_index = tx;
-    auto const ratio_step = ty - tx;
-    auto const ratio_value = rtmp;
-    auto const ratio_error = total_error;
+        // variables instead of a struct
+        auto const ratio_index = tx_i;
+        auto const ratio_step = tx_j - tx_i;
+        auto const ratio_value = rtmp;
+        auto const ratio_error = total_error;
 
-    auto const stepOverBeta = static_cast<SampleVector::Scalar>(ratio_step) / beta;
-    auto const offset = static_cast<SampleVector::Scalar>(ratio_index) + alphabeta;
-    auto const rmin = std::max(ratio_value - ratio_error, 0.001);
-    auto const rmax = std::min(ratio_value + ratio_error, 
-        myMath::fast_expf(static_cast<SampleVector::Scalar>(ratio_step) / beta)
-        - 0.001);
-    auto const time1 = 
-        offset - 
-        ratio_step / 
-            (myMath::fast_expf((stepOverBeta - myMath::fast_logf(rmin)) / 
-                               alpha) - 1.0);
-    auto const time2 = 
-        offset - 
-        ratio_step /
-            (myMath::fast_expf((stepOverBeta - myMath::fast_logf(rmax)) / 
-                               alpha) - 1.0);
+        auto const stepOverBeta = static_cast<SampleVector::Scalar>(ratio_step) / beta;
+        auto const offset = static_cast<SampleVector::Scalar>(ratio_index) + alphabeta;
+        auto const rmin = std::max(ratio_value - ratio_error, 0.001);
+        auto const rmax = std::min(ratio_value + ratio_error, 
+            fast_expf(static_cast<SampleVector::Scalar>(ratio_step) / beta)
+            - 0.001);
+        auto const time1 = 
+            offset - 
+            ratio_step / 
+                (fast_expf((stepOverBeta - fast_logf(rmin)) / 
+                                   alpha) - 1.0);
+        auto const time2 = 
+            offset - 
+            ratio_step /
+                (fast_expf((stepOverBeta - fast_logf(rmax)) / 
+                                   alpha) - 1.0);
 
-    auto const tmax = 0.5 * (time1 + time2);
-    auto const tmaxerr = 0.5 * std::sqrt((time1 - time2) * (time1 - time2));
+        // set these guys
+        auto tmax = 0.5 * (time1 + time2);
+        auto tmaxerr = 0.5 * std::sqrt((time1 - time2) * (time1 - time2));
 
-    SampleVector::Scalar sumAf = 0;
-    SampleVector::Scalar sumff = 0;
-    int itmin = std::max(-1, static_cast<int>(std::floor(tmax - alphabeta)));
-    auto const loffset = (static_cast<ScalarType>(itmin) - itmax) * invalphabeta;
-    // TODO: data dependence 
-    for (int it = itmin+1; it<nsamples; it++) {
-        loffset += invalphabeta;
-        if (useless_sample_values[ch_start + it])
-            continue;
-        auto const inverr2 = 1.0 / 
-            (sample_value_errors[ch_start + it]*sample_value_errors[ch_start + it]);
-        auto const term1 = 1.0 + loffset;
-        auto const f = (term1 > 1e-6)
-            ? myMath::fast_expf(alpha * (myMath::fast_logf(term1) - loffset))
-            : 0;
-        sumAf += sample_values[ch_start+it] * (f * inverr2);
-        sumff += f*(f*inverr2);
+        SampleVector::Scalar sumAf = 0;
+        SampleVector::Scalar sumff = 0;
+        int const itmin = std::max(-1, static_cast<int>(std::floor(tmax - alphabeta)));
+        auto loffset = (static_cast<ScalarType>(itmin) - tmax) * invalphabeta;
+        // TODO: data dependence 
+        for (int it = itmin+1; it<nsamples; it++) {
+            loffset += invalphabeta;
+            if (useless_sample_values[ch_start + it])
+                continue;
+            auto const inverr2 = 1.0 / 
+                (sample_value_errors[ch_start + it]*sample_value_errors[ch_start + it]);
+            auto const term1 = 1.0 + loffset;
+            auto const f = (term1 > 1e-6)
+                ? fast_expf(alpha * (fast_logf(term1) - loffset))
+                : 0;
+            sumAf += sample_values[ch_start+it] * (f * inverr2);
+            sumff += f*(f*inverr2);
+        }
+
+        auto const sumAA = sumAAsNullHypot[ch];
+        auto const sum0 = sum0sNullHypot[ch];
+        chi2 = sumAA;
+        ScalarType amp = 0;
+        // TODO: sum0 can not be 0 below, need to introduce the check upfront
+        if (sumff > 0) {
+            chi2 = sumAA - sumAf * (sumAf / sumff);
+            amp = sumAf / sumff;
+        }
+        chi2 /= sum0;
     }
 
-    auto const chi2 = sumAA;
-    ScalarType amp = 0;
-    auto const sumAA = sumAAs[ch];
-    auto const sum0 = sum0s[ch];
-    // TODO: sumAA and sum0 comes from numm hypothesis 
-    if (sumff > 0) {
-        chi2 = sumAA - sumAf * (sumAf / sumff);
-        amp = sumAf / sumff;
-    }
-    chi2 /= sum0;
-
-    // store into shared memory
+    // store into smem
     shr_chi2s[threadIdx.x] = chi2;
+    __syncthreads();
 
     // find min chi2 - quite crude for now
     // TODO validate/check
@@ -607,43 +659,52 @@ void kernel_time_compute_makeratio() {
 #pragma unroll
     while (iter>=1) {
         if (ltx < iter)
-            shr_chi2s[threadIdx.x] = iter%2==1 && ltx==iter-1 
+            // for odd ns, the last guy will just store itself
+            // exception is for ltx == 0 and iter==1
+            shr_chi2s[threadIdx.x] = iter%2==1 && (ltx==iter-1 && ltx>0)
                 ? shr_chi2s[threadIdx.x] 
                 : std::min(shr_chi2s[threadIdx.x], shr_chi2s[threadIdx.x+iter]);
-        iter = iter/2 + iter%2;
         __syncthreads();
+        iter = iter==1 ? iter/2 : iter/2 + iter%2;
     }
-    __syncthreads();
 
-    // min chi2, now compute weighted average of tmax measurements
-    // see cpu version for more explanation
-    auto const chi2min = shr_chi2s[threadIdx.x - ltx];
-    auto const chi2Limit = chi2min + 1.0;
-    auto const inverseSigmaSquared = 
-        chi2 < chi2Limit
-            ? 1.0 / (tmaxerr * tmaxerr)
-            : 0.0;
+    // filter out inactive or useless samples threads
+    if (!condToExit) {
+        // min chi2, now compute weighted average of tmax measurements
+        // see cpu version for more explanation
+        auto const chi2min = shr_chi2s[threadIdx.x - ltx];
+        auto const chi2Limit = chi2min + 1.0;
+        auto const inverseSigmaSquared = 
+            chi2 < chi2Limit
+                ? 1.0 / (tmaxerr * tmaxerr)
+                : 0.0;
 
-    // store into shared mem and run reduction
-    // TODO: check if cooperative groups would be better
-    // TODO: check if shuffling intrinsics are better
-    shr_time_wgt[threadIdx.x] = inverseSigmaSquared;
-    shr_time_max[threadIdx.x] = tmax * inverseSigmaSquared;
+        // store into shared mem and run reduction
+        // TODO: check if cooperative groups would be better
+        // TODO: check if shuffling intrinsics are better
+        shr_time_wgt[threadIdx.x] = inverseSigmaSquared;
+        shr_time_max[threadIdx.x] = tmax * inverseSigmaSquared;
+    } else {
+        shr_time_wgt[threadIdx.x] = 0;
+        shr_time_max[threadIdx.x] = 0;
+    }
+
+    // reduce to compute time_max and time_wgt
     iter = nthreads_per_channel / 2 + nthreads_per_channel % 2;
+#pragma unroll
     while (iter>=1) {
         if (ltx < iter) {
-            shr_time_wgt[threadIdx.x] = iter%2==1 && ltx==iter-1
+            shr_time_wgt[threadIdx.x] = iter%2==1 && (ltx==iter-1 && ltx>0)
                 ? shr_time_wgt[threadIdx.x]
                 : shr_time_wgt[threadIdx.x] + shr_time_wgt[threadIdx.x+iter];
-            shr_time_max[threadIdx.x] = iter%2==1 && ltx==iter-1
+            shr_time_max[threadIdx.x] = iter%2==1 && (ltx==iter-1 && ltx>0)
                 ? shr_time_max[threadIdx.x]
-                : shr_time_max[threadIdx.x] + shr_time_max[threadIdx+iter];
+                : shr_time_max[threadIdx.x] + shr_time_max[threadIdx.x+iter];
         }
         
-        iter = iter/2 + iter%2;
-        __synchtreads();
+        __syncthreads();
+        iter = iter==1 ? iter/2 : iter/2 + iter%2;
     }
-    __syncthreads();
 
     // load from shared memory the 0th guy (will contain accumulated values)
     // compute 
@@ -654,8 +715,8 @@ void kernel_time_compute_makeratio() {
         auto const tMaxAlphaBeta = tmp_time_max / tmp_time_wgt;
         auto const tMaxErrorAlphaBeta = 1.0 / std::sqrt(tmp_time_wgt);
 
-        g_tMaxAlphaBeta[ch] = tMaxAlphaBeta;
-        g_tMaxErrorAlphaBeta[ch] = tMaxErrorAlphaBeta;
+        tMaxAlphaBetas[ch] = tMaxAlphaBeta;
+        tMaxErrorAlphaBetas[ch] = tMaxErrorAlphaBeta;
     }
 }
 #endif
@@ -689,7 +750,7 @@ void kernel_time_compute_findamplchi2() {
         * invalphabeta;
     auto const term1 = 1.0 + offset;
     auto const f = term1 > 1e-6 
-        ? myMath::fast_expf(alpha * (myMath::fast_logf(term1) - offset))
+        ? fast_expf(alpha * (fast_logf(term1) - offset))
         : static_cast<ScalarType>(0.0);
     auto const sumAf = sample_value * (f * inverr2);
     auto const sumff = f * (f * inverr2);
@@ -757,6 +818,8 @@ void kernel_time_compute_findamplchi2() {
             g_timeError[ch] = tMaxErrorAlphaBeta;
         }
     }
+
+    */
 }
 #endif
 
@@ -816,7 +879,7 @@ void kernel_time_compute_ampl() {
     auto const inverr2 = 1. / (sample_value_error * sample_value_error);
     auto const termOne = 1 + (sample - timeMax) / (alpha * beta);
     auto const f = termOne > 1.e-5
-        ? myMath::fast_expf(alpha * myMath::fast_logf(termOne) - 
+        ? fast_expf(alpha * fast_logf(termOne) - 
             (sample - timeMax) / beta)
         : static_cast<ScalarType>(0.); 
 
@@ -1013,7 +1076,7 @@ void kernel_time_computation_init(uint16_t const* digis,
                                   SampleVector::Scalar* sample_values,
                                   SampleVector::Scalar* sample_value_errors,
                                   bool* useless_sample_values,
-//                                  char* pedestal_nums,
+                                  char* pedestal_nums,
                                   unsigned int const sample_mask,
                                   int nchannels) {
     // constants
@@ -1086,11 +1149,10 @@ void kernel_time_computation_init(uint16_t const* digis,
         sample_values[tx] = sample_value;
         sample_value_errors[tx] = sample_value_error;
  
-        /*
         if (sample == 0) {
             // # pedestal samples used
             pedestal_nums[ch] = num;
-        }*/
+        }
     }
 }
 
@@ -1780,6 +1842,7 @@ void scatter(EcalDigiCollection const& digis,
         d_data.sample_values,
         d_data.sample_value_errors,
         d_data.useless_sample_values,
+        d_data.pedestal_nums,
         barrel 
             ? h_data.sample_mask.getEcalSampleMaskRecordEB()
             : h_data.sample_mask.getEcalSampleMaskRecordEE(),
@@ -1818,6 +1881,34 @@ void scatter(EcalDigiCollection const& digis,
         d_data.sample_value_errors,
         d_data.useless_sample_values,
         d_data.chi2sNullHypot,
+        d_data.sum0sNullHypot,
+        d_data.sumAAsNullHypot,
+        h_data.digis->size()
+    );
+    cudaDeviceSynchronize();
+    ecal::cuda::assert_if_error();
+
+    std::cout << "*** before makeratio kernel ***\n";
+    //
+    // TODO: configurable parameters for launch context below
+    //
+    unsigned int nchannels_per_block_makeratio = 20;
+    unsigned int threads_makeratio = 45 * nchannels_per_block_makeratio;
+    unsigned int blocks_makeratio = threads_makeratio > 45 * h_data.digis->size()
+        ? 1
+        : (h_data.digis->size() * 45 + threads_makeratio - 1) / threads_makeratio;
+    int sharedBytesMakeRatio = 3 * threads_makeratio * sizeof(SampleVector::Scalar);
+    kernel_time_compute_makeratio<<<blocks_makeratio, threads_makeratio,
+                                    sharedBytesMakeRatio>>>(
+        d_data.sample_values,
+        d_data.sample_value_errors,
+        d_data.useless_sample_values,
+        d_data.pedestal_nums,
+        barrel ? d_data.amplitudeFitParametersEB : d_data.amplitudeFitParametersEE,
+        d_data.sumAAsNullHypot,
+        d_data.sum0sNullHypot,
+        d_data.tMaxAlphaBetas,
+        d_data.tMaxErrorAlphaBetas,
         h_data.digis->size()
     );
     cudaDeviceSynchronize();

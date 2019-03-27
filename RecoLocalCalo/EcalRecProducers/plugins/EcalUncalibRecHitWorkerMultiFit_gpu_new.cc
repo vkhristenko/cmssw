@@ -214,7 +214,46 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
     sizeof(bool) * MAX_CHANNELS * EcalDataFrame::MAXSAMPLES);
   cudaMalloc((void**)&d_data.chi2sNullHypot,
     sizeof(SampleVector::Scalar) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.sum0sNullHypot,
+    sizeof(SampleVector::Scalar) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.sumAAsNullHypot,
+    sizeof(SampleVector::Scalar) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.pedestal_nums,
+    sizeof(char) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.amplitudeFitParametersEB,
+    sizeof(SampleVector::Scalar) * EBamplitudeFitParameters_.size());
+  cudaMalloc((void**)&d_data.amplitudeFitParametersEE,
+    sizeof(SampleVector::Scalar) * EEamplitudeFitParameters_.size());
+  cudaMalloc((void**)&d_data.tMaxAlphaBetas,
+    sizeof(SampleVector::Scalar) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.tMaxErrorAlphaBetas,
+    sizeof(SampleVector::Scalar) * MAX_CHANNELS);
   ecal::cuda::assert_if_error();
+
+  //
+  // for configuration parameters, transfer once
+  //
+
+  // TODO: this copy is done on purpose -> to avoid dealing with the current
+  // parameter configuration. replacing double/float ...
+  std::vector<SampleVector::Scalar> ebAmplitudeFitParameters(2), 
+      eeAmplitudeFitParameters(2);
+  ebAmplitudeFitParameters[0] = static_cast<SampleVector::Scalar>(
+    EBamplitudeFitParameters_[0]);
+  ebAmplitudeFitParameters[1] = static_cast<SampleVector::Scalar>(
+    EBamplitudeFitParameters_[1]);
+  eeAmplitudeFitParameters[0] = static_cast<SampleVector::Scalar>(
+    EEamplitudeFitParameters_[0]);
+  eeAmplitudeFitParameters[1] = static_cast<SampleVector::Scalar>(
+    EEamplitudeFitParameters_[1]);
+  cudaMemcpy(d_data.amplitudeFitParametersEB,
+             ebAmplitudeFitParameters.data(),
+             ebAmplitudeFitParameters.size() * sizeof(SampleVector::Scalar),
+             cudaMemcpyHostToDevice);
+  cudaMemcpy(d_data.amplitudeFitParametersEE,
+             eeAmplitudeFitParameters.data(),
+             eeAmplitudeFitParameters.size() * sizeof(SampleVector::Scalar),
+             cudaMemcpyHostToDevice);
 }
 
 EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() {
@@ -272,6 +311,13 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.sample_value_errors);
         cudaFree(d_data.useless_sample_values);
         cudaFree(d_data.chi2sNullHypot);
+        cudaFree(d_data.sum0sNullHypot);
+        cudaFree(d_data.sumAAsNullHypot);
+        cudaFree(d_data.pedestal_nums);
+        cudaFree(d_data.amplitudeFitParametersEB);
+        cudaFree(d_data.amplitudeFitParametersEE);
+        cudaFree(d_data.tMaxAlphaBetas);
+        cudaFree(d_data.tMaxErrorAlphaBetas);
         ecal::cuda::assert_if_error();
     }
 }
