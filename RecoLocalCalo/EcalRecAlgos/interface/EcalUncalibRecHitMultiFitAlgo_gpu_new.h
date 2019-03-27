@@ -140,6 +140,7 @@ struct device_data {
     // from timing computation
     SampleVector::Scalar *sample_values, *sample_value_errors;
     bool* useless_sample_values;
+    SampleVector::Scalar* chi2sNullHypot;
 };
 
 struct xyz {
