@@ -212,6 +212,8 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
     sizeof(SampleVector::Scalar) * MAX_CHANNELS * EcalDataFrame::MAXSAMPLES);
   cudaMalloc((void**)&d_data.useless_sample_values,
     sizeof(bool) * MAX_CHANNELS * EcalDataFrame::MAXSAMPLES);
+  cudaMalloc((void**)&d_data.chi2sNullHypot,
+    sizeof(SampleVector::Scalar) * MAX_CHANNELS);
   ecal::cuda::assert_if_error();
 }
 
@@ -269,6 +271,7 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.sample_values);
         cudaFree(d_data.sample_value_errors);
         cudaFree(d_data.useless_sample_values);
+        cudaFree(d_data.chi2sNullHypot);
         ecal::cuda::assert_if_error();
     }
 }
