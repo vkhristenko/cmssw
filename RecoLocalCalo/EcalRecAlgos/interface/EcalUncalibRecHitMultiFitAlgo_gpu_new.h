@@ -141,6 +141,13 @@ struct device_data {
     SampleVector::Scalar *sample_values, *sample_value_errors;
     bool* useless_sample_values;
     SampleVector::Scalar* chi2sNullHypot;
+    SampleVector::Scalar* sum0sNullHypot;
+    SampleVector::Scalar* sumAAsNullHypot;
+    char* pedestal_nums;
+
+    // TODO: check if we can use __constant__ memory for these guys
+    SampleVector::Scalar *amplitudeFitParametersEB, *amplitudeFitParametersEE;
+    SampleVector::Scalar *tMaxAlphaBetas, *tMaxErrorAlphaBetas;
 };
 
 struct xyz {
