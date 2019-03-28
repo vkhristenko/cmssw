@@ -488,10 +488,16 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
                                    bool const* useless_sample_values,
                                    char const* pedestal_nums,
                                    SampleVector::Scalar const* amplitudeFitParameters,
+                                   SampleVector::Scalar const* timeFitParameters,
                                    SampleVector::Scalar const* sumAAsNullHypot,
                                    SampleVector::Scalar const* sum0sNullHypot,
                                    SampleVector::Scalar* tMaxAlphaBetas,
                                    SampleVector::Scalar* tMaxErrorAlphaBetas,
+                                   SampleVector::Scalar* tMaxRatios,
+                                   SampleVector::Scalar* tMaxErrorRatios,
+                                   unsigned int const timeFitParameters_size,
+                                   SampleVector::Scalar const timeFitLimits_first,
+                                   SampleVector::Scalar const timeFitLimits_second,
                                    int const nchannels) {
     using ScalarType = SampleVector::Scalar;
 
@@ -512,7 +518,11 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
     ScalarType* shr_chi2s = reinterpret_cast<ScalarType*>(smem);
     ScalarType* shr_time_wgt = shr_chi2s + blockDim.x;
     ScalarType* shr_time_max = shr_time_wgt + blockDim.x;
+    ScalarType* shrTimeMax = shr_time_max + blockDim.x;
+    ScalarType* shrTimeWgt = shrTimeMax + blockDim.x;
 
+    // rmeove inactive threads
+    // TODO: need to understand if this is 100% safe in presence of syncthreads
     if (ch >= nchannels) return;
 
     // map tx -> (sample_i, sample_j)
@@ -555,11 +565,16 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
     // we will end up with inactive threads which need to be dragged along
     // through the synching point
     // 
+    /*
     bool const condToExit = ch >= nchannels
         ? true
         : useless_sample_values[tx_i] 
           || useless_sample_values[tx_j]
           || sample_values[tx_i]<=1 || sample_values[tx_j]<=1;
+          */
+    bool const condForUselessSamples = useless_sample_values[tx_i] 
+        || useless_sample_values[tx_j]
+        || sample_values[tx_i]<=1 || sample_values[tx_j]<=1;
 
     //
     // see cpu implementation for explanation
@@ -567,7 +582,7 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
     ScalarType chi2 = std::numeric_limits<ScalarType>::max();
     ScalarType tmax = 0;
     ScalarType tmaxerr = 0;
-    if (!condToExit) {
+    if (!condForUselessSamples) {
         auto const rtmp = sample_values[tx_i] / sample_values[tx_j];
         auto const invampl_i = 1.0 / sample_values[tx_i];
         auto const relErr2_i = sample_value_errors[tx_i]*sample_value_errors[tx_i]*
@@ -597,6 +612,48 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
         auto const ratio_value = rtmp;
         auto const ratio_error = total_error;
 
+        //
+        // precompute.
+        // in cpu version this was done conditionally
+        // however easier to do it here (precompute) and then just filter out
+        // if not needed
+        // 
+        auto const l_timeFitLimits_first = timeFitLimits_first;
+        auto const l_timeFitLimits_second = timeFitLimits_second;
+        if (ratio_step == 1
+            && ratio_value >= l_timeFitLimits_first
+            && ratio_value <= l_timeFitLimits_second) {
+
+            auto const time_max_i = static_cast<ScalarType>(ratio_index);
+            auto u = timeFitParameters[timeFitParameters_size - 1];
+#pragma unroll
+            for (int k=timeFitParameters_size-2; k>=0; k--)
+                u = u*ratio_value + timeFitParameters[k];
+
+            auto du = (timeFitParameters_size - 1) *
+                (timeFitParameters[timeFitParameters_size - 1]);
+            for (int k=timeFitParameters_size - 2; k>=1; k--)
+                du = du*ratio_value + k*timeFitParameters[k];
+
+            auto const error2 = ratio_error * ratio_error * du * du;
+            auto const time_max = error2 > 0
+                ? (time_max_i - u) / error2
+                : static_cast<ScalarType>(0);
+            auto const time_wgt = error2 > 0
+                ? 1.0 / error2
+                : static_cast<ScalarType>(0);
+
+            // store into shared mem
+            // note, this name is essentially identical to the one used 
+            // below. 
+            shrTimeMax[threadIdx.x] = error2 > 0 ? time_max : 0;
+            shrTimeWgt[threadIdx.x] = error2 > 0 ? time_wgt : 0;
+        } else {
+            shrTimeMax[threadIdx.x] = 0;
+            shrTimeWgt[threadIdx.x] = 0;
+        }
+
+        // continue with ratios
         auto const stepOverBeta = static_cast<SampleVector::Scalar>(ratio_step) / beta;
         auto const offset = static_cast<SampleVector::Scalar>(ratio_index) + alphabeta;
         auto const rmin = std::max(ratio_value - ratio_error, 0.001);
@@ -669,7 +726,7 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
     }
 
     // filter out inactive or useless samples threads
-    if (!condToExit) {
+    if (!condForUselessSamples) {
         // min chi2, now compute weighted average of tmax measurements
         // see cpu version for more explanation
         auto const chi2min = shr_chi2s[threadIdx.x - ltx];
@@ -700,6 +757,12 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
             shr_time_max[threadIdx.x] = iter%2==1 && (ltx==iter-1 && ltx>0)
                 ? shr_time_max[threadIdx.x]
                 : shr_time_max[threadIdx.x] + shr_time_max[threadIdx.x+iter];
+            shrTimeMax[threadIdx.x] = iter%2==1 && (ltx==iter-1 && ltx>0)
+                ? shrTimeMax[threadIdx.x]
+                : shrTimeMax[threadIdx.x] + shrTimeMax[threadIdx.x+iter];
+            shrTimeWgt[threadIdx.x] = iter%2==1 && (ltx==iter-1 && ltx>0)
+                ? shrTimeWgt[threadIdx.x]
+                : shrTimeWgt[threadIdx.x] + shrTimeWgt[threadIdx.x+iter];
         }
         
         __syncthreads();
@@ -714,18 +777,44 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
         auto const tmp_time_wgt = shr_time_wgt[threadIdx.x];
         auto const tMaxAlphaBeta = tmp_time_max / tmp_time_wgt;
         auto const tMaxErrorAlphaBeta = 1.0 / std::sqrt(tmp_time_wgt);
+        auto const accTimeMax = shrTimeMax[threadIdx.x];
+        auto const accTimeWgt = shrTimeWgt[threadIdx.x];
+        auto const tMaxRatio = accTimeWgt>0 
+            ? accTimeMax / accTimeWgt 
+            : static_cast<ScalarType>(0);
+        auto const tMaxErrorRatio = accTimeWgt>0 
+            ? 1.0 / std::sqrt(accTimeWgt) 
+            : static_cast<ScalarType>(0);
 
         tMaxAlphaBetas[ch] = tMaxAlphaBeta;
         tMaxErrorAlphaBetas[ch] = tMaxErrorAlphaBeta;
+        tMaxRatios[ch] = tMaxRatio;
+        tMaxErrorRatios[ch] = tMaxErrorRatio;
     }
 }
 #endif
 
 /// launch ctx parameters are 
 /// 10 threads per channel, N channels per block, Y blocks
+#define RUN_FINDAMPLCHI2
 #ifdef RUN_FINDAMPLCHI2
 __global__
-void kernel_time_compute_findamplchi2() {
+void kernel_time_compute_findamplchi2(
+        SampleVector::Scalar const* sample_values,
+        SampleVector::Scalar const* sample_value_errors,
+        bool const* useless_samples,
+        SampleVector::Scalar const* g_tMaxAlphaBeta,
+        SampleVector::Scalar const* g_tMaxErrorAlphaBeta,
+        SampleVector::Scalar const* amplitudeFitParameters,
+        SampleVector::Scalar const* sumAAsNullHypot,
+        SampleVector::Scalar const* sum0sNullHypot,
+        SampleVector::Scalar const* chi2sNullHypot,
+        TimeComputationState* g_state,
+        SampleVector::Scalar* g_ampMaxAlphaBeta,
+        SampleVector::Scalar* g_ampMaxError,
+        SampleVector::Scalar* g_timeMax,
+        SampleVector::Scalar* g_timeError,
+        int const nchannels) {
     using ScalarType = SampleVector::Scalar;
 
     // constants 
@@ -737,10 +826,23 @@ void kernel_time_compute_findamplchi2() {
     int const sample = threadIdx.x % nsamples;
     int const ch_start = ch * nsamples;
 
+    // configure shared mem
+    // per block, we need #threads per block * 2 * sizeof(ScalarType)
+    // we run with N channels per block
+    extern __shared__ char smem[];
+    ScalarType* shr_sumAf = reinterpret_cast<ScalarType*>(smem);
+    ScalarType* shr_sumff = shr_sumAf + blockDim.x;
+
     if (ch >= nchannels) return;
 
     // TODO is that better than storing into global and launching another kernel
     // for the first 10 threads
+    auto const alpha = amplitudeFitParameters[0];
+    auto const beta = amplitudeFitParameters[1];
+    auto const alphabeta = alpha * beta;
+    auto const invalphabeta = 1.0 / alphabeta;
+    auto const tMaxAlphaBeta = g_tMaxAlphaBeta[ch];
+    auto const tMaxErrorAlphaBeta = g_tMaxErrorAlphaBeta[ch];
     auto const sample_value = sample_values[gtx];
     auto const sample_value_error = sample_value_errors[gtx];
     auto const inverr2 = useless_samples[gtx]
@@ -754,6 +856,9 @@ void kernel_time_compute_findamplchi2() {
         : static_cast<ScalarType>(0.0);
     auto const sumAf = sample_value * (f * inverr2);
     auto const sumff = f * (f * inverr2);
+    auto const sumAA = sumAAsNullHypot[ch];
+    auto const sum0 = sum0sNullHypot[ch];
+    auto const nullChi2 = chi2sNullHypot[ch];
 
     // store into shared mem
     shr_sumAf[threadIdx.x] = sumAf;
@@ -765,7 +870,7 @@ void kernel_time_compute_findamplchi2() {
         shr_sumAf[threadIdx.x] += shr_sumAf[threadIdx.x+5];
         shr_sumff[threadIdx.x] += shr_sumff[threadIdx.x+5];
     }
-    __synchtreads();
+    __syncthreads();
 
     if (sample<2) {
         // will need to subtract for ltx = 3, we double count here
@@ -774,7 +879,7 @@ void kernel_time_compute_findamplchi2() {
         shr_sumff[threadIdx.x] += shr_sumff[threadIdx.x+2] 
             + shr_sumff[threadIdx.x+3];
     }
-    __synchtreads();
+    __syncthreads();
 
     if (sample==0) {
         // subtract to avoid double counting
@@ -790,36 +895,34 @@ void kernel_time_compute_findamplchi2() {
             + shr_sumAf[threadIdx.x+1]
             - shr_sumAf[threadIdx.x+3];
 
-        bool finished = false;
+        TimeComputationState state = TimeComputationState::NotFinished;
+        auto const ampMaxAlphaBeta = sumff>0 ? sumAf / sumff : 0;
         if (sumff > 0) {
-            auto const ampMaxAlphaBeta = sumAf / sumff;
             auto const chi2AlphaBeta = (sumAA - sumAf * sumAf / sumff) / sum0;
-            if (chi2AlphaBeta > NullChi2) {
+            if (chi2AlphaBeta > nullChi2) {
                 // null hypothesis is better
-                finished = true;
+                state = TimeComputationState::Finished;
             }
 
             // store to global
             g_ampMaxAlphaBeta[ch] = ampMaxAlphaBeta;
         } else {
-            finished = true;
+            state = TimeComputationState::Finished;
         }
 
         // store the state to global and finish calcs
-        g_finished[ch] = finished;
-        if (finished) return;
+        g_state[ch] = state;
+        if (state == TimeComputationState::Finished) return;
 
         auto const ampMaxError = g_ampMaxError[ch];
         auto const test_ratio = ampMaxAlphaBeta / ampMaxError;
         if (test_ratio <= 5.0) { // note we check for reversed condition w.r.t cpu
-            finished = true;
-            g_finished[ch] = finished;
+            state = TimeComputationState::Finished;
+            g_state[ch] = state;
             g_timeMax[ch] = tMaxAlphaBeta;
             g_timeError[ch] = tMaxErrorAlphaBeta;
         }
     }
-
-    */
 }
 #endif
 
@@ -948,7 +1051,8 @@ void kernel_time_compute_ampl() {
 
 #ifdef RUN_TMAXRATIOS
 __global__
-void kernel_time_compute_tmaxratios() {
+void kernel_time_compute_tmaxratios(
+        g_ratio_step) {
     using ScalarType = SampleVector::Scalar;
     
     // constants
@@ -1075,10 +1179,13 @@ void kernel_time_computation_init(uint16_t const* digis,
                                   float const* gain6Over1,
                                   SampleVector::Scalar* sample_values,
                                   SampleVector::Scalar* sample_value_errors,
+                                  SampleVector::Scalar* ampMaxError,
                                   bool* useless_sample_values,
                                   char* pedestal_nums,
                                   unsigned int const sample_mask,
                                   int nchannels) {
+    using ScalarType = SampleVector::Scalar;
+
     // constants
     constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
 
@@ -1092,6 +1199,12 @@ void kernel_time_computation_init(uint16_t const* digis,
         int ch_start = ch*nsamples;
         SampleVector::Scalar pedestal = 0.;
         int num = 0;
+
+        // configure shared mem
+        extern __shared__ char smem[];
+        ScalarType* shrSampleValues = 
+            reinterpret_cast<SampleVector::Scalar*>(smem);
+        ScalarType* shrSampleValueErrors = shrSampleValues + blockDim.x;
 
         // 0 and 1 sample values
         auto const adc0 = ecal::mgpa::adc(digis[ch_start]);
@@ -1148,10 +1261,61 @@ void kernel_time_computation_init(uint16_t const* digis,
         useless_sample_values[tx] = (sample_value_error <= 0) | bad;
         sample_values[tx] = sample_value;
         sample_value_errors[tx] = sample_value_error;
+
+        // store into the shared mem
+        shrSampleValues[threadIdx.x] = sample_value_error > 0
+            ? sample_value
+            : std::numeric_limits<ScalarType>::min();
+        shrSampleValueErrors[threadIdx.x] = sample_value_error;
+        __syncthreads();
+
+        // perform the reduction with min
+        if (sample < 5) {
+            // note, if equal -> we keep the value with lower sample as for cpu
+            shrSampleValueErrors[threadIdx.x] = 
+                shrSampleValues[threadIdx.x] < shrSampleValues[threadIdx.x+5] 
+                ? shrSampleValueErrors[threadIdx.x+5]
+                : shrSampleValueErrors[threadIdx.x];
+            shrSampleValues[threadIdx.x] = 
+                std::max(shrSampleValues[threadIdx.x], 
+                         shrSampleValues[threadIdx.x+5]);
+        }
+        __syncthreads();
+
+        // a bit of an overkill, but easier than to compare across 3 values
+        if (sample<3) {
+            shrSampleValueErrors[threadIdx.x] = 
+                shrSampleValues[threadIdx.x] < shrSampleValues[threadIdx.x+3]
+                ? shrSampleValueErrors[threadIdx.x+3]
+                : shrSampleValueErrors[threadIdx.x];
+            shrSampleValues[threadIdx.x] = 
+                std::max(shrSampleValues[threadIdx.x], 
+                         shrSampleValues[threadIdx.x+3]);
+        }
+        __syncthreads();
+
+        if (sample < 2) {
+            shrSampleValueErrors[threadIdx.x] = 
+                shrSampleValues[threadIdx.x] < shrSampleValues[threadIdx.x+2]
+                ? shrSampleValueErrors[threadIdx.x+2]
+                : shrSampleValueErrors[threadIdx.x];
+            shrSampleValues[threadIdx.x] = 
+                std::max(shrSampleValues[threadIdx.x], 
+                         shrSampleValues[threadIdx.x+2]);
+        }
+        __syncthreads();
  
         if (sample == 0) {
+            // we only needd the max error
+            auto const maxSampleValueError = 
+                shrSampleValues[threadIdx.x] < shrSampleValues[threadIdx.x+1]
+                ? shrSampleValueErrors[threadIdx.x+1]
+                : shrSampleValueErrors[threadIdx.x];
+
             // # pedestal samples used
             pedestal_nums[ch] = num;
+            // this is used downstream
+            ampMaxError[ch] = maxSampleValueError;
         }
     }
 }
@@ -1829,7 +1993,9 @@ void scatter(EcalDigiCollection const& digis,
     //
     unsigned int threads_time_init = threads_1d;
     unsigned int blocks_time_init = blocks_1d;
-    kernel_time_computation_init<<<blocks_time_init, threads_time_init>>>(
+    int sharedBytesInit = 2 * threads_time_init * sizeof(SampleVector::Scalar);
+    kernel_time_computation_init<<<blocks_time_init, threads_time_init,
+                                   sharedBytesInit>>>(
         d_data.digis_data, d_data.ids,
         d_data.rms_x12,
         d_data.rms_x6,
@@ -1841,6 +2007,7 @@ void scatter(EcalDigiCollection const& digis,
         d_data.gain6Over1,
         d_data.sample_values,
         d_data.sample_value_errors,
+        d_data.ampMaxError,
         d_data.useless_sample_values,
         d_data.pedestal_nums,
         barrel 
@@ -1892,12 +2059,12 @@ void scatter(EcalDigiCollection const& digis,
     //
     // TODO: configurable parameters for launch context below
     //
-    unsigned int nchannels_per_block_makeratio = 20;
+    unsigned int nchannels_per_block_makeratio = 10;
     unsigned int threads_makeratio = 45 * nchannels_per_block_makeratio;
     unsigned int blocks_makeratio = threads_makeratio > 45 * h_data.digis->size()
         ? 1
         : (h_data.digis->size() * 45 + threads_makeratio - 1) / threads_makeratio;
-    int sharedBytesMakeRatio = 3 * threads_makeratio * sizeof(SampleVector::Scalar);
+    int sharedBytesMakeRatio = 5 * threads_makeratio * sizeof(SampleVector::Scalar);
     kernel_time_compute_makeratio<<<blocks_makeratio, threads_makeratio,
                                     sharedBytesMakeRatio>>>(
         d_data.sample_values,
@@ -1905,10 +2072,45 @@ void scatter(EcalDigiCollection const& digis,
         d_data.useless_sample_values,
         d_data.pedestal_nums,
         barrel ? d_data.amplitudeFitParametersEB : d_data.amplitudeFitParametersEE,
+        barrel ? d_data.timeFitParametersEB : d_data.timeFitParametersEE,
         d_data.sumAAsNullHypot,
         d_data.sum0sNullHypot,
         d_data.tMaxAlphaBetas,
         d_data.tMaxErrorAlphaBetas,
+        d_data.tMaxRatios,
+        d_data.tMaxErrorRatios,
+        barrel ? d_data.timeFitParametersSizeEB : d_data.timeFitParametersSizeEE,
+        barrel ? d_data.timeFitLimitsFirstEB : d_data.timeFitLimitsFirstEE,
+        barrel ? d_data.timeFitLimitsSecondEB : d_data.timeFitLimitsSecondEE,
+        h_data.digis->size()
+    );
+    cudaDeviceSynchronize();
+    ecal::cuda::assert_if_error();
+
+    //
+    //
+    //
+    auto const threads_findamplchi2 = threads_1d;
+    auto const blocks_findamplchi2 = blocks_1d;
+    int const sharedBytesFindAmplChi2 = 2 * threads_findamplchi2 * 
+        sizeof(SampleVector::Scalar);
+    kernel_time_compute_findamplchi2<<<blocks_findamplchi2,
+                                       threads_findamplchi2,
+                                       sharedBytesFindAmplChi2>>>(
+        d_data.sample_values,
+        d_data.sample_value_errors,
+        d_data.useless_sample_values,
+        d_data.tMaxAlphaBetas,
+        d_data.tMaxErrorAlphaBetas,
+        barrel ? d_data.amplitudeFitParametersEB : d_data.amplitudeFitParametersEE,
+        d_data.sumAAsNullHypot,
+        d_data.sum0sNullHypot,
+        d_data.chi2sNullHypot,
+        d_data.tcState,
+        d_data.ampMaxAlphaBeta,
+        d_data.ampMaxError,
+        d_data.timeMax,
+        d_data.timeError,
         h_data.digis->size()
     );
     cudaDeviceSynchronize();
