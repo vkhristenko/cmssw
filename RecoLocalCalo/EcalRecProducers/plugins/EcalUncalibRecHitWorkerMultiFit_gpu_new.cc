@@ -232,9 +232,9 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
     sizeof(SampleVector::Scalar) * MAX_CHANNELS);
   cudaMalloc((void**)&d_data.tMaxErrorAlphaBetas,
     sizeof(SampleVector::Scalar) * MAX_CHANNELS);
-  cudaMalloc((void**)&d_data.tMaxRatios,
+  cudaMalloc((void**)&d_data.accTimeMax,
     sizeof(SampleVector::Scalar) * MAX_CHANNELS);
-  cudaMalloc((void**)&d_data.tMaxErrorRatios,
+  cudaMalloc((void**)&d_data.accTimeWgt,
     sizeof(SampleVector::Scalar) * MAX_CHANNELS);
   cudaMalloc((void**)&d_data.tcState,
     sizeof(ecal::multifit::v1::TimeComputationState) * MAX_CHANNELS);
@@ -363,8 +363,8 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.amplitudeFitParametersEE);
         cudaFree(d_data.tMaxAlphaBetas);
         cudaFree(d_data.tMaxErrorAlphaBetas);
-        cudaFree(d_data.tMaxRatios);
-        cudaFree(d_data.tMaxErrorRatios);
+        cudaFree(d_data.accTimeMax);
+        cudaFree(d_data.accTimeWgt;
         cudaFree(d_data.tcState);
         cudaFree(d_data.ampMaxAlphaBeta);
         cudaFree(d_data.ampMaxError);

@@ -493,8 +493,8 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
                                    SampleVector::Scalar const* sum0sNullHypot,
                                    SampleVector::Scalar* tMaxAlphaBetas,
                                    SampleVector::Scalar* tMaxErrorAlphaBetas,
-                                   SampleVector::Scalar* tMaxRatios,
-                                   SampleVector::Scalar* tMaxErrorRatios,
+                                   SampleVector::Scalar* g_accTimeMax,
+                                   SampleVector::Scalar* g_accTimeWgt,
                                    unsigned int const timeFitParameters_size,
                                    SampleVector::Scalar const timeFitLimits_first,
                                    SampleVector::Scalar const timeFitLimits_second,
@@ -777,29 +777,22 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
         auto const tmp_time_wgt = shr_time_wgt[threadIdx.x];
         auto const tMaxAlphaBeta = tmp_time_max / tmp_time_wgt;
         auto const tMaxErrorAlphaBeta = 1.0 / std::sqrt(tmp_time_wgt);
-        auto const accTimeMax = shrTimeMax[threadIdx.x];
-        auto const accTimeWgt = shrTimeWgt[threadIdx.x];
-        auto const tMaxRatio = accTimeWgt>0 
-            ? accTimeMax / accTimeWgt 
-            : static_cast<ScalarType>(0);
-        auto const tMaxErrorRatio = accTimeWgt>0 
-            ? 1.0 / std::sqrt(accTimeWgt) 
-            : static_cast<ScalarType>(0);
 
         tMaxAlphaBetas[ch] = tMaxAlphaBeta;
         tMaxErrorAlphaBetas[ch] = tMaxErrorAlphaBeta;
-        tMaxRatios[ch] = tMaxRatio;
-        tMaxErrorRatios[ch] = tMaxErrorRatio;
+        g_accTimeMax[ch] = shrTimeMax[threadIdx.x];
+        g_accTimeWgt[ch] = shrTimeWgt[threadIdx.x];
     }
 }
 #endif
 
 /// launch ctx parameters are 
 /// 10 threads per channel, N channels per block, Y blocks
+/// TODO: do we need to keep the state around or can be removed?!
 #define RUN_FINDAMPLCHI2
 #ifdef RUN_FINDAMPLCHI2
 __global__
-void kernel_time_compute_findamplchi2(
+void kernel_time_compute_findamplchi2_and_finish(
         SampleVector::Scalar const* sample_values,
         SampleVector::Scalar const* sample_value_errors,
         bool const* useless_samples,
@@ -916,7 +909,35 @@ void kernel_time_compute_findamplchi2(
 
         auto const ampMaxError = g_ampMaxError[ch];
         auto const test_ratio = ampMaxAlphaBeta / ampMaxError;
-        if (test_ratio <= 5.0) { // note we check for reversed condition w.r.t cpu
+        auto const accTimeMax = g_accTimeMax[ch];
+        auto const accTimeWgt = g_accTimeWgt[ch];
+        // branch to separate large vs small pulses
+        // see cpu version for more info
+        if (test_ratio > 5.0 && accTimeWgt>0) {
+            auto const tMaxRatio = accTimeWgt>0 
+                ? accTimeMax / accTimeWgt 
+                : static_cast<ScalarType>(0);
+            auto const tMaxErrorRatio = accTimeWgt>0 
+                ? 1.0 / std::sqrt(accTimeWgt) 
+                : static_cast<ScalarType>(0);
+
+            if (test_ratio > 10.0) {
+                g_timeMax[ch] = tMaxRatio;
+                g_timeError[ch] = tMaxErrorRatio;
+            } else {
+                auto const timeMax = 
+                    (tMaxAlphaBeta * (10.0 - ampMaxAlphaBeta / ampMaxError) + 
+                     tMaxRatio * (ampMaxAlphaBeta / ampMaxError - 5.0)) / 5.0;
+                auto const timeError = 
+                    (tMaxErrorAlphaBeta * (10.0 - ampMaxAlphaBeta / ampMaxError) + 
+                     tMaxErrorRatio * (ampMaxAlphaBeta / ampMaxError - 5.0)) / 5.0;
+                state = TimeComputationState::Finished;
+                g_state[ch] = state;
+                g_timeMax[ch] = timeMax;
+                g_timeError[ch] = timeError;
+            }
+
+        else {
             state = TimeComputationState::Finished;
             g_state[ch] = state;
             g_timeMax[ch] = tMaxAlphaBeta;
@@ -2077,8 +2098,8 @@ void scatter(EcalDigiCollection const& digis,
         d_data.sum0sNullHypot,
         d_data.tMaxAlphaBetas,
         d_data.tMaxErrorAlphaBetas,
-        d_data.tMaxRatios,
-        d_data.tMaxErrorRatios,
+        d_data.accTimeMax,
+        d_data.accTimeWgt,
         barrel ? d_data.timeFitParametersSizeEB : d_data.timeFitParametersSizeEE,
         barrel ? d_data.timeFitLimitsFirstEB : d_data.timeFitLimitsFirstEE,
         barrel ? d_data.timeFitLimitsSecondEB : d_data.timeFitLimitsSecondEE,
