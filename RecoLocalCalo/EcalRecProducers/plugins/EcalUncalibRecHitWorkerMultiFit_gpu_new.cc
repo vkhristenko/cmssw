@@ -224,9 +224,27 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
     sizeof(SampleVector::Scalar) * EBamplitudeFitParameters_.size());
   cudaMalloc((void**)&d_data.amplitudeFitParametersEE,
     sizeof(SampleVector::Scalar) * EEamplitudeFitParameters_.size());
+  cudaMalloc((void**)&d_data.timeFitParametersEB,
+    sizeof(SampleVector::Scalar) * EBtimeFitParameters_.size());
+  cudaMalloc((void**)&d_data.timeFitParametersEE,
+    sizeof(SampleVector::Scalar) * EEtimeFitParameters_.size());
   cudaMalloc((void**)&d_data.tMaxAlphaBetas,
     sizeof(SampleVector::Scalar) * MAX_CHANNELS);
   cudaMalloc((void**)&d_data.tMaxErrorAlphaBetas,
+    sizeof(SampleVector::Scalar) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.tMaxRatios,
+    sizeof(SampleVector::Scalar) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.tMaxErrorRatios,
+    sizeof(SampleVector::Scalar) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.tcState,
+    sizeof(ecal::multifit::v1::TimeComputationState) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.ampMaxAlphaBeta,
+    sizeof(SampleVector::Scalar) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.ampMaxError,
+    sizeof(SampleVector::Scalar) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.timeMax,
+    sizeof(SampleVector::Scalar) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.timeError,
     sizeof(SampleVector::Scalar) * MAX_CHANNELS);
   ecal::cuda::assert_if_error();
 
@@ -236,8 +254,9 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
 
   // TODO: this copy is done on purpose -> to avoid dealing with the current
   // parameter configuration. replacing double/float ...
-  std::vector<SampleVector::Scalar> ebAmplitudeFitParameters(2), 
-      eeAmplitudeFitParameters(2);
+  std::vector<SampleVector::Scalar> 
+      ebAmplitudeFitParameters(EBamplitudeFitParameters_.size()), 
+      eeAmplitudeFitParameters(EEamplitudeFitParameters_.size());
   ebAmplitudeFitParameters[0] = static_cast<SampleVector::Scalar>(
     EBamplitudeFitParameters_[0]);
   ebAmplitudeFitParameters[1] = static_cast<SampleVector::Scalar>(
@@ -253,6 +272,32 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
   cudaMemcpy(d_data.amplitudeFitParametersEE,
              eeAmplitudeFitParameters.data(),
              eeAmplitudeFitParameters.size() * sizeof(SampleVector::Scalar),
+             cudaMemcpyHostToDevice);
+
+  d_data.timeFitParametersSizeEB = EBtimeFitParameters_.size();
+  d_data.timeFitParametersSizeEE = EEtimeFitParameters_.size();
+  d_data.timeFitLimitsFirstEB = EBtimeFitLimits_.first;
+  d_data.timeFitLimitsSecondEB = EBtimeFitLimits_.second;
+  d_data.timeFitLimitsFirstEE = EEtimeFitLimits_.first;
+  d_data.timeFitLimitsSecondEE = EEtimeFitLimits_.second;
+  std::vector<SampleVector::Scalar> 
+      timeFitParametersEB(d_data.timeFitParametersSizeEB), 
+      timeFitParametersEE(d_data.timeFitParametersSizeEE);
+
+  // assume the same size for eb/ee
+  for (unsigned int i=0; i<d_data.timeFitParametersSizeEB; i++) {
+      timeFitParametersEB[i] = static_cast<SampleVector::Scalar>(
+        EBtimeFitParameters_[i]);
+      timeFitParametersEE[i] = static_cast<SampleVector::Scalar>(
+        EEtimeFitParameters_[i]);
+  }
+  cudaMemcpy(d_data.timeFitParametersEB,
+             timeFitParametersEB.data(),
+             timeFitParametersEB.size() * sizeof(SampleVector::Scalar),
+             cudaMemcpyHostToDevice);
+  cudaMemcpy(d_data.timeFitParametersEE,
+             timeFitParametersEE.data(),
+             timeFitParametersEE.size() * sizeof(SampleVector::Scalar),
              cudaMemcpyHostToDevice);
 }
 
@@ -318,6 +363,15 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.amplitudeFitParametersEE);
         cudaFree(d_data.tMaxAlphaBetas);
         cudaFree(d_data.tMaxErrorAlphaBetas);
+        cudaFree(d_data.tMaxRatios);
+        cudaFree(d_data.tMaxErrorRatios);
+        cudaFree(d_data.tcState);
+        cudaFree(d_data.ampMaxAlphaBeta);
+        cudaFree(d_data.ampMaxError);
+        cudaFree(d_data.timeMax);
+        cudaFree(d_data.timeError);
+        cudaFree(d_data.timeFitParametersEB);
+        cudaFree(d_data.timeFitParametersEE);
         ecal::cuda::assert_if_error();
     }
 }

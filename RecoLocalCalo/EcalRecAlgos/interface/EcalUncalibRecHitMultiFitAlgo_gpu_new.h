@@ -89,6 +89,11 @@ using EMatrix = Eigen::Matrix<double,
     EcalWeightSet::EcalWeightMatrix::rep_type::kRows,
     EcalWeightSet::EcalWeightMatrix::rep_type::kCols>;
 
+enum class TimeComputationState : char {
+    NotFinished = 0,
+    Finished = 1
+};
+
 struct device_data {
     uint16_t *digis_data = nullptr;
     uint32_t *ids = nullptr;
@@ -148,6 +153,14 @@ struct device_data {
     // TODO: check if we can use __constant__ memory for these guys
     SampleVector::Scalar *amplitudeFitParametersEB, *amplitudeFitParametersEE;
     SampleVector::Scalar *tMaxAlphaBetas, *tMaxErrorAlphaBetas;
+    SampleVector::Scalar *tMaxRatios, *tMaxErrorRatios;
+    SampleVector::Scalar *ampMaxAlphaBeta, *ampMaxError;
+    SampleVector::Scalar *timeMax, *timeError;
+    TimeComputationState *tcState;
+    unsigned int timeFitParametersSizeEB, timeFitParametersSizeEE;
+    SampleVector::Scalar timeFitLimitsFirstEB, timeFitLimitsSecondEB;
+    SampleVector::Scalar timeFitLimitsFirstEE, timeFitLimitsSecondEE;
+    SampleVector::Scalar *timeFitParametersEB, *timeFitParametersEE;
 };
 
 struct xyz {
