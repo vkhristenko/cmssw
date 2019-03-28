@@ -153,7 +153,7 @@ struct device_data {
     // TODO: check if we can use __constant__ memory for these guys
     SampleVector::Scalar *amplitudeFitParametersEB, *amplitudeFitParametersEE;
     SampleVector::Scalar *tMaxAlphaBetas, *tMaxErrorAlphaBetas;
-    SampleVector::Scalar *tMaxRatios, *tMaxErrorRatios;
+    SampleVector::Scalar *accTimeMax, *accTimeWgt;
     SampleVector::Scalar *ampMaxAlphaBeta, *ampMaxError;
     SampleVector::Scalar *timeMax, *timeError;
     TimeComputationState *tcState;
