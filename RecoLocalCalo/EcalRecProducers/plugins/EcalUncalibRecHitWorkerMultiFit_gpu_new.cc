@@ -364,7 +364,7 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.tMaxAlphaBetas);
         cudaFree(d_data.tMaxErrorAlphaBetas);
         cudaFree(d_data.accTimeMax);
-        cudaFree(d_data.accTimeWgt;
+        cudaFree(d_data.accTimeWgt);
         cudaFree(d_data.tcState);
         cudaFree(d_data.ampMaxAlphaBeta);
         cudaFree(d_data.ampMaxError);
