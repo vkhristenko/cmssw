@@ -246,6 +246,12 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
     sizeof(SampleVector::Scalar) * MAX_CHANNELS);
   cudaMalloc((void**)&d_data.timeError,
     sizeof(SampleVector::Scalar) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.amplitudeMax,
+    sizeof(SampleVector::Scalar) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.jitter,
+    sizeof(float) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.jitterError,
+    sizeof(float) * MAX_CHANNELS);
   ecal::cuda::assert_if_error();
 
   //
@@ -299,6 +305,9 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
              timeFitParametersEE.data(),
              timeFitParametersEE.size() * sizeof(SampleVector::Scalar),
              cudaMemcpyHostToDevice);
+
+  d_data.timeConstantTermEB = EBtimeConstantTerm_;
+  d_data.timeConstantTermEE = EEtimeConstantTerm_;
 }
 
 EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() {
@@ -372,6 +381,9 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.timeError);
         cudaFree(d_data.timeFitParametersEB);
         cudaFree(d_data.timeFitParametersEE);
+        cudaFree(d_data.amplitudeMax);
+        cudaFree(d_data.jitter);
+        cudaFree(d_data.jitterError);
         ecal::cuda::assert_if_error();
     }
 }
@@ -641,6 +653,8 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
     result.amplitude.resize(digis.size());
     result.chi2.resize(digis.size());
     result.did.resize(digis.size());
+    result.jitter.resize(digis.size());
+    result.jitterError.resize(digis.size());
 
     // 
     // launch
