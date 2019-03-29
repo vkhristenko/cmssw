@@ -981,9 +981,16 @@ void kernel_time_compute_fixMGPAslew(uint16_t const* digis,
     }
 }
 
+#define RUN_AMPL
 #ifdef RUN_AMPL
 __global__
-void kernel_time_compute_ampl() {
+void kernel_time_compute_ampl(SampleVector::Scalar const* sample_values,
+                              SampleVector::Scalar const* sample_value_errors,
+                              bool const* useless_samples,
+                              SampleVector::Scalar const* g_timeMax,
+                              SampleVector::Scalar const* amplitudeFitParameters,
+                              SampleVector::Scalar *g_amplitudeMax,
+                              int const nchannels) {
     using ScalarType = SampleVector::Scalar;
 
     // constants
@@ -996,13 +1003,25 @@ void kernel_time_compute_ampl() {
     int const ch = gtx / nsamples;
     int const sample = threadIdx.x % nsamples;
 
+    if (ch >= nchannels) return;
+
+    // configure shared mem
+    extern __shared__ char smem[];
+    ScalarType* shr_sum1 = reinterpret_cast<ScalarType*>(smem);
+    auto *shr_sumA = shr_sum1 + blockDim.x;
+    auto *shr_sumF = shr_sumA + blockDim.x;
+    auto *shr_sumAF = shr_sumF + blockDim.x;
+    auto *shr_sumFF = shr_sumAF + blockDim.x;
+
     auto const alpha = amplitudeFitParameters[0];
     auto const beta = amplitudeFitParameters[1];
     auto const timeMax = g_timeMax[ch];
     auto const pedestalLimit = timeMax - (alpha * beta) - 1.0;
     auto const sample_value = sample_values[gtx];
     auto const sample_value_error = sample_value_errors[gtx];
-    auto const inverr2 = 1. / (sample_value_error * sample_value_error);
+    auto const inverr2 = sample_value_error > 0
+        ? 1. / (sample_value_error * sample_value_error)
+        : static_cast<ScalarType>(0);
     auto const termOne = 1 + (sample - timeMax) / (alpha * beta);
     auto const f = termOne > 1.e-5
         ? fast_expf(alpha * fast_logf(termOne) - 
@@ -1015,10 +1034,12 @@ void kernel_time_compute_ampl() {
 
     // store into shared mem
     shr_sum1[threadIdx.x] = cond ? inverr2 : static_cast<ScalarType>(0);
-    shr_sumA[threadIdx.x] = cond 
-        ? sample_value * inverr2 
+    shr_sumA[threadIdx.x] = cond
+        ? sample_value * inverr2
         : static_cast<ScalarType>(0);
-    shr_sumF[threadIdx.x] = cond ? f * inverr2 : static_cast<ScalarType>(0);
+    shr_sumF[threadIdx.x] = cond 
+        ? f * inverr2
+        : static_cast<ScalarType>(0);
     shr_sumAF[threadIdx.x] = cond 
         ? (f*inverr2)*sample_value
         : static_cast<ScalarType>(0);
@@ -1046,7 +1067,7 @@ void kernel_time_compute_ampl() {
         shr_sumFF[threadIdx.x] += shr_sumFF[threadIdx.x+2] 
             + shr_sumFF[threadIdx.x+3];
     }
-    __synchtreads();
+    __syncthreads();
 
     if (sample == 0) {
         auto const sum1 = shr_sum1[threadIdx.x] 
@@ -1061,8 +1082,8 @@ void kernel_time_compute_ampl() {
             + shr_sumFF[threadIdx.x+1] - shr_sumFF[threadIdx.x+3];
 
         auto const denom = sumFF * sum1 - sumF*sumF;
-        auto const cond = sum1 > 0 && ecal::abs(denom)>1.e-20;
-        auto const amplitudeMax = cond
+        auto const condForDenom = sum1 > 0 && ecal::abs(denom)>1.e-20;
+        auto const amplitudeMax = condForDenom
             ? (sumAF * sum1 - sumA * sumF) / denom
             : static_cast<ScalarType>(0.);
 
@@ -1341,6 +1362,65 @@ void kernel_time_computation_init(uint16_t const* digis,
             ampMaxError[ch] = maxSampleValueError;
         }
     }
+}
+
+///
+/// launch context parameters: 1 thread per channel
+///
+__global__
+void kernel_time_correction_and_finalize(
+//        SampleVector::Scalar const* g_amplitude,
+        float const* g_amplitude,
+        float const* amplitudeBins,
+        float const* shiftBins,
+        SampleVector::Scalar const* g_timeMax,
+        SampleVector::Scalar const* g_timeError,
+        float *g_jitter,
+        float *g_jitterError,
+        int const amplitudeBinsSize,
+        SampleVector::Scalar const timeConstantTerm,
+        int const nchannels) {
+    using ScalarType = SampleVector::Scalar;
+
+    // indices
+    int const gtx = threadIdx.x + blockIdx.x * blockDim.x;
+
+    // filter out outside of range threads
+    if (gtx >= nchannels) return;
+
+    auto const amplitude = g_amplitude[gtx];
+
+    int myBin = -1;
+    for (int bin=0; bin<amplitudeBinsSize; bin++) {
+        if (amplitude > amplitudeBins[bin]) 
+            myBin = bin;
+        else 
+            break;
+    }
+
+    ScalarType correction = 0;
+    if (myBin == -1) {
+        correction = shiftBins[0];
+    } else if (myBin == amplitudeBinsSize-1) {
+        correction = shiftBins[myBin];
+    } else {
+        correction = shiftBins[myBin+1] - shiftBins[myBin];
+        correction *= (amplitude - amplitudeBins[myBin]) / 
+            (amplitudeBins[myBin+1] - amplitudeBins[myBin]);
+        correction += shiftBins[myBin];
+    }
+
+    // correction * 1./25.
+    correction = correction * 0.04;
+    auto const timeMax = g_timeMax[gtx];
+    auto const timeError = g_timeError[gtx];
+    auto const jitter = timeMax - 5 + correction;
+    auto const jitterError = std::sqrt(timeError*timeError + 
+        timeConstantTerm*timeConstantTerm * 0.04 * 0.04); // 0.04 = 1./25.
+
+    // store back to  global
+    g_jitter[gtx] = jitter;
+    g_jitterError[gtx] = jitterError;
 }
 
 void eigen_solve_submatrix(SampleMatrix& mat, 
@@ -1808,22 +1888,25 @@ void scatter(EcalDigiCollection const& digis,
         h_data.noisecorrs->size() * sizeof(SampleMatrixD),
         cudaMemcpyHostToDevice);
 
-    cudaMemcpy(d_data.EBTimeCorrAmplitudeBins, 
-        h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.data(),
-        sizeof(float) * h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.size(),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.EBTimeCorrShiftBins, 
-        h_data.time_bias_corrections->EBTimeCorrShiftBins.data(),
-        sizeof(float) * h_data.time_bias_corrections->EBTimeCorrShiftBins.size(),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.EETimeCorrAmplitudeBins, 
-        h_data.time_bias_corrections->EETimeCorrAmplitudeBins.data(),
-        sizeof(float) * h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.EETimeCorrShiftBins, 
-        h_data.time_bias_corrections->EETimeCorrShiftBins.data(),
-        sizeof(float) * h_data.time_bias_corrections->EETimeCorrShiftBins.size(),
-        cudaMemcpyHostToDevice);
+    if (barrel) {
+        cudaMemcpy(d_data.EBTimeCorrAmplitudeBins, 
+            h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.data(),
+            sizeof(float) * h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.size(),
+            cudaMemcpyHostToDevice);
+        cudaMemcpy(d_data.EBTimeCorrShiftBins, 
+            h_data.time_bias_corrections->EBTimeCorrShiftBins.data(),
+            sizeof(float) * h_data.time_bias_corrections->EBTimeCorrShiftBins.size(),
+            cudaMemcpyHostToDevice);
+    } else {
+        cudaMemcpy(d_data.EETimeCorrAmplitudeBins, 
+            h_data.time_bias_corrections->EETimeCorrAmplitudeBins.data(),
+            sizeof(float) * h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
+            cudaMemcpyHostToDevice);
+        cudaMemcpy(d_data.EETimeCorrShiftBins, 
+            h_data.time_bias_corrections->EETimeCorrShiftBins.data(),
+            sizeof(float) * h_data.time_bias_corrections->EETimeCorrShiftBins.size(),
+            cudaMemcpyHostToDevice);
+    }
     cudaMemcpy(d_data.weights,
         h_data.weights->data(),
         sizeof(EMatrix) * h_data.weights->size(),
@@ -2141,6 +2224,50 @@ void scatter(EcalDigiCollection const& digis,
     cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
+    //
+    //
+    //
+    auto const threads_ampl = threads_1d;
+    auto const blocks_ampl = blocks_1d;
+    int const sharedBytesAmpl = 5 * threads_ampl * sizeof(SampleVector::Scalar);
+    kernel_time_compute_ampl<<<blocks_ampl, threads_ampl,
+                               sharedBytesAmpl>>>(
+        d_data.sample_values,
+        d_data.sample_value_errors,
+        d_data.useless_sample_values,
+        d_data.timeMax,
+        barrel ? d_data.amplitudeFitParametersEB : d_data.amplitudeFitParametersEE,
+        d_data.amplitudeMax,
+        h_data.digis->size()
+    );
+    cudaDeviceSynchronize();
+    ecal::cuda::assert_if_error();
+
+    //
+    //
+    //
+    auto const threads_timecorr = 32;
+    auto const blocks_timecorr = threads_timecorr > h_data.digis->size()
+        ? 1 : (h_data.digis->size() + threads_timecorr-1) / threads_timecorr;
+    kernel_time_correction_and_finalize<<<blocks_timecorr, threads_timecorr>>>(
+        d_data.energies,
+        barrel ? d_data.EBTimeCorrAmplitudeBins : d_data.EETimeCorrAmplitudeBins,
+        barrel ? d_data.EBTimeCorrShiftBins : d_data.EETimeCorrShiftBins,
+        d_data.timeMax,
+        d_data.timeError,
+        d_data.jitter,
+        d_data.jitterError,
+        barrel 
+            ? h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.size() 
+            : h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
+        barrel 
+            ? d_data.timeConstantTermEB
+            : d_data.timeConstantTermEE,
+        h_data.digis->size()
+    );
+    cudaDeviceSynchronize();
+    ecal::cuda::assert_if_error();
+
 /*
     kernel_build_rechit<<<blocks_min, threads_min>>>(
         d_data.energies,
@@ -2192,6 +2319,14 @@ void scatter(EcalDigiCollection const& digis,
     cudaMemcpy(&(*h_data.rechits_soa.did.begin()),
                d_data.ids,
                h_data.rechits_soa.did.size() * sizeof(uint32_t),
+               cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_data.rechits_soa.jitter.data(),
+               d_data.jitter,
+               h_data.rechits_soa.jitter.size() * sizeof(float),
+               cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_data.rechits_soa.jitterError.data(),
+               d_data.jitterError,
+               h_data.rechits_soa.jitterError.size() * sizeof(float),
                cudaMemcpyDeviceToHost);
 
 //    cudaMemcpy(&(*h_data.rechits->begin()), d_data.rechits,

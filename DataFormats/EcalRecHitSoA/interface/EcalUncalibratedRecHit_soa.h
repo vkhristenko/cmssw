@@ -34,6 +34,8 @@ struct UncalibratedRecHit {
     typename type_wrapper<float, L>::type amplitude;
     typename type_wrapper<float, L>::type chi2;
     typename type_wrapper<uint32_t, L>::type did;
+    typename type_wrapper<float, L>::type jitter;
+    typename type_wrapper<float, L>::type jitterError;
 };
 
 using SoAUncalibratedRecHitCollection = UncalibratedRecHit<Tag::soa>;

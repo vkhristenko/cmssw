@@ -152,15 +152,22 @@ struct device_data {
 
     // TODO: check if we can use __constant__ memory for these guys
     SampleVector::Scalar *amplitudeFitParametersEB, *amplitudeFitParametersEE;
+
     SampleVector::Scalar *tMaxAlphaBetas, *tMaxErrorAlphaBetas;
     SampleVector::Scalar *accTimeMax, *accTimeWgt;
     SampleVector::Scalar *ampMaxAlphaBeta, *ampMaxError;
     SampleVector::Scalar *timeMax, *timeError;
+    float *jitter, *jitterError;
     TimeComputationState *tcState;
     unsigned int timeFitParametersSizeEB, timeFitParametersSizeEE;
     SampleVector::Scalar timeFitLimitsFirstEB, timeFitLimitsSecondEB;
     SampleVector::Scalar timeFitLimitsFirstEE, timeFitLimitsSecondEE;
+    // check if cosntant mem is better for these 2
     SampleVector::Scalar *timeFitParametersEB, *timeFitParametersEE;
+    SampleVector::Scalar *amplitudeMax;
+
+    // use constant mem?
+    SampleVector::Scalar timeConstantTermEB, timeConstantTermEE;
 };
 
 struct xyz {
