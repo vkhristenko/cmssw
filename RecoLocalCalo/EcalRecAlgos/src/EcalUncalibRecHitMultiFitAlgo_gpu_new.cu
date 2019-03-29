@@ -789,8 +789,8 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
 /// launch ctx parameters are 
 /// 10 threads per channel, N channels per block, Y blocks
 /// TODO: do we need to keep the state around or can be removed?!
-#define RUN_FINDAMPLCHI2
-#ifdef RUN_FINDAMPLCHI2
+#define RUN_FINDAMPLCHI2_AND_FINISH
+#ifdef RUN_FINDAMPLCHI2_AND_FINISH
 __global__
 void kernel_time_compute_findamplchi2_and_finish(
         SampleVector::Scalar const* sample_values,
@@ -798,6 +798,8 @@ void kernel_time_compute_findamplchi2_and_finish(
         bool const* useless_samples,
         SampleVector::Scalar const* g_tMaxAlphaBeta,
         SampleVector::Scalar const* g_tMaxErrorAlphaBeta,
+        SampleVector::Scalar const* g_accTimeMax,
+        SampleVector::Scalar const* g_accTimeWgt,
         SampleVector::Scalar const* amplitudeFitParameters,
         SampleVector::Scalar const* sumAAsNullHypot,
         SampleVector::Scalar const* sum0sNullHypot,
@@ -936,7 +938,7 @@ void kernel_time_compute_findamplchi2_and_finish(
                 g_timeMax[ch] = timeMax;
                 g_timeError[ch] = timeError;
             }
-
+        }
         else {
             state = TimeComputationState::Finished;
             g_state[ch] = state;
@@ -2115,7 +2117,7 @@ void scatter(EcalDigiCollection const& digis,
     auto const blocks_findamplchi2 = blocks_1d;
     int const sharedBytesFindAmplChi2 = 2 * threads_findamplchi2 * 
         sizeof(SampleVector::Scalar);
-    kernel_time_compute_findamplchi2<<<blocks_findamplchi2,
+    kernel_time_compute_findamplchi2_and_finish<<<blocks_findamplchi2,
                                        threads_findamplchi2,
                                        sharedBytesFindAmplChi2>>>(
         d_data.sample_values,
@@ -2123,6 +2125,8 @@ void scatter(EcalDigiCollection const& digis,
         d_data.useless_sample_values,
         d_data.tMaxAlphaBetas,
         d_data.tMaxErrorAlphaBetas,
+        d_data.accTimeMax,
+        d_data.accTimeWgt,
         barrel ? d_data.amplitudeFitParametersEB : d_data.amplitudeFitParametersEE,
         d_data.sumAAsNullHypot,
         d_data.sum0sNullHypot,
