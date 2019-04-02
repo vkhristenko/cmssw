@@ -4,7 +4,7 @@
 #include <Eigen/Dense>
 #include <array>
 
-namespace ecal { namespace multifit { namespace v1 {
+namespace ecal { namespace multifit {
 
 constexpr int SampleVectorSize = 10;
 constexpr int FullSampleVectorSize = 19;
@@ -36,6 +36,8 @@ typedef Eigen::Matrix<data_type,1,1> SingleVector;
 
 typedef std::array<SampleMatrixD,NGains> SampleMatrixGainArray;
 
-}}}
+using PermutationMatrix = Eigen::PermutationMatrix<SampleMatrix::RowsAtCompileTime>;
+
+}}
 
 #endif

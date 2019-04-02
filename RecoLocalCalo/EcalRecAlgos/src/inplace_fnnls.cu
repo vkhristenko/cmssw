@@ -1,25 +1,9 @@
-#ifndef inplace_fnnls_hpp
-#define inpalce_fnnls_hpp
+#include "inplace_fnnls.h"
 
-#include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes_gpu.h"
-
-namespace ecal { namespace multifit { namespace v1 {
+namespace ecal { namespace multifit {
 
 using matrix_t = SampleMatrix;
 using vector_t = SampleVector;
-using permutation_t = Eigen::PermutationMatrix<SampleMatrix::RowsAtCompileTime>;
-
-__device__
-bool
-inplace_fnnls(matrix_t const& A,
-              vector_t const& b,
-              vector_t& x,
-              int& npassive,
-              BXVectorType& activeBXs,
-              permutation_t& permutation,
-              PulseMatrixType& pulse_matrix,
-              const double eps = 1e-11,
-              const unsigned int max_iterations = 500);
 
 __device__
 bool inplace_fnnls(matrix_t const& A,
@@ -27,7 +11,7 @@ bool inplace_fnnls(matrix_t const& A,
                    vector_t& x,
                    int& npassive,
                    BXVectorType& activeBXs,
-                   permutation_t& permutation,
+                   PermutationMatrix& permutation,
                    PulseMatrixType& pulse_matrix,
                    const double eps,
                    const unsigned int max_iterations) {
@@ -147,6 +131,4 @@ bool inplace_fnnls(matrix_t const& A,
   return true;
 }
 
-}}}
-
-#endif
+}}
