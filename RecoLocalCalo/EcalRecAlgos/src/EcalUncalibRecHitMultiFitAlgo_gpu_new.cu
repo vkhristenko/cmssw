@@ -262,7 +262,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     unsigned int blocks_min = threads_min > h_data.digis->size()
         ? 1 : (h_data.digis->size() + threads_min - 1) / threads_min;
     cudaEventRecord(start_event, 0);
-#define USE_SINGLE_KERNEL_FOR_MINIMIZE
+//#define USE_SINGLE_KERNEL_FOR_MINIMIZE
 #ifdef USE_SINGLE_KERNEL_FOR_MINIMIZE
     kernel_minimize<<<blocks_min, threads_min>>>(
         d_data.noisecov,

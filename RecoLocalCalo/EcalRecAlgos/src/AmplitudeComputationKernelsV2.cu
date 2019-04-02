@@ -28,8 +28,6 @@
 
 namespace ecal { namespace multifit {
 
-#define RUN_UPDATE_COVARIANCE
-#ifdef RUN_UPDATE_COVARIANCE
 __global__
 void kernel_update_covariance_matrix(
         SampleMatrix const* noiseCovariance,
@@ -90,10 +88,7 @@ void kernel_update_covariance_matrix(
     updatedNoiseCovariance[ch](ty, tx) = matrixValue;
 
 }
-#endif
 
-#define RUN_COVARIANCE_DECOMPOSITION
-#ifdef RUN_COVARIANCE_DECOMPOSITION
 __global__
 void kernel_matrix_ludecomp(
         SampleMatrix const* covarianceMatrix,
@@ -109,10 +104,7 @@ void kernel_matrix_ludecomp(
         Ls[ch] = covarianceMatrix[ch].llt().matrixL();
     }
 }
-#endif
 
-#define RUN_FAST_NNLS
-#ifdef RUN_FAST_NNLS
 __global__
 void kernel_fast_nnls(
         SampleMatrix const* Ls,
@@ -138,10 +130,7 @@ void kernel_fast_nnls(
                       pulseMatrix[ch]);
     }
 }
-#endif
 
-#define RUN_COMPUTE_CHI2
-#ifdef RUN_COMPUTE_CHI2
 __global__
 void kernel_compute_chi2_and_propogate_quantities(
         SampleMatrix const* Ls,
@@ -177,16 +166,13 @@ void kernel_compute_chi2_and_propogate_quantities(
         if (ecal::abs(delta) < 1e-3) {
             acState[ch] = static_cast<char>(MinimizationState::Finished);
             amplitudes[ch] = amplitudes[ch].transpose() * 
-                permutation[ch];
+                permutation[ch].transpose();
             energies[ch] = amplitudes[ch](5);
 //            statuses[ch] = 
         }
     }
 }
-#endif
 
-#define RUN_REDUCE_STATE
-#ifdef RUN_REDUCE_STATE
 __global__
 void kernel_reduce_state(
         char const* state,
@@ -213,7 +199,6 @@ void kernel_reduce_state(
     if (threadIdx.x == 0)
         statePerBlock[blockIdx.x] = sState[0];
 }
-#endif
 
 __global__
 void kernelInitializeBeforeMinimizationProcedure(
@@ -233,8 +218,6 @@ void kernelInitializeBeforeMinimizationProcedure(
     }
 }
 
-#define RUN_MINIMIZATION_PROCEDURE
-#ifdef RUN_MINIMIZATION_PROCEDURE
 void minimization_procedure(
         device_data& d_data, 
         host_data& h_data) {
@@ -278,7 +261,6 @@ void minimization_procedure(
         ecal::cuda::assert_if_error();
 
         // call kernel to perform covaraince matrix cholesky decomposition
-#ifdef RUN_COVARIANCE_DECOMPOSITION
         unsigned int threadsMatrixLU = 32;
         unsigned int blocksMatrixLU = threadsMatrixLU > h_data.digis->size()
             ? 1
@@ -290,10 +272,8 @@ void minimization_procedure(
             h_data.digis->size());
         cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
-#endif
 
         // call kernel to perform fast nnls
-#ifdef RUN_FAST_NNLS
         unsigned int threadsNNLS = 32;
         unsigned int blocksNNLS = threadsNNLS > h_data.digis->size()
             ? 1
@@ -310,10 +290,9 @@ void minimization_procedure(
             h_data.digis->size());
         cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
-#endif
 
+#ifdef XXXX
         // call kernel to compute chi2
-#ifdef RUN_COMPUTE_CHI2
         unsigned int threadsChi2 = 32;
         unsigned int blocksChi2 = threadsChi2 > h_data.digis->size()
             ? 1
@@ -330,10 +309,8 @@ void minimization_procedure(
             h_data.digis->size());
         cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
-#endif
 
         // call kernel to reduce to generate global state
-#ifdef RUN_REDUCE_STATE
         unsigned int threadsState = 256;
         unsigned int blocksForStateReduce = threadsState > h_data.digis->size()
             ? 1
@@ -342,11 +319,9 @@ void minimization_procedure(
             d_data.acState, 
             d_data.minimizationStatePerBlock,
             h_data.digis->size());
-#endif
 
         // transfer the reductions per block back
-#define RUN_FINALIZE_MINIMIZATION_PROCEDURE
-#ifdef RUN_FINALIZE_MINIMIZATION_PROCEDURE 
+//#define RUN_FINALIZE_MINIMIZATION_PROCEDURE
         cudaMemcpy(d_data.h_minimizationStatesPerBlock.data(),
                    d_data.minimizationStatePerBlock,
                    blocksForStateReduce * sizeof(MinimizationState),
@@ -363,6 +338,5 @@ void minimization_procedure(
         iterations++;
     }
 }
-#endif
 
 }}

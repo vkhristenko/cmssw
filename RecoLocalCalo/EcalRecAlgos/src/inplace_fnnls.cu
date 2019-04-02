@@ -88,7 +88,7 @@ bool inplace_fnnls(matrix_t const& A,
       auto alpha = std::numeric_limits<double>::max();
       Eigen::Index alpha_idx = 0;
 
-#pragma unroll 10
+#pragma unroll
       for (auto i = 0; i < npassive; ++i) {
         if (s[i] <= 0.) {
           auto const ratio = x[i] / (x[i] - s[i]);
