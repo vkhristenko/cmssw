@@ -13,6 +13,7 @@
 <use   name="eigen"/>
 <use   name="cuda"/>
 <use   name="DataFormats/EcaRecHitSoA"/>
+<flags CUDA_FLAGS="-Xptxas -v"/>
 
 <export>
   <lib   name="1"/>

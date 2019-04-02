@@ -26,8 +26,9 @@
 #include <cuda_runtime.h>
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 
-#define MAX_CHANNELS 50000
+#define MAX_CHANNELS 20000
 #define MAX_TIME_BIAS_CORRECTIONS 100
+#define MAX_BLOCKS_FOR_STATE_REDUCTION 1000
 
 EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(const edm::ParameterSet&ps,edm::ConsumesCollector& c) :
   EcalUncalibRecHitWorkerBaseClass(ps,c)
@@ -124,13 +125,13 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
   cudaMalloc((void**)&d_data.ids,
     MAX_CHANNELS * sizeof(uint32_t));
   cudaMalloc((void**)&d_data.amplitudes,
-    MAX_CHANNELS * sizeof(ecal::multifit::v1::SampleVector));
+    MAX_CHANNELS * sizeof(ecal::multifit::SampleVector));
   cudaMalloc((void**)&d_data.samples,
-    MAX_CHANNELS * sizeof(ecal::multifit::v1::SampleVector));
+    MAX_CHANNELS * sizeof(ecal::multifit::SampleVector));
   cudaMalloc((void**)&d_data.gainsNoise,
-    MAX_CHANNELS * sizeof(ecal::multifit::v1::SampleGainVector));
+    MAX_CHANNELS * sizeof(ecal::multifit::SampleGainVector));
   cudaMalloc((void**)&d_data.gainsPedestal,
-    MAX_CHANNELS * sizeof(ecal::multifit::v1::SampleGainVector));
+    MAX_CHANNELS * sizeof(ecal::multifit::SampleGainVector));
 
 //  cudaMalloc((void**)&d_data.pedestals,
 //    MAX_CHANNELS * sizeof(EcalPedestal));
@@ -156,30 +157,24 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
   cudaMalloc((void**)&d_data.gain6Over1,
     MAX_CHANNELS * sizeof(float));
 
-  cudaMalloc((void**)&d_data.xtals,
-    MAX_CHANNELS * sizeof(EcalXtalGroupId));
-
   cudaMalloc((void**)&d_data.pulses,
     MAX_CHANNELS * sizeof(EcalPulseShape));
   cudaMalloc((void**)&d_data.epulses,
-    MAX_CHANNELS * sizeof(ecal::multifit::v1::FullSampleVector));
+    MAX_CHANNELS * sizeof(ecal::multifit::FullSampleVector));
 
   cudaMalloc((void**)&d_data.covariances,
     MAX_CHANNELS * sizeof(EcalPulseCovariance));
   cudaMalloc((void**)&d_data.pulse_covariances,
-    MAX_CHANNELS * sizeof(ecal::multifit::v1::FullSampleMatrix));
-
-  cudaMalloc((void**)&d_data.rechits,
-    MAX_CHANNELS * sizeof(EcalUncalibratedRecHit));
+    MAX_CHANNELS * sizeof(ecal::multifit::FullSampleMatrix));
 
   cudaMalloc((void**)&d_data.noisecorrs,
-    3 * sizeof(ecal::multifit::v1::SampleMatrixD)); // size of std::array
+    3 * sizeof(ecal::multifit::SampleMatrixD)); // size of std::array
   cudaMalloc((void**)&d_data.noisecov,
-    MAX_CHANNELS * sizeof(ecal::multifit::v1::SampleMatrix));
+    MAX_CHANNELS * sizeof(ecal::multifit::SampleMatrix));
   cudaMalloc((void**)&d_data.pulse_matrix,
-    MAX_CHANNELS * sizeof(ecal::multifit::v1::PulseMatrixType));
+    MAX_CHANNELS * sizeof(ecal::multifit::PulseMatrixType));
   cudaMalloc((void**)&d_data.bxs,
-    sizeof(ecal::multifit::v1::BXVectorType));
+    sizeof(ecal::multifit::BXVectorType));
 
   cudaMalloc((void**)&d_data.sample_mask, sizeof(EcalSampleMask));
   cudaMalloc((void**)&d_data.EBTimeCorrAmplitudeBins,
@@ -190,8 +185,6 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
     sizeof(float) * MAX_TIME_BIAS_CORRECTIONS);
   cudaMalloc((void**)&d_data.EETimeCorrShiftBins,
     sizeof(float) * MAX_TIME_BIAS_CORRECTIONS);
-  cudaMalloc((void**)&d_data.weights,
-    sizeof(ecal::multifit::v1::EMatrix)*2*MAX_CHANNELS);
   cudaMalloc((void**)&d_data.statuses,
     sizeof(bool) * MAX_CHANNELS);
   cudaMalloc((void**)&d_data.chi2,
@@ -204,8 +197,6 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
     sizeof(bool) * MAX_CHANNELS);
   cudaMalloc((void**)&d_data.isSaturated,
     sizeof(bool) * MAX_CHANNELS);
-  cudaMalloc((void**)&d_data.state_flags,
-    sizeof(char) * MAX_CHANNELS);
   cudaMalloc((void**)&d_data.sample_values,
     sizeof(SampleVector::Scalar) * MAX_CHANNELS * EcalDataFrame::MAXSAMPLES);
   cudaMalloc((void**)&d_data.sample_value_errors,
@@ -237,7 +228,7 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
   cudaMalloc((void**)&d_data.accTimeWgt,
     sizeof(SampleVector::Scalar) * MAX_CHANNELS);
   cudaMalloc((void**)&d_data.tcState,
-    sizeof(ecal::multifit::v1::TimeComputationState) * MAX_CHANNELS);
+    sizeof(ecal::multifit::TimeComputationState) * MAX_CHANNELS);
   cudaMalloc((void**)&d_data.ampMaxAlphaBeta,
     sizeof(SampleVector::Scalar) * MAX_CHANNELS);
   cudaMalloc((void**)&d_data.ampMaxError,
@@ -252,6 +243,21 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
     sizeof(float) * MAX_CHANNELS);
   cudaMalloc((void**)&d_data.jitterError,
     sizeof(float) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.updatedNoiseCovariance,
+    sizeof(SampleMatrix) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.noiseMatrixDecomposition,
+    sizeof(SampleMatrix) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.acState,
+    sizeof(char) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.npassive,
+    sizeof(int) * MAX_CHANNELS);
+  cudaMalloc((void**)&d_data.permutation,
+    sizeof(ecal::multifit::PermutationMatrix) * MAX_CHANNELS);
+
+  // resize the host as well
+  d_data.h_minimizationStatesPerBlock.resize(MAX_BLOCKS_FOR_STATE_REDUCTION);
+  cudaMalloc((void**)&d_data.minimizationStatePerBlock,
+    sizeof(char) * MAX_BLOCKS_FOR_STATE_REDUCTION);
   ecal::cuda::assert_if_error();
 
   //
@@ -334,14 +340,12 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.gain12Over6);
         cudaFree(d_data.gain6Over1);
 
-        cudaFree(d_data.xtals);
         cudaFree(d_data.pulses);
         cudaFree(d_data.epulses);
 
         cudaFree(d_data.covariances);
         cudaFree(d_data.pulse_covariances);
 
-        cudaFree(d_data.rechits);
         cudaFree(d_data.noisecorrs);
         cudaFree(d_data.sample_mask);
 
@@ -353,14 +357,12 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.EBTimeCorrShiftBins);
         cudaFree(d_data.EETimeCorrAmplitudeBins);
         cudaFree(d_data.EETimeCorrShiftBins);
-        cudaFree(d_data.weights);
         cudaFree(d_data.statuses);
         cudaFree(d_data.chi2);
         cudaFree(d_data.energies);
         cudaFree(d_data.hasSwitchToGain6);
         cudaFree(d_data.hasSwitchToGain1);
         cudaFree(d_data.isSaturated);
-        cudaFree(d_data.state_flags);
         cudaFree(d_data.sample_values);
         cudaFree(d_data.sample_value_errors);
         cudaFree(d_data.useless_sample_values);
@@ -384,6 +386,12 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.amplitudeMax);
         cudaFree(d_data.jitter);
         cudaFree(d_data.jitterError);
+        cudaFree(d_data.updatedNoiseCovariance);
+        cudaFree(d_data.noiseMatrixDecomposition);
+        cudaFree(d_data.acState);
+        cudaFree(d_data.permutation);
+        cudaFree(d_data.minimizationStatePerBlock);
+        cudaFree(d_data.npassive);
         ecal::cuda::assert_if_error();
     }
 }
@@ -545,13 +553,13 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
     //
 //    std::vector<EcalPedestal> vpedestals;
 //    std::vector<EcalMGPAGainRatio> vgains;
-    ecal::multifit::v1::pedestal_data ped_data;
-    ecal::multifit::v1::mgpagain_ratio_data gainratio_data;
+    ecal::multifit::pedestal_data ped_data;
+    ecal::multifit::mgpagain_ratio_data gainratio_data;
 
     std::vector<EcalXtalGroupId> vxtals;
     std::vector<EcalPulseShape> vpulseshapes;
     std::vector<EcalPulseCovariance> vcovariances;
-    std::vector<ecal::multifit::v1::EMatrix> vweights;
+    std::vector<ecal::multifit::EMatrix> vweights;
     const SampleMatrixGainArray &noisecors = noisecor(barrel);
 
     // 
@@ -570,7 +578,7 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
     gainratio_data.gain12Over6.reserve(digis.size());
     gainratio_data.gain6Over1.reserve(digis.size());
 
-    ecal::multifit::v1::BXVectorType bxs;
+    ecal::multifit::BXVectorType bxs;
     bxs << -5, -4, -3, -2, -1, 0, 1, 2, 3, 4;
 
     vxtals.reserve(digis.size());
@@ -616,7 +624,7 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
         EcalWeightSet const& wset = wit->second;
         auto const& mat1 = wset.getWeightsBeforeGainSwitch();
         auto const& mat2 = wset.getWeightsAfterGainSwitch();
-        ecal::multifit::v1::EMatrix m1,m2;
+        ecal::multifit::EMatrix m1,m2;
         for (unsigned int irow=0; 
              irow<EcalWeightSet::EcalWeightMatrix::rep_type::kRows;
              irow++)
@@ -659,12 +667,12 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
     // 
     // launch
     //
-    ecal::multifit::v1::host_data h_data{&digis,
+    ecal::multifit::host_data h_data{&digis,
                                      ped_data, gainratio_data, sample_mask,
                                      &vxtals, &vpulseshapes, &vcovariances,
                                      &noisecors, &(*timeCorrBias_),
                                      &vweights, &bxs, result};
-    ecal::multifit::v1::scatter(h_data, d_data, conf);
+    ecal::multifit::scatter(h_data, d_data, conf);
 }
 
 void

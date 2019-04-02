@@ -150,8 +150,8 @@ class EcalUncalibRecHitWorkerMultiFitGPUNew final : public EcalUncalibRecHitWork
                 //
                 // TODO: tmp solution for now: can we do better
                 //
-                ecal::multifit::v1::device_data d_data;
-                ecal::multifit::v1::conf_data conf;
+                ecal::multifit::device_data d_data;
+                ecal::multifit::conf_data conf;
 };
 
 #endif
