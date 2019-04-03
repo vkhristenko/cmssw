@@ -149,6 +149,8 @@ void kernel_compute_chi2_and_propogate_quantities(
         if (state == MinimizationState::Finished)
             return;
 
+        printf("ch = %d\n", ch);
+
         // TODO
         // use LLT traits to get triangular view
         auto oldChi2 = chi2s[ch];
@@ -205,6 +207,7 @@ void kernelInitializeBeforeMinimizationProcedure(
         PermutationMatrix *permutation,
         int *npassive,
         char *minimizationStatePerBlock,
+        BXVectorType *activeBXs,
         int nchannels, 
         int blocksForStateInitialization) {
     int ch = threadIdx.x + blockIdx.x * blockDim.x;
@@ -212,6 +215,8 @@ void kernelInitializeBeforeMinimizationProcedure(
     if (ch < nchannels) {
         permutation[ch].setIdentity();
         npassive[ch] = 0;
+        // if this gonna be too slow, we can put more threads per channel
+        activeBXs[ch] << -5, -4, -3, -2, -1, 0, 1, 2, 3, 4;
 
         if (ch < blocksForStateInitialization)
             minimizationStatePerBlock[ch] = 0;
@@ -236,6 +241,7 @@ void minimization_procedure(
         d_data.permutation,
         d_data.npassive,
         d_data.minimizationStatePerBlock,
+        d_data.activeBXs,
         h_data.digis->size(),
         blocksForStateInitialization);
 
@@ -243,6 +249,8 @@ void minimization_procedure(
     while (true) {
         if (iterations == maxIterations)
             break;
+
+        std::cout << "iteration = " << iterations << std::endl;
         
         // call kernel to compute update covariance matrix
         dim3 threads_update_cov_matrix{EcalDataFrame::MAXSAMPLES, 
@@ -253,12 +261,23 @@ void minimization_procedure(
             d_data.noisecov,
             d_data.pulse_covariances,
             d_data.amplitudes,
-            d_data.bxs,
+            d_data.activeBXs,
             d_data.acState,
             d_data.updatedNoiseCovariance,
             h_data.digis->size());
         cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
+
+#ifdef DEBUG_CVMATRIX
+        std::vector<SampleMatrix> tmp(h_data.digis->size());
+        cudaMemcpy(tmp.data(), d_data.updatedNoiseCovariance,
+            h_data.digis->size() * sizeof(SampleMatrix),
+            cudaMemcpyDeviceToHost);
+        for (auto const& m : tmp)
+            std::cout << "::: gpu :::\n"<< m << "\n";
+#endif
+
+        std::cout << "updated covariance matrix\n";
 
         // call kernel to perform covaraince matrix cholesky decomposition
         unsigned int threadsMatrixLU = 32;
@@ -273,6 +292,17 @@ void minimization_procedure(
         cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
 
+#ifdef DEBUG_CVMATRIX
+        std::vector<SampleMatrix> tmp(h_data.digis->size());
+        cudaMemcpy(tmp.data(), d_data.noiseMatrixDecomposition,
+            h_data.digis->size() * sizeof(SampleMatrix),
+            cudaMemcpyDeviceToHost);
+        for (auto const& m : tmp)
+            std::cout << "::: gpu :::\n"<< m << "\n";
+#endif
+
+        std::cout << "LU decomposition\n";
+
         // call kernel to perform fast nnls
         unsigned int threadsNNLS = 32;
         unsigned int blocksNNLS = threadsNNLS > h_data.digis->size()
@@ -285,13 +315,24 @@ void minimization_procedure(
             d_data.pulse_matrix,
             d_data.amplitudes,
             d_data.npassive,
-            d_data.bxs,
+            d_data.activeBXs,
             d_data.permutation,
             h_data.digis->size());
         cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
 
-#ifdef XXXX
+//#define DEBUG_CVMATRIX
+#ifdef DEBUG_CVMATRIX
+        std::vector<SampleVector> tmp(h_data.digis->size());
+        cudaMemcpy(tmp.data(), d_data.amplitudes,
+            h_data.digis->size() * sizeof(SampleVector),
+            cudaMemcpyDeviceToHost);
+        for (auto const& m : tmp)
+            std::cout << "::: gpu :::\n"<< m << "\n";
+#endif
+
+        std::cout << "fast nnls\n";
+
         // call kernel to compute chi2
         unsigned int threadsChi2 = 32;
         unsigned int blocksChi2 = threadsChi2 > h_data.digis->size()
@@ -309,6 +350,9 @@ void minimization_procedure(
             h_data.digis->size());
         cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
+
+        std::cout << "computed chi2 and propogated quantities\n";
+#ifdef XXXX
 
         // call kernel to reduce to generate global state
         unsigned int threadsState = 256;
