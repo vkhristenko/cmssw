@@ -11,7 +11,6 @@ bool inplace_fnnls(matrix_t const& A,
                    vector_t& x,
                    int& npassive,
                    BXVectorType& activeBXs,
-                   PermutationMatrix& permutation,
                    PulseMatrixType& pulse_matrix,
                    const double eps,
                    const unsigned int max_iterations) {
@@ -24,8 +23,13 @@ bool inplace_fnnls(matrix_t const& A,
   Eigen::Index w_max_idx_prev = 0;
   matrix_t::Scalar w_max_prev = 0;
   double eps_to_use = eps;
+
   int iter = 0;
   while (true) {
+    if (iter > 10) {
+        printf("tid = %d iter = %d\n", threadIdx.x + blockDim.x*blockIdx.x, iter);
+    }
+
       /*
       if (iter > 100) {
           printf("%d %d\n", threadIdx.x, iter);
@@ -63,9 +67,6 @@ bool inplace_fnnls(matrix_t const& A,
         // swap Atb to match with AtA
         Eigen::numext::swap(Atb.coeffRef(npassive), Atb.coeffRef(w_max_idx));
         Eigen::numext::swap(x.coeffRef(npassive), x.coeffRef(w_max_idx));
-        // swap the permutation matrix to reorder the solution in the end
-        Eigen::numext::swap(permutation.indices()[npassive],
-                            permutation.indices()[w_max_idx]);
         Eigen::numext::swap(activeBXs.coeffRef(npassive), activeBXs.coeffRef(w_max_idx));
         pulse_matrix.col(npassive).swap(pulse_matrix.col(w_max_idx));
 
@@ -114,9 +115,6 @@ bool inplace_fnnls(matrix_t const& A,
       // swap Atb to match with AtA
       Eigen::numext::swap(Atb.coeffRef(npassive), Atb.coeffRef(alpha_idx));
       Eigen::numext::swap(x.coeffRef(npassive), x.coeffRef(alpha_idx));
-      // swap the permutation matrix to reorder the solution in the end
-      Eigen::numext::swap(permutation.indices()[npassive],
-                          permutation.indices()[alpha_idx]);
       Eigen::numext::swap(activeBXs.coeffRef(npassive), 
                           activeBXs.coeffRef(alpha_idx));
       pulse_matrix.col(npassive).swap(pulse_matrix.col(alpha_idx));
