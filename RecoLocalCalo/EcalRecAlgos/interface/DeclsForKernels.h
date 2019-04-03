@@ -60,6 +60,7 @@ struct device_data {
     SampleMatrix* noiseMatrixDecomposition = nullptr;
     PulseMatrixType* pulse_matrix = nullptr;
     BXVectorType* bxs = nullptr;
+    BXVectorType* activeBXs = nullptr;
     float *EBTimeCorrAmplitudeBins = nullptr;
     int EBTimeCorrAmplitudeBins_size;
     float *EBTimeCorrShiftBins = nullptr;
