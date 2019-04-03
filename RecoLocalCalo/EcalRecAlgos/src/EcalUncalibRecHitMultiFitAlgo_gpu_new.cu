@@ -16,6 +16,7 @@
 
 #include "cuda.h"
 
+#include "AmplitudeComputationCommonKernels.h"
 #include "AmplitudeComputationKernelsV1.h"
 #include "AmplitudeComputationKernelsV2.h"
 #include "TimeComputationKernels.h"
@@ -258,33 +259,11 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     cudaEventCreate(&start_event);
     cudaEventCreate(&end_event);
 
-    unsigned int threads_min = conf.threads.x;
-    unsigned int blocks_min = threads_min > h_data.digis->size()
-        ? 1 : (h_data.digis->size() + threads_min - 1) / threads_min;
     cudaEventRecord(start_event, 0);
-//#define USE_SINGLE_KERNEL_FOR_MINIMIZE
-#ifdef USE_SINGLE_KERNEL_FOR_MINIMIZE
-    kernel_minimize<<<blocks_min, threads_min>>>(
-        d_data.noisecov,
-        d_data.pulse_covariances,
-        d_data.bxs,
-        d_data.samples,
-        d_data.amplitudes,
-        d_data.energies,
-        d_data.pulse_matrix,
-        d_data.statuses,
-        d_data.chi2,
-        d_data.isSaturated,
-        d_data.hasSwitchToGain6,
-        d_data.hasSwitchToGain1,
-        d_data.rms_x12,
-        d_data.acState,
-        h_data.digis->size(),
-        50,
-        gainSwitchUseMaxSample);
-#else
-    minimization_procedure(d_data, h_data);
-#endif
+    if (conf.runV1)
+        v1::minimization_procedure(d_data, h_data, conf);
+    else
+        v2::minimization_procedure(d_data, h_data);
     cudaEventRecord(end_event, 0);
     cudaEventSynchronize(end_event);
     float ms;

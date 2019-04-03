@@ -21,12 +21,62 @@
 #include "inplace_fnnls.h"
 
 #include "AmplitudeComputationKernelsV2.h"
+#include "AmplitudeComputationCommonKernels.h"
 
 //#define DEBUG
 
 //#define ECAL_RECO_CUDA_DEBUG
 
 namespace ecal { namespace multifit {
+
+namespace debug {
+
+__global__
+void kernelUpdateCovarianceMatrix(
+        SampleMatrix const* noiseCovariance,
+        FullSampleMatrix const* fullPulseCovariance,
+        SampleVector const* amplitudes,
+        BXVectorType const* bxs,
+        char const* acState,
+        SampleMatrix *updatedNoiseCovariance,
+        int const nchannels) {
+    // constants
+    constexpr int nsamples = SampleVector::RowsAtCompileTime;
+    constexpr int npulses = SampleVector::RowsAtCompileTime;
+
+    // indices
+    int ch = threadIdx.x + blockIdx.x*blockDim.x;
+
+    if (ch < nchannels) {
+        auto const state = static_cast<MinimizationState>(acState[ch]);
+        if (state != MinimizationState::NotFinished)
+            return;
+
+        // start with the default values
+        updatedNoiseCovariance[ch] = noiseCovariance[ch];
+
+        for (unsigned int ipulse=0; ipulse<npulses; ipulse++) {
+            if (amplitudes[ch].coeff(ipulse) == 0) 
+                continue;
+
+            int const bx = bxs[ch].coeff(ipulse);
+            int first_sample_t = std::max(0, bx+3);
+            int offset = 7 - 3 - bx;
+
+            auto const value = amplitudes[ch].coeff(ipulse);
+            auto const value_sq = value * value;
+
+            unsigned int nsample_pulse = nsamples - first_sample_t;
+            updatedNoiseCovariance[ch].block(first_sample_t, first_sample_t,
+                                         nsample_pulse, nsample_pulse)
+                += value_sq * fullPulseCovariance[ch].block(
+                    first_sample_t + offset, first_sample_t + offset,
+                    nsample_pulse, nsample_pulse);
+        }
+    }
+}
+
+}
 
 __global__
 void kernel_update_covariance_matrix(
@@ -47,16 +97,19 @@ void kernel_update_covariance_matrix(
     int ch = blockIdx.x;
 
     auto const state = static_cast<MinimizationState>(acState[ch]);
-    if (state == MinimizationState::Finished)
+    if (state != MinimizationState::NotFinished)
         return;
 
     // configure shared mem
-    //__shared__ SampleVector::Scalar
-    
+    __shared__ FullSampleMatrix shrFullPulseCovariance;
+    for (unsigned int ity=ty; ity<FullSampleMatrix::RowsAtCompileTime; 
+         ity+=nsamples)
+        for (unsigned int itx=tx; itx<FullSampleMatrix::ColsAtCompileTime;
+            itx+=nsamples)
+            shrFullPulseCovariance(ity, itx) = fullPulseCovariance[ch](ity, itx);
+
     // load the initial matrix value
     auto matrixValue = noiseCovariance[ch](ty, tx);
-    auto const fullMatrixValue1 = fullPulseCovariance[ch](ty, tx);
-    auto const fullMatrixValue2 = fullPulseCovariance[ch](ty+9, tx+9);
 
 #pragma unroll
     for (int ipulse=0; ipulse<npulses; ipulse++) {
@@ -78,10 +131,7 @@ void kernel_update_covariance_matrix(
         // update the matrix element
         auto const value = amplitude;
         auto const value_sq = value * value;
-        matrixValue += value_sq * 
-            (first_full_sample_t <= 9 
-                ? fullMatrixValue1
-                : fullMatrixValue2);
+        matrixValue += value_sq * shrFullPulseCovariance(ty + offset, tx+offset);
     }
 
     // store into global
@@ -98,7 +148,7 @@ void kernel_matrix_ludecomp(
     int const ch = threadIdx.x + blockIdx.x * blockDim.x;
     if (ch < nchannels) {
         auto const state = static_cast<MinimizationState>(acState[ch]);
-        if (state == MinimizationState::Finished)
+        if (state != MinimizationState::NotFinished)
             return;
 
         Ls[ch] = covarianceMatrix[ch].llt().matrixL();
@@ -109,84 +159,51 @@ __global__
 void kernel_fast_nnls(
         SampleMatrix const* Ls,
         SampleVector const* samples,
-        char const* acState,
+        char* acState,
         PulseMatrixType *pulseMatrix,
         SampleVector *amplitudes,
         int *npassive,
         BXVectorType *activeBXs,
-        PermutationMatrix *permutation,
+        float *chi2s,
         int nchannels) {
     int const ch = threadIdx.x + blockIdx.x * blockDim.x;
     if (ch < nchannels) {
         auto const state = static_cast<MinimizationState>(acState[ch]);
-        if (state == MinimizationState::Finished)
+        if (state != MinimizationState::NotFinished)
             return;
 
         auto const L = Eigen::internal::LLT_Traits<SampleMatrix, Eigen::Lower>::getL(Ls[ch]); // this gives just a view - should not generate any memcp
-        auto A = L.solve(pulseMatrix[ch]);
-        auto b = L.solve(samples[ch]);
+//        auto L = covarianceMatrix[ch].llt().matrixL();
+        SampleMatrix A = L.solve(pulseMatrix[ch]);
+        SampleVector b = L.solve(samples[ch]);
         inplace_fnnls(A, b, amplitudes[ch], npassive[ch],
-                      activeBXs[ch], permutation[ch], 
+                      activeBXs[ch],
                       pulseMatrix[ch]);
-    }
-}
 
-__global__
-void kernel_compute_chi2_and_propogate_quantities(
-        SampleMatrix const* Ls,
-        SampleVector const* samples,
-        PulseMatrixType const* pulseMatrix,
-        PermutationMatrix const* permutation,
-        SampleVector* amplitudes,
-        float *chi2s,
-        char *acState,
-        float *energies,
-        int nchannels) {
-    int const ch = threadIdx.x + blockIdx.x * blockDim.x;
-
-    if (ch < nchannels) {
-        auto const state = static_cast<MinimizationState>(acState[ch]);
-        if (state == MinimizationState::Finished)
-            return;
-
-        printf("ch = %d\n", ch);
-
-        // TODO
-        // use LLT traits to get triangular view
-        auto oldChi2 = chi2s[ch];
-        // just a view
-        auto const L = Eigen::internal::LLT_Traits<SampleMatrix, Eigen::Lower>::getL(Ls[ch]);
-        auto chi2 = L
-            .solve(pulseMatrix[ch]*amplitudes[ch] - samples[ch])
+        // ocmpute chi2
+        auto const oldChi2 = chi2s[ch];
+        auto const chi2 = L.solve(pulseMatrix[ch]*amplitudes[ch] - samples[ch])
             .squaredNorm();
-        auto delta = chi2 - oldChi2;
-        chi2s[ch] = chi2;
-
-        // if converged, permute amplitudes and set energy value
-        // TODO: may be variables propogation could be done more systematically
-        // or more efficiently
-        if (ecal::abs(delta) < 1e-3) {
+        auto const delta = chi2 - oldChi2;
+        if (ecal::abs(delta) < 1e-3)
             acState[ch] = static_cast<char>(MinimizationState::Finished);
-            amplitudes[ch] = amplitudes[ch].transpose() * 
-                permutation[ch].transpose();
-            energies[ch] = amplitudes[ch](5);
-//            statuses[ch] = 
-        }
+        chi2s[ch] = chi2;
     }
 }
 
+template<int BLOCKSIZE>
 __global__
 void kernel_reduce_state(
-        char const* state,
+        char const* acState,
         char *statePerBlock,
         int nchannels) {
     int const ch = threadIdx.x + blockIdx.x * blockDim.x;
 
     // configure shared memory and load
-    extern __shared__ char smem[];
-    char* sState = smem;
+    __shared__ char sState[BLOCKSIZE];
+
     sState[threadIdx.x] = ch<nchannels
-        ? state[ch]
+        ? acState[ch] != 0 ? 1 : 0
         : 1;
     __syncthreads();
 
@@ -204,7 +221,6 @@ void kernel_reduce_state(
 
 __global__
 void kernelInitializeBeforeMinimizationProcedure(
-        PermutationMatrix *permutation,
         int *npassive,
         char *minimizationStatePerBlock,
         BXVectorType *activeBXs,
@@ -213,15 +229,19 @@ void kernelInitializeBeforeMinimizationProcedure(
     int ch = threadIdx.x + blockIdx.x * blockDim.x;
 
     if (ch < nchannels) {
-        permutation[ch].setIdentity();
         npassive[ch] = 0;
         // if this gonna be too slow, we can put more threads per channel
         activeBXs[ch] << -5, -4, -3, -2, -1, 0, 1, 2, 3, 4;
 
+        // TODO: unnecessary assignments/initialization
         if (ch < blocksForStateInitialization)
             minimizationStatePerBlock[ch] = 0;
     }
 }
+
+//#define DEBUG_ITERATIONS
+
+namespace v2 {
 
 void minimization_procedure(
         device_data& d_data, 
@@ -234,31 +254,31 @@ void minimization_procedure(
     constexpr int blocksForStateInitialization = 1000;
     constexpr int maxChannels = 20000;
     unsigned int threadsInit = 32;
-    unsigned int blocksInit = h_data.digis->size()
+    unsigned int blocksInit = threadsInit > h_data.digis->size()
         ? 1
         : (h_data.digis->size() + threadsInit - 1) / threadsInit;
     kernelInitializeBeforeMinimizationProcedure<<<blocksInit, threadsInit>>>(
-        d_data.permutation,
         d_data.npassive,
         d_data.minimizationStatePerBlock,
         d_data.activeBXs,
         h_data.digis->size(),
         blocksForStateInitialization);
+    cudaDeviceSynchronize();
+    ecal::cuda::assert_if_error();
 
     // main loop
     while (true) {
         if (iterations == maxIterations)
             break;
-
+#ifdef DEBUG_ITERATIONS
         std::cout << "iteration = " << iterations << std::endl;
-        
-        // call kernel to compute update covariance matrix
-        dim3 threads_update_cov_matrix{EcalDataFrame::MAXSAMPLES, 
+#endif
+ 
+        dim3 threadsUpdateCov = {EcalDataFrame::MAXSAMPLES,
             EcalDataFrame::MAXSAMPLES};
-        int blocks_update_cov_matrix = h_data.digis->size();
-        kernel_update_covariance_matrix<<<blocks_update_cov_matrix,
-                                          threads_update_cov_matrix>>>(
-            d_data.noisecov,
+        unsigned int blocksUpdateCov = h_data.digis->size();
+        kernel_update_covariance_matrix<<<blocksUpdateCov, threadsUpdateCov>>>(
+            d_data.noisecov, 
             d_data.pulse_covariances,
             d_data.amplitudes,
             d_data.activeBXs,
@@ -268,16 +288,28 @@ void minimization_procedure(
         cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
 
-#ifdef DEBUG_CVMATRIX
-        std::vector<SampleMatrix> tmp(h_data.digis->size());
-        cudaMemcpy(tmp.data(), d_data.updatedNoiseCovariance,
-            h_data.digis->size() * sizeof(SampleMatrix),
-            cudaMemcpyDeviceToHost);
-        for (auto const& m : tmp)
-            std::cout << "::: gpu :::\n"<< m << "\n";
-#endif
+/*
+        // call kernel to compute update covariance matrix
+        unsigned int threadsUpdateCov = 32;
+        unsigned int blocksUpdateCov = threadsUpdateCov > h_data.digis->size()
+            ? 1 
+            : (h_data.digis->size() + threadsUpdateCov - 1) / threadsUpdateCov;
+        kernelUpdateCovarianceMatrix<<<blocksUpdateCov, threadsUpdateCov>>>(
+            d_data.noisecov,
+            d_data.pulse_covariances,
+            d_data.amplitudes,
+            d_data.activeBXs,
+            d_data.acState,
+            d_data.updatedNoiseCovariance,
+            h_data.digis->size());
+        cudaDeviceSynchronize();
+        ecal::cuda::assert_if_error();
+*/
 
+
+#ifdef DEBUG_ITERATIONS
         std::cout << "updated covariance matrix\n";
+#endif
 
         // call kernel to perform covaraince matrix cholesky decomposition
         unsigned int threadsMatrixLU = 32;
@@ -292,16 +324,9 @@ void minimization_procedure(
         cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
 
-#ifdef DEBUG_CVMATRIX
-        std::vector<SampleMatrix> tmp(h_data.digis->size());
-        cudaMemcpy(tmp.data(), d_data.noiseMatrixDecomposition,
-            h_data.digis->size() * sizeof(SampleMatrix),
-            cudaMemcpyDeviceToHost);
-        for (auto const& m : tmp)
-            std::cout << "::: gpu :::\n"<< m << "\n";
-#endif
-
+#ifdef DEBUG_ITERATIONS
         std::cout << "LU decomposition\n";
+#endif
 
         // call kernel to perform fast nnls
         unsigned int threadsNNLS = 32;
@@ -316,71 +341,60 @@ void minimization_procedure(
             d_data.amplitudes,
             d_data.npassive,
             d_data.activeBXs,
-            d_data.permutation,
+            d_data.chi2, 
             h_data.digis->size());
         cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
 
-//#define DEBUG_CVMATRIX
-#ifdef DEBUG_CVMATRIX
-        std::vector<SampleVector> tmp(h_data.digis->size());
-        cudaMemcpy(tmp.data(), d_data.amplitudes,
-            h_data.digis->size() * sizeof(SampleVector),
-            cudaMemcpyDeviceToHost);
-        for (auto const& m : tmp)
-            std::cout << "::: gpu :::\n"<< m << "\n";
+#ifdef DEBUG_ITERATIONS
+        std::cout << "fast nnls\n";
 #endif
 
-        std::cout << "fast nnls\n";
-
-        // call kernel to compute chi2
-        unsigned int threadsChi2 = 32;
-        unsigned int blocksChi2 = threadsChi2 > h_data.digis->size()
-            ? 1
-            : (h_data.digis->size() + threadsChi2 - 1) / threadsChi2;
-        kernel_compute_chi2_and_propogate_quantities<<<blocksChi2, threadsChi2>>>(
-            d_data.noiseMatrixDecomposition,
-            d_data.samples,
-            d_data.pulse_matrix,
-            d_data.permutation,
-            d_data.amplitudes,
-            d_data.chi2,
-            d_data.acState,
-            d_data.energies,
-            h_data.digis->size());
-        cudaDeviceSynchronize();
-        ecal::cuda::assert_if_error();
-
-        std::cout << "computed chi2 and propogated quantities\n";
-#ifdef XXXX
-
-        // call kernel to reduce to generate global state
-        unsigned int threadsState = 256;
+        // call kernel to reduce in order to generate global state
+        constexpr unsigned int threadsState = 256;
         unsigned int blocksForStateReduce = threadsState > h_data.digis->size()
             ? 1
             : (h_data.digis->size() + threadsState - 1) / threadsState;
-        kernel_reduce_state<<<blocksForStateReduce, threadsState>>>(
+        kernel_reduce_state<threadsState><<<blocksForStateReduce, threadsState>>>(
             d_data.acState, 
             d_data.minimizationStatePerBlock,
             h_data.digis->size());
 
         // transfer the reductions per block back
-//#define RUN_FINALIZE_MINIMIZATION_PROCEDURE
         cudaMemcpy(d_data.h_minimizationStatesPerBlock.data(),
                    d_data.minimizationStatePerBlock,
                    blocksForStateReduce * sizeof(MinimizationState),
                    cudaMemcpyDeviceToHost);
         // reduce on the host (should be tiny)
-        char acc = 1;
+        bool acc = true;
         for (unsigned int i=0; i<blocksForStateReduce; i++)
-            acc &= d_data.h_minimizationStatesPerBlock[i];
+            acc = acc && static_cast<bool>(d_data.h_minimizationStatesPerBlock[i]);
         // global convergence
-        if (static_cast<MinimizationState>(acc) == MinimizationState::Finished)
+        if (acc)
             break;
-#endif
 
         iterations++;
     }
+
+    //
+    // permute computed amplitudes
+    // and assign the final uncalibared energy value
+    //
+    unsigned int threadsPermute = 32 * EcalDataFrame::MAXSAMPLES; // 32 * 10
+    unsigned int blocksPermute = threadsPermute > 32 * h_data.digis->size()
+        ? 1
+        : (32 * h_data.digis->size() + threadsPermute - 1) / threadsPermute;
+    int bytesPermute = threadsPermute * sizeof(SampleVector::Scalar);
+    kernel_permute_results<<<blocksPermute, threadsPermute, bytesPermute>>>(
+        d_data.amplitudes,
+        d_data.activeBXs,
+        d_data.energies,
+        d_data.acState,
+        h_data.digis->size());
+    cudaDeviceSynchronize();
+    ecal::cuda::assert_if_error();
+}
+
 }
 
 }}

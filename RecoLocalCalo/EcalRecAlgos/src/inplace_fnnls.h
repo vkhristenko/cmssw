@@ -15,7 +15,6 @@ inplace_fnnls(matrix_t const& A,
               vector_t& x,
               int& npassive,
               BXVectorType& activeBXs,
-              PermutationMatrix& permutation,
               PulseMatrixType& pulse_matrix,
               const double eps = 1e-11,
               const unsigned int max_iterations = 500);

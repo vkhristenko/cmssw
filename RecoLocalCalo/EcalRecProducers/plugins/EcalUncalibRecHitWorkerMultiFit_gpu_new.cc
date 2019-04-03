@@ -115,7 +115,9 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
 
   // threads/blocks conf
   auto vthreads = ps.getParameter<std::vector<int>>("threads");
+  auto runV1 = ps.getParameter<bool>("runV1");
   conf.threads = {vthreads[0], vthreads[1], vthreads[2]};
+  conf.runV1 = runV1;
 
   // 
   // TODO
@@ -253,8 +255,6 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
     sizeof(char) * MAX_CHANNELS);
   cudaMalloc((void**)&d_data.npassive,
     sizeof(int) * MAX_CHANNELS);
-  cudaMalloc((void**)&d_data.permutation,
-    sizeof(ecal::multifit::PermutationMatrix) * MAX_CHANNELS);
 
   // resize the host as well
   d_data.h_minimizationStatesPerBlock.resize(MAX_BLOCKS_FOR_STATE_REDUCTION);
@@ -392,7 +392,6 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.updatedNoiseCovariance);
         cudaFree(d_data.noiseMatrixDecomposition);
         cudaFree(d_data.acState);
-        cudaFree(d_data.permutation);
         cudaFree(d_data.minimizationStatePerBlock);
         cudaFree(d_data.npassive);
         ecal::cuda::assert_if_error();
@@ -913,6 +912,7 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::getAlgoDescription() {
 	      edm::ParameterDescription<double>("chi2ThreshEE_", 50.0, true) and
           edm::ParameterDescription<std::vector<int>>("threads", {256, 1, 1}, true)
           and 
+          edm::ParameterDescription<bool>("runV1", true, true) and
 	      edm::ParameterDescription<edm::ParameterSetDescription>("EcalPulseShapeParameters", psd0, true));
 
  return psd;
