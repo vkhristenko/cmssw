@@ -27,7 +27,8 @@ enum class TimeComputationState : char {
 };
 enum class MinimizationState : char {
     NotFinished = 0,
-    Finished = 1
+    Finished = 1,
+    Precomputed = 2,
 };
 
 using EMatrix = Eigen::Matrix<double,
@@ -70,7 +71,6 @@ struct device_data {
     float *EETimeCorrShiftBins = nullptr;
     int EETimeCorrShiftBins_size;
 
-    PermutationMatrix *permutation = nullptr;
     char *acState = nullptr;
     char *minimizationStatePerBlock = nullptr;
     int *npassive = nullptr;
@@ -120,6 +120,7 @@ struct xyz {
 
 struct conf_data {
     xyz threads;
+    bool runV1;
 };
 
 struct pedestal_data {
