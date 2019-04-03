@@ -175,6 +175,8 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
     MAX_CHANNELS * sizeof(ecal::multifit::PulseMatrixType));
   cudaMalloc((void**)&d_data.bxs,
     sizeof(ecal::multifit::BXVectorType));
+  cudaMalloc((void**)&d_data.activeBXs,
+    sizeof(ecal::multifit::BXVectorType) * MAX_CHANNELS);
 
   cudaMalloc((void**)&d_data.sample_mask, sizeof(EcalSampleMask));
   cudaMalloc((void**)&d_data.EBTimeCorrAmplitudeBins,
@@ -352,6 +354,7 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.noisecov);
         cudaFree(d_data.pulse_matrix);
         cudaFree(d_data.bxs);
+        cudaFree(d_data.activeBXs);
 
         cudaFree(d_data.EBTimeCorrAmplitudeBins);
         cudaFree(d_data.EBTimeCorrShiftBins);
