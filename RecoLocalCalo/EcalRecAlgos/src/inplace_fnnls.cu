@@ -26,15 +26,6 @@ bool inplace_fnnls(matrix_t const& A,
 
   int iter = 0;
   while (true) {
-    if (iter > 10) {
-        printf("tid = %d iter = %d\n", threadIdx.x + blockDim.x*blockIdx.x, iter);
-    }
-
-      /*
-      if (iter > 100) {
-          printf("%d %d\n", threadIdx.x, iter);
-      }*/
-//  for (int iter = 0; iter < max_iterations; ++iter) {
     if (iter>0 || npassive==0) {
         const auto nActive = vector_t::RowsAtCompileTime - npassive;
 
@@ -50,7 +41,7 @@ bool inplace_fnnls(matrix_t const& A,
         // check for convergence
         if (max_w < eps_to_use || (w_max_idx==w_max_idx_prev && max_w==w_max_prev))
           break;
-
+    
         // worst case
         if (iter >= 500)
             break;
