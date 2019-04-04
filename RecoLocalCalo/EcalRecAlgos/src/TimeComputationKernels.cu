@@ -5,6 +5,7 @@
 
 #include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
+#include "DataFormats/EcalRecHit/interface/EcalUncalibratedRecHit.h"
 
 #include "DataFormats/Math/interface/approx_exp.h"
 #include "DataFormats/Math/interface/approx_log.h"
@@ -1018,16 +1019,30 @@ __global__
 void kernel_time_correction_and_finalize(
 //        SampleVector::Scalar const* g_amplitude,
         float const* g_amplitude,
+        uint16_t const* digis,
         float const* amplitudeBins,
         float const* shiftBins,
         SampleVector::Scalar const* g_timeMax,
         SampleVector::Scalar const* g_timeError,
+        float const* g_rms_x12,
+        float const* timeCalibConstant,
         float *g_jitter,
         float *g_jitterError,
+        uint32_t *flags,
         int const amplitudeBinsSize,
         SampleVector::Scalar const timeConstantTerm,
+        float const offsetTimeValue,
+        float const timeNconst,
+        float const amplitudeThreshold,
+        float const outOfTimeThreshG12p,
+        float const outOfTimeThreshG12m,
+        float const outOfTimeThreshG61p,
+        float const outOfTimeThreshG61m,
         int const nchannels) {
     using ScalarType = SampleVector::Scalar;
+
+    // constants
+    constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
 
     // indices
     int const gtx = threadIdx.x + blockIdx.x * blockDim.x;
@@ -1036,6 +1051,8 @@ void kernel_time_correction_and_finalize(
     if (gtx >= nchannels) return;
 
     auto const amplitude = g_amplitude[gtx];
+    auto const rms_x12 = g_rms_x12[gtx];
+    auto const timeCalibConst = timeCalibConstant[gtx];
 
     int myBin = -1;
     for (int bin=0; bin<amplitudeBinsSize; bin++) {
@@ -1075,6 +1092,33 @@ void kernel_time_correction_and_finalize(
     // store back to  global
     g_jitter[gtx] = jitter;
     g_jitterError[gtx] = jitterError;
+
+    // set the flag
+    // TODO: replace with something more efficient (if required), 
+    // for now just to make it work
+    if (amplitude > amplitudeThreshold * rms_x12) {
+        auto threshP = outOfTimeThreshG12p;
+        auto threshM = outOfTimeThreshG12m;
+        if (amplitude > 3000.) {
+            for (int isample=0; isample<nsamples; isample++) {
+                int gainid = ecal::mgpa::gainId(digis[nsamples*gtx + isample]);
+                if (gainid != 1) {
+                    threshP = outOfTimeThreshG61p;
+                    threshM = outOfTimeThreshG61m;
+                    break;
+                }
+            }
+        }
+
+        auto const correctedTime = (timeMax - 5) * 25 + 
+            timeCalibConst + offsetTimeValue;
+        auto const nterm = timeNconst * rms_x12 / amplitude;
+        auto const sigmat = std::sqrt(nterm * nterm + 
+            timeConstantTerm*timeConstantTerm);
+        if (correctedTime > sigmat*threshP || 
+            correctedTime < -sigmat*threshM)
+            flags[gtx] |= 0x1 << EcalUncalibratedRecHit::kOutOfTime;
+    }
 }
 
 }}
