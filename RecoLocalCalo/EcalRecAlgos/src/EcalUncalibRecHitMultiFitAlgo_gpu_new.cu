@@ -508,6 +508,11 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
                d_data.jitterError,
                h_data.rechits_soa.jitterError.size() * sizeof(float),
                cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_data.rechits_soa.amplitudesAll.data(),
+               d_data.amplitudes,
+               h_data.rechits_soa.amplitudesAll.size() * 
+               sizeof(::ecal::reco::ComputationScalarType),
+               cudaMemcpyDeviceToHost);
 
 //    cudaMemcpy(&(*h_data.rechits->begin()), d_data.rechits,
 //        h_data.rechits->size() * sizeof(EcalUncalibratedRecHit),

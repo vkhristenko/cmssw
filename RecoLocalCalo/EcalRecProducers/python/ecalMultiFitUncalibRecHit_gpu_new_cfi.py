@@ -78,6 +78,6 @@ ecalMultiFitUncalibRecHitgpu = cms.EDProducer("EcalUncalibRecHitProducerGPUNew",
 
       # threads/blocks config
       threads = cms.vint32(256, 1, 1),
-      runV1 = cms.bool(False),
+      runV1 = cms.bool(True),
    )                                           
 )
