@@ -135,14 +135,25 @@ __global__
 void kernel_time_correction_and_finalize(
 //        SampleVector::Scalar const* g_amplitude,
         float const* g_amplitude,
+        uint16_t const* digis,
         float const* amplitudeBins,
         float const* shiftBins,
         SampleVector::Scalar const* g_timeMax,
         SampleVector::Scalar const* g_timeError,
+        float const* g_rms_x12,
+        float const* timeCalibConstant,
         float *g_jitter,
         float *g_jitterError,
+        uint32_t *flags,
         int const amplitudeBinsSize,
         SampleVector::Scalar const timeConstantTerm,
+        float const offsetTimeValue,
+        float const timeNconst,
+        float const amplitudeThreshold,
+        float const outOfTimeThreshG12p,
+        float const outOfTimeThreshG12m,
+        float const outOfTimeThreshG61p,
+        float const outOfTimeThreshG61m,
         int const nchannels);
 
 }}

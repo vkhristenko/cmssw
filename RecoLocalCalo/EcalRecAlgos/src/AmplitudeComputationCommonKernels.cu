@@ -4,6 +4,7 @@
 #include "cuda.h"
 
 #include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
+#include "DataFormats/EcalRecHit/interface/EcalUncalibratedRecHit.h"
 #include "DataFormats/Math/interface/approx_exp.h"
 #include "DataFormats/Math/interface/approx_log.h"
 
@@ -37,8 +38,10 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
                     bool* hasSwitchToGain6,
                     bool* hasSwitchToGain1,
                     bool* isSaturated,
-                    float* energies,
-                    float* chi2,
+                    ::ecal::reco::StorageScalarType* energies,
+                    ::ecal::reco::StorageScalarType* chi2,
+                    ::ecal::reco::StorageScalarType* g_pedestal,
+                    uint32_t *flags,
                     char* acState,
                     bool gainSwitchUseMaxSample,
                     int nchannels) {
@@ -210,49 +213,70 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
         //
         amplitudesForMinimization[ch](sample) = 0;
 
-        if (sample == 0) {
+        if (sample == sample_max) { // select the thread for the max sample
             //
             // initialization
             //
             acState[ch] = static_cast<char>(MinimizationState::NotFinished);
             energies[ch] = 0;
             chi2[ch] = 0;
+            g_pedestal[ch] = 0;
+            uint32_t flag = 0;
+
+            // start of this channel in shared mem
+            int const chStart = threadIdx.x - sample_max;
+            // thread for the max sample in shared mem
+            int const threadMax = threadIdx.x;
+            
+            // this flag setting is applied to all of the cases
+            if (shr_hasSwitchToGain6[chStart])
+                flag |= 0x1 << EcalUncalibratedRecHit::kHasSwitchToGain6;
+            if (shr_hasSwitchToGain1[chStart])
+                flag |= 0x1 << EcalUncalibratedRecHit::kHasSwitchToGain1;
 
             // this corresponds to cpu branching on lastSampleBeforeSaturation
             // likely false
             if (check_hasSwitchToGain0) {
                 // assign for the case some sample having gainId == 0
-                energies[ch] = amplitudes[ch][sample_max];
+//                energies[ch] = amplitudes[ch][sample_max];
+                energies[ch] = amplitude;
 
                 // check if samples before sample_max have true
                 bool saturated_before_max = false;
                 #pragma unroll
                 for (char ii=0; ii<5; ii++)
                     saturated_before_max = saturated_before_max ||
-                        shr_hasSwitchToGain0[threadIdx.x + ii];
+                        shr_hasSwitchToGain0[chStart + ii];
 
                 // if saturation is in the max sample and not in the first 5
                 if (!saturated_before_max && 
-                    shr_hasSwitchToGain0[threadIdx.x + sample_max])
+                    shr_hasSwitchToGain0[threadMax])
                     energies[ch] = 49140; // 4095 * 12
 
                 // set state flag to terminate further processing of this channel
                 acState[ch] = static_cast<char>(MinimizationState::Precomputed); 
+                flag |= 0x1 << EcalUncalibratedRecHit::kSaturated;
+                flags[ch] = flag;
                 return;
             }
 
             // according to cpu version
-            auto max_amplitude = amplitudes[ch][sample_max]; 
+//            auto max_amplitude = amplitudes[ch][sample_max]; 
+            auto const max_amplitude = amplitude;
             // according to cpu version
             auto shape_value = shapes_out[ch](full_pulse_max); 
             // note, no syncing as the same thread will be accessing here
-            bool hasGainSwitch = shr_hasSwitchToGain6[threadIdx.x]
-                || shr_hasSwitchToGain1[threadIdx.x]
-                || shr_isSaturated[threadIdx.x+3];
+            bool hasGainSwitch = shr_hasSwitchToGain6[chStart]
+                || shr_hasSwitchToGain1[chStart]
+                || shr_isSaturated[chStart+3];
+            // pedestal is final unconditionally
+            g_pedestal[ch] = pedestal;
             if (hasGainSwitch && gainSwitchUseMaxSample) {
                 // thread for sample=0 will access the right guys
                 energies[ch] = max_amplitude / shape_value;
                 acState[ch] = static_cast<char>(MinimizationState::Precomputed);
+                flags[ch] = flag;
+                return;
             }
             
             // this happens cause sometimes rms_x12 is 0...
@@ -260,8 +284,12 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
             // general case here is that noisecov is a Zero matrix
             if (rmsForChecking == 0) {
                 acState[ch] = static_cast<char>(MinimizationState::Precomputed);
+                flags[ch] = flag;
                 return;
             }
+
+            // for the case when no shortcuts were taken
+            flags[ch] = flag;
         }
     }
 }

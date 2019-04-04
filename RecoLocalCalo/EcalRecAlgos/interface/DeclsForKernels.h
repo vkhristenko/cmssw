@@ -5,6 +5,7 @@
 
 #include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes_gpu.h"
 #include "DataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
+#include "DataFormats/EcalRecHitSoA/interface/RecoTypes.h"
 
 #include "CondFormats/EcalObjects/interface/EcalWeightSet.h"
 #include "CondFormats/EcalObjects/interface/EcalPedestals.h"
@@ -50,6 +51,7 @@ struct device_data {
 //    EcalMGPAGainRatio *gains = nullptr;
     float* gain12Over6 = nullptr;
     float* gain6Over1 = nullptr;
+    float* timeCalibConstants = nullptr;
     EcalPulseShape *pulses = nullptr;
     FullSampleVector* epulses = nullptr;
     EcalPulseCovariance *covariances = nullptr;
@@ -79,8 +81,11 @@ struct device_data {
     // rechits
     bool* statuses = nullptr;
     SampleVector* amplitudes = nullptr;
-    float* energies = nullptr;
-    float* chi2 = nullptr;
+    ::ecal::reco::StorageScalarType* energies = nullptr;
+    ::ecal::reco::StorageScalarType* chi2 = nullptr;
+    ::ecal::reco::StorageScalarType* pedestal = nullptr;
+    uint32_t *flags = nullptr;
+
 
     bool* hasSwitchToGain6 = nullptr;
     bool* hasSwitchToGain1 = nullptr;
@@ -112,6 +117,15 @@ struct device_data {
 
     // use constant mem?
     SampleVector::Scalar timeConstantTermEB, timeConstantTermEE;
+
+    // time calib constants
+    float offsetTimeValue;
+    float timeNconstEB, timeNconstEE;
+    float amplitudeThreshEE, amplitudeThreshEB;
+    float outOfTimeThreshG12pEB, outOfTimeThreshG12mEB;
+    float outOfTimeThreshG12pEE, outOfTimeThreshG12mEE;
+    float outOfTimeThreshG61pEE, outOfTimeThreshG61mEE;
+    float outOfTimeThreshG61pEB, outOfTimeThreshG61mEB;
 };
 
 struct xyz {
@@ -150,6 +164,7 @@ struct host_data {
     SampleMatrixGainArray const *noisecorrs;
     EcalTimeBiasCorrections const *time_bias_corrections;
     std::vector<EMatrix> const* weights;
+    std::vector<float> const& timeCalibConstants;
     BXVectorType const* bxs;
     ecal::UncalibratedRecHit<ecal::Tag::soa>& rechits_soa;
 };
