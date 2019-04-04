@@ -236,24 +236,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         gainSwitchUseMaxSample
     );
 
-    /*
-    for (unsigned int i=0; i<samples.size(); i++) {
-        auto const& sample_vector = samples[i];
-        auto const& pulse_matrix = pulse_matrices[i];
-        auto const& noisecov = noisecovs[i];
-        auto const& pulse_cov = pulse_covariances[i];
-
-        std::cout << "*** samples ***\n"
-            << sample_vector << std::endl;
-        std::cout << "*** pulse matrix ***\n"
-            << pulse_matrix << std::endl;
-        std::cout << "*** noisecov ***\n"
-            << noisecov << std::endl;
-        std::cout << "*** pulse cov ***\n"
-            << pulse_cov << std::endl;
-    }
-    */
-
 #endif
 
     cudaEvent_t start_event;
@@ -473,41 +455,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
-/*
-    kernel_build_rechit<<<blocks_min, threads_min>>>(
-        d_data.energies,
-        d_data.chi2,
-        d_data.ids,
-        d_data.rechits,
-        h_data.digis->size());
-    cudaDeviceSynchronize();
-    ecal::cuda::assert_if_error();
-    */
-
-  /*  kernel_reconstruct<<<nblocks, nthreads_per_block>>>(
-        d_data.digis_data,
-        d_data.ids,*/
-        /* d_rechits, */
-/*        d_data.pedestals,
-        d_data.gains,
-        d_data.xtals,
-        d_data.pulses,
-        d_data.covariances,
-        d_data.rechits,
-        d_data.noisecors,
-        d_data.sample_mask,
-        d_data.EBTimeCorrAmplitudeBins, 
-        h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.size(),
-        d_data.EBTimeCorrShiftBins, 
-        h_data.time_bias_corrections->EBTimeCorrShiftBins.size(),
-        d_data.EETimeCorrAmplitudeBins, 
-        h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
-        d_data.EETimeCorrShiftBins, 
-        h_data.time_bias_corrections->EETimeCorrShiftBins.size(),
-        d_data.weights,
-        h_data.digis->size()
-    );*/
-
     //
     // transfer the results back
     //
@@ -546,27 +493,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
                h_data.rechits_soa.amplitudesAll.size() * 
                sizeof(::ecal::reco::ComputationScalarType),
                cudaMemcpyDeviceToHost);
-
-//    cudaMemcpy(&(*h_data.rechits->begin()), d_data.rechits,
-//        h_data.rechits->size() * sizeof(EcalUncalibratedRecHit),
-//        cudaMemcpyDeviceToHost);
-
-    // 
-    // free all the device ptrs
-    // TODO: remove per event dealloc
-    //
-    /*
-    cudaFree(d_digis_data);
-    cudaFree(d_ids);
-    cudaFree(d_pedestals);
-    cudaFree(d_gains);
-    cudaFree(d_xtals);
-    cudaFree(d_shapes);
-    cudaFree(d_covariances);
-    cudaFree(d_rechits);
-    cudaFree(d_noisecors);
-    ecal::cuda::assert_if_error();
-    */
 }
 
 }}
