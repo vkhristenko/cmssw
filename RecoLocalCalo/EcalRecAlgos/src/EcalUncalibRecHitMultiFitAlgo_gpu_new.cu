@@ -142,6 +142,8 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.isSaturated,
         d_data.energies,
         d_data.chi2,
+        d_data.pedestal,
+        d_data.flags,
         d_data.acState,
         gainSwitchUseMaxSample,
         h_data.digis->size());
@@ -431,18 +433,41 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         ? 1 : (h_data.digis->size() + threads_timecorr-1) / threads_timecorr;
     kernel_time_correction_and_finalize<<<blocks_timecorr, threads_timecorr>>>(
         d_data.energies,
+        d_data.digis_data,
         barrel ? d_data.EBTimeCorrAmplitudeBins : d_data.EETimeCorrAmplitudeBins,
         barrel ? d_data.EBTimeCorrShiftBins : d_data.EETimeCorrShiftBins,
         d_data.timeMax,
         d_data.timeError,
+        d_data.rms_x12,
+        d_data.timeCalibConstants,
         d_data.jitter,
         d_data.jitterError,
+        d_data.flags,
         barrel 
             ? h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.size() 
             : h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
         barrel 
             ? d_data.timeConstantTermEB
             : d_data.timeConstantTermEE,
+        d_data.offsetTimeValue,
+        barrel 
+            ? d_data.timeNconstEB
+            : d_data.timeNconstEE,
+        barrel 
+            ? d_data.amplitudeThreshEB
+            : d_data.amplitudeThreshEE,
+        barrel
+            ? d_data.outOfTimeThreshG12pEB
+            : d_data.outOfTimeThreshG12pEE,
+        barrel 
+            ? d_data.outOfTimeThreshG12mEB
+            : d_data.outOfTimeThreshG12mEE,
+        barrel
+            ? d_data.outOfTimeThreshG61pEB
+            : d_data.outOfTimeThreshG61pEE,
+        barrel
+            ? d_data.outOfTimeThreshG61mEB
+            : d_data.outOfTimeThreshG61mEE,
         h_data.digis->size()
     );
     cudaDeviceSynchronize();
@@ -492,6 +517,10 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
                d_data.energies,
                h_data.rechits_soa.amplitude.size() * sizeof(float),
                cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_data.rechits_soa.pedestal.data(),
+               d_data.pedestal,
+               h_data.rechits_soa.pedestal.size() * sizeof(float),
+               cudaMemcpyDeviceToHost);
     cudaMemcpy(&(*h_data.rechits_soa.chi2.begin()),
                d_data.chi2,
                h_data.rechits_soa.chi2.size() * sizeof(float),
@@ -499,6 +528,10 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     cudaMemcpy(&(*h_data.rechits_soa.did.begin()),
                d_data.ids,
                h_data.rechits_soa.did.size() * sizeof(uint32_t),
+               cudaMemcpyDeviceToHost);
+    cudaMemcpy(h_data.rechits_soa.flags.data(),
+               d_data.flags,
+               h_data.rechits_soa.flags.size() * sizeof(uint32_t),
                cudaMemcpyDeviceToHost);
     cudaMemcpy(h_data.rechits_soa.jitter.data(),
                d_data.jitter,

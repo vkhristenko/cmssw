@@ -6,6 +6,7 @@
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 
 class EcalPulseShape;
+            // this flag setting is applied to all of the cases
 class EcalPulseCovariance;
 class EcalUncalibratedRecHit;
 
@@ -33,8 +34,10 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
                     bool* hasSwitchToGain6,
                     bool* hasSwitchToGain1,
                     bool* isSaturated,
-                    float* energies,
-                    float* chi2,
+                    ::ecal::reco::StorageScalarType* energies,
+                    ::ecal::reco::StorageScalarType* chi2,
+                    ::ecal::reco::StorageScalarType* pedestal,
+                    uint32_t *flags,
                     char* acState,
                     bool gainSwitchUseMaxSample,
                     int nchannels);
