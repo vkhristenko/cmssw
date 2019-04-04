@@ -2,6 +2,10 @@
 #define DataFormats_EcalRecHitSoA_interface_EcalUncalibratedRecHit_soa_h
 
 #include <vector>
+#include <array>
+
+#include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
+#include "DataFormats/EcalRecHitSoA/interface/RecoTypes.h"
 
 namespace ecal {
 
@@ -31,11 +35,26 @@ struct UncalibratedRecHit {
     UncalibratedRecHit(UncalibratedRecHit&&) = default;
     UncalibratedRecHit& operator=(UncalibratedRecHit&&) = default;
 
-    typename type_wrapper<float, L>::type amplitude;
-    typename type_wrapper<float, L>::type chi2;
+    // TODO: std::array causes root's dictionary problems
+    typename type_wrapper<reco::ComputationScalarType, L>::type amplitudesAll;
+//    typename type_wrapper<std::array<reco::ComputationScalarType, 
+//        EcalDataFrame::MAXSAMPLES>, L>::type amplitudesAll;
+    typename type_wrapper<reco::StorageScalarType, L>::type amplitude;
+    typename type_wrapper<reco::StorageScalarType, L>::type chi2;
     typename type_wrapper<uint32_t, L>::type did;
-    typename type_wrapper<float, L>::type jitter;
-    typename type_wrapper<float, L>::type jitterError;
+    typename type_wrapper<reco::StorageScalarType, L>::type jitter;
+    typename type_wrapper<reco::StorageScalarType, L>::type jitterError;
+
+    template<typename U = L>
+    typename std::enable_if<std::is_same<U, Tag::soa>::value, void>::type 
+    resize(size_t size) {
+        amplitudesAll.resize(size * EcalDataFrame::MAXSAMPLES);
+        amplitude.resize(size);
+        chi2.resize(size);
+        did.resize(size);
+        jitter.resize(size);
+        jitterError.resize(size);
+    }
 };
 
 using SoAUncalibratedRecHitCollection = UncalibratedRecHit<Tag::soa>;
