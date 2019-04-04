@@ -660,11 +660,14 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
     // 
     // prepare the result
     //
+    result.resize(digis.size());
+    /*
     result.amplitude.resize(digis.size());
     result.chi2.resize(digis.size());
     result.did.resize(digis.size());
     result.jitter.resize(digis.size());
     result.jitterError.resize(digis.size());
+    */
 
     // 
     // launch

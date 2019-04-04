@@ -4,6 +4,8 @@
 #include <Eigen/Dense>
 #include <array>
 
+#include "DataFormats/EcalRecHitSoA/interface/RecoTypes.h"
+
 namespace ecal { namespace multifit {
 
 constexpr int SampleVectorSize = 10;
@@ -11,7 +13,7 @@ constexpr int FullSampleVectorSize = 19;
 constexpr int PulseVectorSize = 12;
 constexpr int NGains = 3;
 
-using data_type = double;
+using data_type = ::ecal::reco::ComputationScalarType;
 
 typedef Eigen::Matrix<data_type, SampleVectorSize, SampleVectorSize> PulseMatrixType;
 typedef Eigen::Matrix<char, SampleVectorSize, 1> BXVectorType;
