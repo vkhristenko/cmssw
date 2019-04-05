@@ -29,26 +29,49 @@
 namespace ecal { namespace multifit {
     
 void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
-    auto const& ids = h_data.digis->ids();
-    auto const& digis_data = h_data.digis->data();
     using digis_type = std::vector<uint16_t>;
     using dids_type = std::vector<uint32_t>;
-    bool barrel = 
-        DetId{h_data.digis->begin()->id()}
-            .subdetId() == EcalBarrel;
+    bool barrel = true;
     bool gainSwitchUseMaxSample = barrel; // accodring to the cpu setup
 
-    // 
-    // copy to the device
-    // TODO: can conditions be copied only once when updated?
+    unsigned int totalChannels = h_data.digisEB->size() + h_data.digisEE->size();
+    
+    // temporary for recording
+    cudaEvent_t start_event;
+    cudaEvent_t end_event;
+    cudaEventCreate(&start_event);
+    cudaEventCreate(&end_event);
+
+    cudaEventRecord(start_event, 0);
+
     //
-    cudaMemcpy(d_data.digis_data, digis_data.data(),
-        digis_data.size() * sizeof(digis_type::value_type),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.ids, ids.data(),
-        ids.size() * sizeof(dids_type::value_type),
-        cudaMemcpyHostToDevice);
- 
+    // in what follows we copy eb then ee.
+    // offset by size 
+    //
+
+    // 
+    // copy digis data
+    //
+    cudaMemcpy(d_data.digis_data, 
+               h_data.digisEB->data().data(),
+               h_data.digisEB->data().size() * sizeof(digis_type::value_type),
+               cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.digis_data + h_data.digisEB->data().size(), 
+               h_data.digisEE->data().data(),
+               h_data.digisEE->data().size() * sizeof(digis_type::value_type),
+               cudaMemcpyHostToDevice);
+
+    // copy ids
+    cudaMemcpy(d_data.ids, 
+               h_data.digisEB->ids().data(),
+               h_data.digisEB->ids().size() * sizeof(dids_type::value_type),
+               cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.ids + h_data.digisEB->ids().size(), 
+               h_data.digisEE->ids().data(),
+               h_data.digisEE->ids().size() * sizeof(dids_type::value_type),
+               cudaMemcpyHostToDevice);
+
+    // copy pedestal means/rmss
     cudaMemcpy(d_data.mean_x12, h_data.ped_data.mean_x12.data(),
         h_data.ped_data.mean_x12.size() * sizeof(float),
         cudaMemcpyHostToDevice);
@@ -68,6 +91,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         h_data.ped_data.rms_x1.size() * sizeof(float),
         cudaMemcpyHostToDevice);
 
+    // copy gains
     cudaMemcpy(d_data.gain12Over6, h_data.gainratio_data.gain12Over6.data(),
         h_data.gainratio_data.gain12Over6.size() * sizeof(float),
         cudaMemcpyHostToDevice);
@@ -75,6 +99,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         h_data.gainratio_data.gain6Over1.size() * sizeof(float),
         cudaMemcpyHostToDevice);
 
+    // copy pulse shape information
     cudaMemcpy(d_data.pulses, h_data.pulse_shapes->data(),
         h_data.pulse_shapes->size() * sizeof(EcalPulseShape),
         cudaMemcpyHostToDevice);
@@ -82,6 +107,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         h_data.pulse_covariances->size() * sizeof(EcalPulseCovariance),
         cudaMemcpyHostToDevice);
 
+    // copy sample correlations
     cudaMemcpy(d_data.G12SamplesCorrelation, 
                barrel
                  ? h_data.noiseCovariances->EBG12SamplesCorrelation.data()
@@ -101,46 +127,42 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
                EcalDataFrame::MAXSAMPLES * sizeof(double),
                cudaMemcpyHostToDevice);
 
-    if (barrel) {
-        cudaMemcpy(d_data.EBTimeCorrAmplitudeBins, 
-            h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.data(),
-            sizeof(float) * h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.size(),
-            cudaMemcpyHostToDevice);
-        cudaMemcpy(d_data.EBTimeCorrShiftBins, 
-            h_data.time_bias_corrections->EBTimeCorrShiftBins.data(),
-            sizeof(float) * h_data.time_bias_corrections->EBTimeCorrShiftBins.size(),
-            cudaMemcpyHostToDevice);
-    } else {
-        cudaMemcpy(d_data.EETimeCorrAmplitudeBins, 
-            h_data.time_bias_corrections->EETimeCorrAmplitudeBins.data(),
-            sizeof(float) * h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
-            cudaMemcpyHostToDevice);
-        cudaMemcpy(d_data.EETimeCorrShiftBins, 
-            h_data.time_bias_corrections->EETimeCorrShiftBins.data(),
-            sizeof(float) * h_data.time_bias_corrections->EETimeCorrShiftBins.size(),
-            cudaMemcpyHostToDevice);
-    }
+    // copy time bias corrections
+    cudaMemcpy(d_data.EBTimeCorrAmplitudeBins, 
+        h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.data(),
+        sizeof(float) * h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.size(),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.EBTimeCorrShiftBins, 
+        h_data.time_bias_corrections->EBTimeCorrShiftBins.data(),
+        sizeof(float) * h_data.time_bias_corrections->EBTimeCorrShiftBins.size(),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.EETimeCorrAmplitudeBins, 
+        h_data.time_bias_corrections->EETimeCorrAmplitudeBins.data(),
+        sizeof(float) * h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.EETimeCorrShiftBins, 
+        h_data.time_bias_corrections->EETimeCorrShiftBins.data(),
+        sizeof(float) * h_data.time_bias_corrections->EETimeCorrShiftBins.size(),
+        cudaMemcpyHostToDevice);
+   
+    // copy bxs
     cudaMemcpy(d_data.bxs, h_data.bxs,
         sizeof(BXVectorType),
         cudaMemcpyHostToDevice);
-    ecal::cuda::assert_if_error();
-
-    int nthreads_per_block = conf.threads.x;
-    int nblocks = (h_data.digis->size() + nthreads_per_block - 1) / nthreads_per_block;
+    AssertIfError
 
     // 
     // 1d preparation kernel
     //
     unsigned int nchannels_per_block = 32;
     unsigned int threads_1d = 10 * nchannels_per_block;
-    unsigned int blocks_1d = threads_1d > 10*h_data.digis->size() 
-        ? 1 : (h_data.digis->size()*10 + threads_1d - 1) / threads_1d;
+    unsigned int blocks_1d = threads_1d > 10*totalChannels 
+        ? 1 : (totalChannels*10 + threads_1d - 1) / threads_1d;
     int shared_bytes = nchannels_per_block * EcalDataFrame::MAXSAMPLES * (
         sizeof(bool) + sizeof(bool) + sizeof(bool) + sizeof(bool) + sizeof(char)
         + sizeof(bool)
     );
-    std::cout << "nchannels = " << h_data.digis->size() << std::endl;
-    std::cout << "shared memory per block = " << shared_bytes << "B\n";
+    std::cout << "nchannels = " << totalChannels << std::endl;
     kernel_prep_1d_and_initialize<<<blocks_1d, threads_1d, shared_bytes>>>(
         d_data.pulses, d_data.epulses,
         d_data.digis_data, d_data.samples,
@@ -162,15 +184,13 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.flags,
         d_data.acState,
         gainSwitchUseMaxSample,
-        h_data.digis->size());
-    ecal::cuda::assert_if_error();
-
-    std::cout << " after kernel prep 1d\n";
+        totalChannels);
+    AssertIfError
 
     //
     // 2d preparation kernel
     //
-    int blocks_2d = h_data.digis->size();
+    int blocks_2d = totalChannels;
     dim3 threads_2d{10, 10};
     kernel_prep_2d<<<blocks_2d, threads_2d>>>(
         d_data.covariances, d_data.pulse_covariances,
@@ -190,9 +210,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.hasSwitchToGain6,
         d_data.hasSwitchToGain1,
         d_data.isSaturated);
-    ecal::cuda::assert_if_error();
-
-    std::cout << "after kernel prep 2d\n";
+    AssertIfError
 
 //#define ECAL_RECO_DEBUG_CPU4GPU
 #ifdef ECAL_RECO_DEBUG_CPU4GPU
@@ -253,23 +271,12 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     );
 
 #endif
-
-    cudaEvent_t start_event;
-    cudaEvent_t end_event;
-    cudaEventCreate(&start_event);
-    cudaEventCreate(&end_event);
-
-    cudaEventRecord(start_event, 0);
+    
     if (conf.runV1)
         v1::minimization_procedure(d_data, h_data, conf);
     else
         v2::minimization_procedure(d_data, h_data);
-    cudaEventRecord(end_event, 0);
-    cudaEventSynchronize(end_event);
-    float ms;
-    cudaEventElapsedTime(&ms, start_event, end_event);
-    std::cout << "elapsed time = " << ms << std::endl;
-    ecal::cuda::assert_if_error();
+    AssertIfError
 
     //
     // TODO: this guy can run concurrently with other kernels,
@@ -297,9 +304,9 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         barrel 
             ? h_data.sample_mask.getEcalSampleMaskRecordEB()
             : h_data.sample_mask.getEcalSampleMaskRecordEE(),
-        h_data.digis->size()
+        totalChannels
     );
-    ecal::cuda::assert_if_error();
+    AssertIfError
 
     // 
     // TODO: small kernel only for EB. It needs to be checked if 
@@ -312,9 +319,9 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
             d_data.sample_value_errors,
             d_data.useless_sample_values,
             h_data.sample_mask.getEcalSampleMaskRecordEB(),
-            h_data.digis->size()
+            totalChannels
         );
-        ecal::cuda::assert_if_error();
+        AssertIfError
     }
 
     //
@@ -332,19 +339,15 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.chi2sNullHypot,
         d_data.sum0sNullHypot,
         d_data.sumAAsNullHypot,
-        h_data.digis->size()
+        totalChannels
     );
-    ecal::cuda::assert_if_error();
+    AssertIfError
 
-    std::cout << "*** before makeratio kernel ***\n";
-    //
-    // TODO: configurable parameters for launch context below
-    //
     unsigned int nchannels_per_block_makeratio = 10;
     unsigned int threads_makeratio = 45 * nchannels_per_block_makeratio;
-    unsigned int blocks_makeratio = threads_makeratio > 45 * h_data.digis->size()
+    unsigned int blocks_makeratio = threads_makeratio > 45 * totalChannels
         ? 1
-        : (h_data.digis->size() * 45 + threads_makeratio - 1) / threads_makeratio;
+        : (totalChannels * 45 + threads_makeratio - 1) / threads_makeratio;
     int sharedBytesMakeRatio = 5 * threads_makeratio * sizeof(SampleVector::Scalar);
     kernel_time_compute_makeratio<<<blocks_makeratio, threads_makeratio,
                                     sharedBytesMakeRatio>>>(
@@ -364,9 +367,9 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         barrel ? d_data.timeFitParametersSizeEB : d_data.timeFitParametersSizeEE,
         barrel ? d_data.timeFitLimitsFirstEB : d_data.timeFitLimitsFirstEE,
         barrel ? d_data.timeFitLimitsSecondEB : d_data.timeFitLimitsSecondEE,
-        h_data.digis->size()
+        totalChannels
     );
-    ecal::cuda::assert_if_error();
+    AssertIfError
 
     //
     //
@@ -394,9 +397,9 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.ampMaxError,
         d_data.timeMax,
         d_data.timeError,
-        h_data.digis->size()
+        totalChannels
     );
-    ecal::cuda::assert_if_error();
+    AssertIfError
 
     //
     //
@@ -412,16 +415,16 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.timeMax,
         barrel ? d_data.amplitudeFitParametersEB : d_data.amplitudeFitParametersEE,
         d_data.amplitudeMax,
-        h_data.digis->size()
+        totalChannels
     );
-    ecal::cuda::assert_if_error();
+    AssertIfError
 
     //
     //
     //
     auto const threads_timecorr = 32;
-    auto const blocks_timecorr = threads_timecorr > h_data.digis->size()
-        ? 1 : (h_data.digis->size() + threads_timecorr-1) / threads_timecorr;
+    auto const blocks_timecorr = threads_timecorr > totalChannels
+        ? 1 : (totalChannels + threads_timecorr-1) / threads_timecorr;
     kernel_time_correction_and_finalize<<<blocks_timecorr, threads_timecorr>>>(
         d_data.energies,
         d_data.digis_data,
@@ -459,48 +462,118 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         barrel
             ? d_data.outOfTimeThreshG61mEB
             : d_data.outOfTimeThreshG61mEE,
-        h_data.digis->size()
+        totalChannels
     );
-    ecal::cuda::assert_if_error();
+    AssertIfError
 
     //
-    // transfer the results back
+    // transfer eb then ee
     //
-//    h_data.rechits_soa.amplitude = std::move(energies);
-//    h_data.rechits_soa.chi2 = std::move(chi2s);
-    cudaMemcpy(&(*h_data.rechits_soa.amplitude.begin()),
+
+    // amplitude
+    cudaMemcpy(h_data.rechits_soa_eb.amplitude.data(),
                d_data.energies,
-               h_data.rechits_soa.amplitude.size() * sizeof(float),
+               h_data.rechits_soa_eb.amplitude.size() * sizeof(float),
                cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_data.rechits_soa.pedestal.data(),
+    AssertIfError
+    cudaMemcpy(h_data.rechits_soa_ee.amplitude.data(),
+               d_data.energies + h_data.rechits_soa_eb.amplitude.size(),
+               h_data.rechits_soa_ee.amplitude.size() * sizeof(float),
+               cudaMemcpyDeviceToHost);
+    AssertIfError
+
+    // pedestal
+    cudaMemcpy(h_data.rechits_soa_eb.pedestal.data(),
                d_data.pedestal,
-               h_data.rechits_soa.pedestal.size() * sizeof(float),
+               h_data.rechits_soa_eb.pedestal.size() * sizeof(float),
                cudaMemcpyDeviceToHost);
-    cudaMemcpy(&(*h_data.rechits_soa.chi2.begin()),
+    AssertIfError
+    cudaMemcpy(h_data.rechits_soa_ee.pedestal.data(),
+               d_data.pedestal + h_data.rechits_soa_eb.pedestal.size(),
+               h_data.rechits_soa_ee.pedestal.size() * sizeof(float),
+               cudaMemcpyDeviceToHost);
+    AssertIfError
+
+    // chi2
+    cudaMemcpy(h_data.rechits_soa_eb.chi2.data(),
                d_data.chi2,
-               h_data.rechits_soa.chi2.size() * sizeof(float),
+               h_data.rechits_soa_eb.chi2.size() * sizeof(float),
                cudaMemcpyDeviceToHost);
-    cudaMemcpy(&(*h_data.rechits_soa.did.begin()),
+    AssertIfError
+    cudaMemcpy(h_data.rechits_soa_ee.chi2.data(),
+               d_data.chi2 + h_data.rechits_soa_eb.chi2.size(),
+               h_data.rechits_soa_ee.chi2.size() * sizeof(float),
+               cudaMemcpyDeviceToHost);
+    AssertIfError
+
+    // detector ids
+    cudaMemcpy(h_data.rechits_soa_eb.did.data(),
                d_data.ids,
-               h_data.rechits_soa.did.size() * sizeof(uint32_t),
+               h_data.rechits_soa_eb.did.size() * sizeof(uint32_t),
                cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_data.rechits_soa.flags.data(),
+    AssertIfError
+    cudaMemcpy(h_data.rechits_soa_ee.did.data(),
+               d_data.ids + h_data.rechits_soa_eb.did.size(),
+               h_data.rechits_soa_ee.did.size() * sizeof(uint32_t),
+               cudaMemcpyDeviceToHost);
+    AssertIfError
+
+    // flags
+    cudaMemcpy(h_data.rechits_soa_eb.flags.data(),
                d_data.flags,
-               h_data.rechits_soa.flags.size() * sizeof(uint32_t),
+               h_data.rechits_soa_eb.flags.size() * sizeof(uint32_t),
                cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_data.rechits_soa.jitter.data(),
+    AssertIfError
+    cudaMemcpy(h_data.rechits_soa_ee.flags.data(),
+               d_data.flags + h_data.rechits_soa_eb.flags.size(),
+               h_data.rechits_soa_ee.flags.size() * sizeof(uint32_t),
+               cudaMemcpyDeviceToHost);
+    AssertIfError
+
+    // jitter
+    cudaMemcpy(h_data.rechits_soa_eb.jitter.data(),
                d_data.jitter,
-               h_data.rechits_soa.jitter.size() * sizeof(float),
+               h_data.rechits_soa_eb.jitter.size() * sizeof(float),
                cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_data.rechits_soa.jitterError.data(),
+    AssertIfError
+    cudaMemcpy(h_data.rechits_soa_ee.jitter.data(),
+               d_data.jitter + h_data.rechits_soa_eb.jitter.size(),
+               h_data.rechits_soa_ee.jitter.size() * sizeof(float),
+               cudaMemcpyDeviceToHost);
+    AssertIfError
+
+    // jitter error
+    cudaMemcpy(h_data.rechits_soa_eb.jitterError.data(),
                d_data.jitterError,
-               h_data.rechits_soa.jitterError.size() * sizeof(float),
+               h_data.rechits_soa_eb.jitterError.size() * sizeof(float),
                cudaMemcpyDeviceToHost);
-    cudaMemcpy(h_data.rechits_soa.amplitudesAll.data(),
+    AssertIfError
+    cudaMemcpy(h_data.rechits_soa_ee.jitterError.data(),
+               d_data.jitterError + h_data.rechits_soa_eb.jitterError.size(),
+               h_data.rechits_soa_ee.jitterError.size() * sizeof(float),
+               cudaMemcpyDeviceToHost);
+    AssertIfError
+
+    // amplitudes per sample
+    cudaMemcpy(h_data.rechits_soa_eb.amplitudesAll.data(),
                d_data.amplitudes,
-               h_data.rechits_soa.amplitudesAll.size() * 
+               h_data.rechits_soa_eb.amplitudesAll.size() * 
                sizeof(::ecal::reco::ComputationScalarType),
                cudaMemcpyDeviceToHost);
+    AssertIfError
+    cudaMemcpy(h_data.rechits_soa_ee.amplitudesAll.data(),
+               d_data.amplitudes + 
+               h_data.rechits_soa_eb.amplitudesAll.size() / EcalDataFrame::MAXSAMPLES,
+               h_data.rechits_soa_ee.amplitudesAll.size() * 
+               sizeof(::ecal::reco::ComputationScalarType),
+               cudaMemcpyDeviceToHost);
+    AssertIfError
+
+    cudaEventRecord(end_event, 0);
+    cudaEventSynchronize(end_event);
+    float ms;
+    cudaEventElapsedTime(&ms, start_event, end_event);
+    std::cout << "elapsed time = " << ms << std::endl;
 }
 
 }}

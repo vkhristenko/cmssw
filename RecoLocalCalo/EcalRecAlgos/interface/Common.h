@@ -3,6 +3,10 @@
 
 #include <cstdint>
 #include <cmath>
+#include <cassert>
+
+#include <cuda.h>
+#include <cuda_runtime.h>
 
 // a workaround for std::abs not being a constexpr function
 namespace ecal {
@@ -22,10 +26,13 @@ constexpr int gainId(uint16_t sample) { return (sample>>12) & 0x3; }
 
 }
 
-namespace ecal { namespace cuda {
-
-void assert_if_error();
-
-}}
+#define AssertIfError \
+    { \
+        auto code = cudaGetLastError(); \
+        if (code != cudaSuccess) { \
+            std::cout << cudaGetErrorString(code) << std::endl; \
+            assert(false); \
+        } \
+    }
 
 #endif

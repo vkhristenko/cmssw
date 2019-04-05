@@ -251,22 +251,24 @@ void minimization_procedure(
         host_data& h_data) {
     int iterations = 0;
     int const maxIterations = 50;
+    unsigned int const totalChannels = h_data.digisEB->size() + 
+        h_data.digisEE->size();
 
     // TODO: specify all the constants in 1 location
     // initialize all the varibles before starting minimization
     constexpr int blocksForStateInitialization = 1000;
     constexpr int maxChannels = 20000;
     unsigned int threadsInit = 32;
-    unsigned int blocksInit = threadsInit > h_data.digis->size()
+    unsigned int blocksInit = threadsInit > totalChannels
         ? 1
-        : (h_data.digis->size() + threadsInit - 1) / threadsInit;
+        : (totalChannels + threadsInit - 1) / threadsInit;
     kernelInitializeBeforeMinimizationProcedure<<<blocksInit, threadsInit>>>(
         d_data.npassive,
         d_data.minimizationStatePerBlock,
         d_data.activeBXs,
-        h_data.digis->size(),
+        totalChannels,
         blocksForStateInitialization);
-    ecal::cuda::assert_if_error();
+    AssertIfError
 
     // main loop
     while (true) {
@@ -278,7 +280,7 @@ void minimization_procedure(
  
         dim3 threadsUpdateCov = {EcalDataFrame::MAXSAMPLES,
             EcalDataFrame::MAXSAMPLES};
-        unsigned int blocksUpdateCov = h_data.digis->size();
+        unsigned int blocksUpdateCov = totalChannels;
         kernel_update_covariance_matrix<<<blocksUpdateCov, threadsUpdateCov>>>(
             d_data.noisecov, 
             d_data.pulse_covariances,
@@ -286,8 +288,8 @@ void minimization_procedure(
             d_data.activeBXs,
             d_data.acState,
             d_data.updatedNoiseCovariance,
-            h_data.digis->size());
-        ecal::cuda::assert_if_error();
+            totalChannels);
+        AssertIfError
 
 /*
         // call kernel to compute update covariance matrix
@@ -313,15 +315,15 @@ void minimization_procedure(
 
         // call kernel to perform covaraince matrix cholesky decomposition
         unsigned int threadsMatrixLU = 32;
-        unsigned int blocksMatrixLU = threadsMatrixLU > h_data.digis->size()
+        unsigned int blocksMatrixLU = threadsMatrixLU > totalChannels
             ? 1
-            : (h_data.digis->size() + threadsMatrixLU - 1) / threadsMatrixLU;
+            : (totalChannels + threadsMatrixLU - 1) / threadsMatrixLU;
         kernel_matrix_ludecomp<<<blocksMatrixLU, threadsMatrixLU>>>(
             d_data.updatedNoiseCovariance,
             d_data.acState,
             d_data.noiseMatrixDecomposition,
-            h_data.digis->size());
-        ecal::cuda::assert_if_error();
+            totalChannels);
+        AssertIfError
 
 #ifdef DEBUG_ITERATIONS
         std::cout << "LU decomposition\n";
@@ -329,9 +331,9 @@ void minimization_procedure(
 
         // call kernel to perform fast nnls
         unsigned int threadsNNLS = 32;
-        unsigned int blocksNNLS = threadsNNLS > h_data.digis->size()
+        unsigned int blocksNNLS = threadsNNLS > totalChannels
             ? 1
-            : (h_data.digis->size() + threadsNNLS - 1) / threadsNNLS;
+            : (totalChannels + threadsNNLS - 1) / threadsNNLS;
         kernel_fast_nnls<<<blocksNNLS, threadsNNLS>>>(
             d_data.noiseMatrixDecomposition,
             d_data.samples,
@@ -341,8 +343,8 @@ void minimization_procedure(
             d_data.npassive,
             d_data.activeBXs,
             d_data.chi2, 
-            h_data.digis->size());
-        ecal::cuda::assert_if_error();
+            totalChannels);
+        AssertIfError
 
 #ifdef DEBUG_ITERATIONS
         std::cout << "fast nnls\n";
@@ -350,19 +352,21 @@ void minimization_procedure(
 
         // call kernel to reduce in order to generate global state
         constexpr unsigned int threadsState = 256;
-        unsigned int blocksForStateReduce = threadsState > h_data.digis->size()
+        unsigned int blocksForStateReduce = threadsState > totalChannels
             ? 1
-            : (h_data.digis->size() + threadsState - 1) / threadsState;
+            : (totalChannels + threadsState - 1) / threadsState;
         kernel_reduce_state<threadsState><<<blocksForStateReduce, threadsState>>>(
             d_data.acState, 
             d_data.minimizationStatePerBlock,
-            h_data.digis->size());
+            totalChannels);
+        AssertIfError
 
         // transfer the reductions per block back
         cudaMemcpy(d_data.h_minimizationStatesPerBlock.data(),
                    d_data.minimizationStatePerBlock,
                    blocksForStateReduce * sizeof(MinimizationState),
                    cudaMemcpyDeviceToHost);
+        AssertIfError
         // reduce on the host (should be tiny)
         bool acc = true;
         for (unsigned int i=0; i<blocksForStateReduce; i++)
@@ -379,17 +383,17 @@ void minimization_procedure(
     // and assign the final uncalibared energy value
     //
     unsigned int threadsPermute = 32 * EcalDataFrame::MAXSAMPLES; // 32 * 10
-    unsigned int blocksPermute = threadsPermute > 32 * h_data.digis->size()
+    unsigned int blocksPermute = threadsPermute > 32 * totalChannels
         ? 1
-        : (32 * h_data.digis->size() + threadsPermute - 1) / threadsPermute;
+        : (32 * totalChannels + threadsPermute - 1) / threadsPermute;
     int bytesPermute = threadsPermute * sizeof(SampleVector::Scalar);
     kernel_permute_results<<<blocksPermute, threadsPermute, bytesPermute>>>(
         d_data.amplitudes,
         d_data.activeBXs,
         d_data.energies,
         d_data.acState,
-        h_data.digis->size());
-    ecal::cuda::assert_if_error();
+        totalChannels);
+    AssertIfError
 }
 
 }
