@@ -42,15 +42,17 @@ class EcalUncalibRecHitWorkerMultiFitGPUNew final : public EcalUncalibRecHitWork
 
         public:
                 EcalUncalibRecHitWorkerMultiFitGPUNew(const edm::ParameterSet&, edm::ConsumesCollector& c);
-		EcalUncalibRecHitWorkerMultiFitGPUNew() {};
-                ~EcalUncalibRecHitWorkerMultiFitGPUNew() override;
+		EcalUncalibRecHitWorkerMultiFitGPUNew() {}
+        ~EcalUncalibRecHitWorkerMultiFitGPUNew() override;
         private:
                 void set(const edm::EventSetup& es) override;
                 void set(const edm::Event& evt) override;
                 void run(const edm::Event& evt, const EcalDigiCollection & digis, EcalUncalibratedRecHitCollection & result) override;
                 void run(const edm::Event& evt,
-                         const EcalDigiCollection& digis,
-                         ecal::SoAUncalibratedRecHitCollection& result) override;
+                         const EBDigiCollection& digisEB,
+                         const EEDigiCollection& digisEE,
+                         ecal::SoAUncalibratedRecHitCollection& resultEB,
+                         ecal::SoAUncalibratedRecHitCollection& resultEE) override;
 	public:	
 		edm::ParameterSetDescription getAlgoDescription() override;
         private:

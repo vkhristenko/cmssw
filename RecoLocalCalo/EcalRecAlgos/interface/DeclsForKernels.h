@@ -20,6 +20,8 @@ class EcalPulseCovariance;
 class EcalDigiCollection;
 class EcalXtalGroupId;
 class EcalSamplesCorrelation;
+class EBDigiCollection;
+class EEDigiCollection;
 
 namespace ecal { namespace multifit {
 
@@ -154,7 +156,8 @@ struct mgpagain_ratio_data {
 };
 
 struct host_data {
-    EcalDigiCollection const *digis;
+    EBDigiCollection const *digisEB;
+    EEDigiCollection const *digisEE; 
 //    std::vector<EcalPedestal> const *pedestals;
     pedestal_data const& ped_data;
 //    std::vector<EcalMGPAGainRatio> const *gains;
@@ -166,7 +169,8 @@ struct host_data {
     EcalTimeBiasCorrections const *time_bias_corrections;
     std::vector<float> const& timeCalibConstants;
     BXVectorType const* bxs;
-    ecal::UncalibratedRecHit<ecal::Tag::soa>& rechits_soa;
+    ecal::UncalibratedRecHit<ecal::Tag::soa>& rechits_soa_eb;
+    ecal::UncalibratedRecHit<ecal::Tag::soa>& rechits_soa_ee;
     EcalSamplesCorrelation const* noiseCovariances;
 };
 

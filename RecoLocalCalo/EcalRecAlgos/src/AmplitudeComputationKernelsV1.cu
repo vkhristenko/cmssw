@@ -245,11 +245,12 @@ void minimization_procedure(
         device_data& d_data,
         host_data const& h_data,
         conf_data const& conf) {
+    unsigned int totalChannels = h_data.digisEB->size() + h_data.digisEE->size();
 
     unsigned int threads_min = conf.threads.x;
-    unsigned int blocks_min = threads_min > h_data.digis->size()
+    unsigned int blocks_min = threads_min > totalChannels
         ? 1
-        : (h_data.digis->size() + threads_min - 1) / threads_min;
+        : (totalChannels + threads_min - 1) / threads_min;
     kernel_minimize<<<blocks_min, threads_min>>>(
         d_data.noisecov,
         d_data.pulse_covariances,
@@ -265,26 +266,26 @@ void minimization_procedure(
         d_data.hasSwitchToGain1,
         d_data.rms_x12,
         d_data.acState,
-        h_data.digis->size(),
+        totalChannels,
         50);
-    ecal::cuda::assert_if_error();
+    AssertIfError
 
     //
     // permute computed amplitudes
     // and assign the final uncalibared energy value
     //
     unsigned int threadsPermute = 32 * EcalDataFrame::MAXSAMPLES; // 32 * 10
-    unsigned int blocksPermute = threadsPermute > 32 * h_data.digis->size()
+    unsigned int blocksPermute = threadsPermute > 32 * totalChannels
         ? 1
-        : (32 * h_data.digis->size() + threadsPermute - 1) / threadsPermute;
+        : (32 * totalChannels + threadsPermute - 1) / threadsPermute;
     int bytesPermute = threadsPermute * sizeof(SampleVector::Scalar);
     kernel_permute_results<<<blocksPermute, threadsPermute, bytesPermute>>>(
         d_data.amplitudes,
         d_data.activeBXs,
         d_data.energies,
         d_data.acState,
-        h_data.digis->size());
-    ecal::cuda::assert_if_error();
+        totalChannels);
+    AssertIfError
 }
 
 }
