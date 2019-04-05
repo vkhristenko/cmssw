@@ -82,10 +82,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         h_data.pulse_covariances->size() * sizeof(EcalPulseCovariance),
         cudaMemcpyHostToDevice);
 
-    cudaMemcpy(d_data.noisecorrs, h_data.noisecorrs->data(),
-        h_data.noisecorrs->size() * sizeof(SampleMatrixD),
-        cudaMemcpyHostToDevice);
-
     cudaMemcpy(d_data.G12SamplesCorrelation, 
                barrel
                  ? h_data.noiseCovariances->EBG12SamplesCorrelation.data()
@@ -167,7 +163,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.acState,
         gainSwitchUseMaxSample,
         h_data.digis->size());
-    cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
     std::cout << " after kernel prep 1d\n";
@@ -180,7 +175,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     kernel_prep_2d<<<blocks_2d, threads_2d>>>(
         d_data.covariances, d_data.pulse_covariances,
         d_data.gainsNoise,
-        d_data.noisecorrs,
         d_data.rms_x12,
         d_data.rms_x6,
         d_data.rms_x1,
@@ -196,7 +190,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.hasSwitchToGain6,
         d_data.hasSwitchToGain1,
         d_data.isSaturated);
-    cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
     std::cout << "after kernel prep 2d\n";
@@ -276,7 +269,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     float ms;
     cudaEventElapsedTime(&ms, start_event, end_event);
     std::cout << "elapsed time = " << ms << std::endl;
-    cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
     //
@@ -307,7 +299,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
             : h_data.sample_mask.getEcalSampleMaskRecordEE(),
         h_data.digis->size()
     );
-    cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
     // 
@@ -323,7 +314,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
             h_data.sample_mask.getEcalSampleMaskRecordEB(),
             h_data.digis->size()
         );
-        cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
     }
 
@@ -344,7 +334,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.sumAAsNullHypot,
         h_data.digis->size()
     );
-    cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
     std::cout << "*** before makeratio kernel ***\n";
@@ -377,7 +366,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         barrel ? d_data.timeFitLimitsSecondEB : d_data.timeFitLimitsSecondEE,
         h_data.digis->size()
     );
-    cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
     //
@@ -408,7 +396,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.timeError,
         h_data.digis->size()
     );
-    cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
     //
@@ -427,7 +414,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.amplitudeMax,
         h_data.digis->size()
     );
-    cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
     //
@@ -475,7 +461,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
             : d_data.outOfTimeThreshG61mEE,
         h_data.digis->size()
     );
-    cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
     //

@@ -50,7 +50,6 @@ __global__
 void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                     FullSampleMatrix* pulse_cov_out,
                     SampleGainVector const* gainNoise,
-                    SampleMatrixD const* noisecorrs,
                     float const* rms_x12,
                     float const* rms_x6,
                     float const* rms_x1,

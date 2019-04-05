@@ -267,7 +267,6 @@ void minimization_procedure(
         d_data.acState,
         h_data.digis->size(),
         50);
-    cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
     //
@@ -285,7 +284,6 @@ void minimization_procedure(
         d_data.energies,
         d_data.acState,
         h_data.digis->size());
-    cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 }
 

@@ -266,7 +266,6 @@ void minimization_procedure(
         d_data.activeBXs,
         h_data.digis->size(),
         blocksForStateInitialization);
-    cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 
     // main loop
@@ -288,7 +287,6 @@ void minimization_procedure(
             d_data.acState,
             d_data.updatedNoiseCovariance,
             h_data.digis->size());
-        cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
 
 /*
@@ -305,7 +303,6 @@ void minimization_procedure(
             d_data.acState,
             d_data.updatedNoiseCovariance,
             h_data.digis->size());
-        cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
 */
 
@@ -324,7 +321,6 @@ void minimization_procedure(
             d_data.acState,
             d_data.noiseMatrixDecomposition,
             h_data.digis->size());
-        cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
 
 #ifdef DEBUG_ITERATIONS
@@ -346,7 +342,6 @@ void minimization_procedure(
             d_data.activeBXs,
             d_data.chi2, 
             h_data.digis->size());
-        cudaDeviceSynchronize();
         ecal::cuda::assert_if_error();
 
 #ifdef DEBUG_ITERATIONS
@@ -394,7 +389,6 @@ void minimization_procedure(
         d_data.energies,
         d_data.acState,
         h_data.digis->size());
-    cudaDeviceSynchronize();
     ecal::cuda::assert_if_error();
 }
 
