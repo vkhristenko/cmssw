@@ -19,6 +19,7 @@ class EcalTimeBiasCorrections;
 class EcalPulseCovariance;
 class EcalDigiCollection;
 class EcalXtalGroupId;
+class EcalSamplesCorrelation;
 
 namespace ecal { namespace multifit {
 
@@ -115,6 +116,8 @@ struct device_data {
     SampleVector::Scalar *timeFitParametersEB, *timeFitParametersEE;
     SampleVector::Scalar *amplitudeMax;
 
+    double *G12SamplesCorrelation, *G6SamplesCorrelation, *G1SamplesCorrelation;
+
     // use constant mem?
     SampleVector::Scalar timeConstantTermEB, timeConstantTermEE;
 
@@ -163,10 +166,10 @@ struct host_data {
     std::vector<EcalPulseCovariance> const *pulse_covariances;
     SampleMatrixGainArray const *noisecorrs;
     EcalTimeBiasCorrections const *time_bias_corrections;
-    std::vector<EMatrix> const* weights;
     std::vector<float> const& timeCalibConstants;
     BXVectorType const* bxs;
     ecal::UncalibratedRecHit<ecal::Tag::soa>& rechits_soa;
+    EcalSamplesCorrelation const* noiseCovariances;
 };
 
 }}

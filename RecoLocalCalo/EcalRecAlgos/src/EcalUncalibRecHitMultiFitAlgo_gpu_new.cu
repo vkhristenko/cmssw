@@ -7,6 +7,7 @@
 #include "CondFormats/EcalObjects/interface/EcalPulseShapes.h"
 #include "CondFormats/EcalObjects/interface/EcalPulseCovariances.h"
 #include "CondFormats/EcalObjects/interface/EcalSampleMask.h"
+#include "CondFormats/EcalObjects/interface/EcalSamplesCorrelation.h"
 
 #include <iostream>
 #include <limits>
@@ -84,6 +85,25 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     cudaMemcpy(d_data.noisecorrs, h_data.noisecorrs->data(),
         h_data.noisecorrs->size() * sizeof(SampleMatrixD),
         cudaMemcpyHostToDevice);
+
+    cudaMemcpy(d_data.G12SamplesCorrelation, 
+               barrel
+                 ? h_data.noiseCovariances->EBG12SamplesCorrelation.data()
+                 : h_data.noiseCovariances->EEG12SamplesCorrelation.data(),
+               EcalDataFrame::MAXSAMPLES * sizeof(double),
+               cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.G6SamplesCorrelation, 
+               barrel
+                 ? h_data.noiseCovariances->EBG6SamplesCorrelation.data()
+                 : h_data.noiseCovariances->EEG6SamplesCorrelation.data(),
+               EcalDataFrame::MAXSAMPLES * sizeof(double),
+               cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.G1SamplesCorrelation, 
+               barrel
+                 ? h_data.noiseCovariances->EBG1SamplesCorrelation.data()
+                 : h_data.noiseCovariances->EEG1SamplesCorrelation.data(),
+               EcalDataFrame::MAXSAMPLES * sizeof(double),
+               cudaMemcpyHostToDevice);
 
     if (barrel) {
         cudaMemcpy(d_data.EBTimeCorrAmplitudeBins, 
@@ -166,6 +186,9 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.rms_x1,
         d_data.gain12Over6,
         d_data.gain6Over1,
+        d_data.G12SamplesCorrelation,
+        d_data.G6SamplesCorrelation,
+        d_data.G1SamplesCorrelation,
         d_data.noisecov,
         d_data.pulse_matrix,
         d_data.epulses,

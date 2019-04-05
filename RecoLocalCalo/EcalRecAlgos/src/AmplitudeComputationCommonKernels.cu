@@ -10,6 +10,7 @@
 
 #include "CondFormats/EcalObjects/interface/EcalPulseShapes.h"
 #include "CondFormats/EcalObjects/interface/EcalPulseCovariances.h"
+#include "CondFormats/EcalObjects/interface/EcalSamplesCorrelation.h"
 
 #include "inplace_fnnls.h"
 #include "AmplitudeComputationKernelsV1.h"
@@ -308,6 +309,9 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                     float const* rms_x1,
                     float const* gain12Over6,
                     float const* gain6Over1,
+                    double const* G12SamplesCorrelation,
+                    double const* G6SamplesCorrelation,
+                    double const* G1SamplesCorrelation,
                     SampleMatrix* noisecov,
                     PulseMatrixType* pulse_matrix,
                     FullSampleVector const* pulse_shape,
@@ -339,6 +343,7 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
     bool tmp1 = hasSwitchToGain1[ch];
     bool tmp2 = isSaturated[ch];
     bool hasGainSwitch = tmp0 || tmp1 || tmp2;
+    auto const vidx = ecal::abs(ty - tx);
     // non-divergent branch for all threads per block
     if (hasGainSwitch) {
         // TODO: did not include simplified noise model
@@ -354,14 +359,21 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
 
             // non-divergent branches
             if (gainidx==0)
-                noise_value = rms_x12[ch]*rms_x12[ch]*noisecorrs[0](ty, tx);
+                //noise_value = rms_x12[ch]*rms_x12[ch]*noisecorrs[0](ty, tx);
+                noise_value = rms_x12[ch]*rms_x12[ch]
+                    * G12SamplesCorrelation[vidx];
             if (gainidx==1) 
+//                noise_value = gain12Over6[ch]*gain12Over6[ch] * rms_x6[ch]*rms_x6[ch]
+//                    *noisecorrs[1](ty, tx);
                 noise_value = gain12Over6[ch]*gain12Over6[ch] * rms_x6[ch]*rms_x6[ch]
-                    *noisecorrs[1](ty, tx);
+                    * G6SamplesCorrelation[vidx];
             if (gainidx==2)
+//                noise_value = gain12Over6[ch]*gain12Over6[ch]
+//                    * gain6Over1[ch]*gain6Over1[ch] * rms_x1[ch]*rms_x1[ch]
+//                    * noisecorrs[2](ty, tx);
                 noise_value = gain12Over6[ch]*gain12Over6[ch]
                     * gain6Over1[ch]*gain6Over1[ch] * rms_x1[ch]*rms_x1[ch]
-                    * noisecorrs[2](ty, tx);
+                    * G1SamplesCorrelation[vidx];
             if (!dynamicPedestal && addPedestalUncertainty>0.f)
                 noise_value += addPedestalUncertainty*addPedestalUncertainty;
         } else {
@@ -369,8 +381,10 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
             int gainidx=0;
             char mask = gainidx;
             int pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
+//            noise_value += /* gainratio is 1*/ rms_x12[ch]*rms_x12[ch]
+//                *pedestal*noisecorrs[0](ty, tx);
             noise_value += /* gainratio is 1*/ rms_x12[ch]*rms_x12[ch]
-                *pedestal*noisecorrs[0](ty, tx);
+                * pedestal* G12SamplesCorrelation[vidx];
             // non-divergent branch
             if (!dynamicPedestal && addPedestalUncertainty>0.f) {
                 noise_value += /* gainratio is 1 */
@@ -381,8 +395,11 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
             gainidx=1;
             mask = gainidx;
             pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
+//            noise_value += gain12Over6[ch]*gain12Over6[ch]
+//                *rms_x6[ch]*rms_x6[ch]*pedestal*noisecorrs[1](ty, tx);
             noise_value += gain12Over6[ch]*gain12Over6[ch]
-                *rms_x6[ch]*rms_x6[ch]*pedestal*noisecorrs[1](ty, tx);
+                *rms_x6[ch]*rms_x6[ch]*pedestal
+                * G6SamplesCorrelation[vidx];
             // non-divergent branch
             if (!dynamicPedestal && addPedestalUncertainty>0.f) {
                 noise_value += gain12Over6[ch]*gain12Over6[ch]
@@ -395,8 +412,10 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
             mask = gainidx;
             pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
             float tmp = gain6Over1[ch] * gain12Over6[ch];
+//            noise_value += tmp*tmp * rms_x1[ch]*rms_x1[ch]
+//                *pedestal*noisecorrs[2](ty, tx);
             noise_value += tmp*tmp * rms_x1[ch]*rms_x1[ch]
-                *pedestal*noisecorrs[2](ty, tx);
+                *pedestal* G1SamplesCorrelation[vidx];
             // non-divergent branch
             if (!dynamicPedestal && addPedestalUncertainty>0.f) {
                 noise_value += tmp*tmp * addPedestalUncertainty*addPedestalUncertainty
@@ -407,7 +426,7 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
         noisecov[ch](ty, tx) = noise_value;
     } else {
         auto rms = rms_x12[ch];
-        float noise_value = rms*rms * noisecorrs[0](ty, tx);
+        float noise_value = rms*rms * G12SamplesCorrelation[vidx];
         if (!dynamicPedestal && addPedestalUncertainty>0.f)
             noise_value += addPedestalUncertainty*addPedestalUncertainty;
         noisecov[ch](ty, tx) = noise_value;
