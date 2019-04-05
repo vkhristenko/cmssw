@@ -32,7 +32,8 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     using digis_type = std::vector<uint16_t>;
     using dids_type = std::vector<uint32_t>;
     bool barrel = true;
-    bool gainSwitchUseMaxSample = barrel; // accodring to the cpu setup
+    bool const gainSwitchUseMaxSampleEB = true; // accodring to the cpu setup
+    bool const gainSwitchUseMaxSampleEE = false;
 
     unsigned int totalChannels = h_data.digisEB->size() + h_data.digisEE->size();
     
@@ -165,7 +166,9 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     std::cout << "nchannels = " << totalChannels << std::endl;
     kernel_prep_1d_and_initialize<<<blocks_1d, threads_1d, shared_bytes>>>(
         d_data.pulses, d_data.epulses,
-        d_data.digis_data, d_data.samples,
+        d_data.digis_data, 
+        d_data.ids,
+        d_data.samples,
         d_data.amplitudes,
         d_data.gainsNoise,
         d_data.gainsPedestal,
@@ -183,7 +186,8 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.pedestal,
         d_data.flags,
         d_data.acState,
-        gainSwitchUseMaxSample,
+        gainSwitchUseMaxSampleEB,
+        gainSwitchUseMaxSampleEE,
         totalChannels);
     AssertIfError
 

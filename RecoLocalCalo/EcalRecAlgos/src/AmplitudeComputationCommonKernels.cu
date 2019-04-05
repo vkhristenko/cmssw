@@ -26,6 +26,7 @@ __global__
 void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
                     FullSampleVector* shapes_out, 
                     uint16_t const* digis_in,
+                    uint32_t const* dids,
                     SampleVector* amplitudes,
                     SampleVector* amplitudesForMinimization,
                     SampleGainVector* gainsNoise,
@@ -44,7 +45,8 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
                     ::ecal::reco::StorageScalarType* g_pedestal,
                     uint32_t *flags,
                     char* acState,
-                    bool gainSwitchUseMaxSample,
+                    bool gainSwitchUseMaxSampleEB,
+                    bool gainSwitchUseMaxSampleEE,
                     int nchannels) {
     constexpr bool dynamicPedestal = false;
     constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
@@ -86,6 +88,7 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
         //
         int adc = ecal::mgpa::adc(digis_in[tx]);
         int gainId = ecal::mgpa::gainId(digis_in[tx]);
+        auto const did = DetId{dids[ch]};
         auto const rmsForChecking = rms_x12[ch];
         SampleVector::Scalar amplitude = 0.;
         SampleVector::Scalar pedestal = 0.;
@@ -228,6 +231,9 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
             int const chStart = threadIdx.x - sample_max;
             // thread for the max sample in shared mem
             int const threadMax = threadIdx.x;
+            auto const gainSwitchUseMaxSample = did.subdet() == EcalBarrel
+                ? gainSwitchUseMaxSampleEB
+                : gainSwitchUseMaxSampleEE;
             
             // this flag setting is applied to all of the cases
             if (shr_hasSwitchToGain6[chStart])
