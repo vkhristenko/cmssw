@@ -57,7 +57,6 @@ struct device_data {
     FullSampleVector* epulses = nullptr;
     EcalPulseCovariance *covariances = nullptr;
     FullSampleMatrix* pulse_covariances = nullptr;
-    SampleMatrixD* noisecorrs = nullptr; // array of 3
     EcalSampleMask *sample_mask = nullptr;
     SampleMatrix* noisecov = nullptr;
     SampleMatrix* updatedNoiseCovariance = nullptr;
@@ -164,7 +163,6 @@ struct host_data {
     std::vector<EcalXtalGroupId> const *xtals;
     std::vector<EcalPulseShape> const *pulse_shapes;
     std::vector<EcalPulseCovariance> const *pulse_covariances;
-    SampleMatrixGainArray const *noisecorrs;
     EcalTimeBiasCorrections const *time_bias_corrections;
     std::vector<float> const& timeCalibConstants;
     BXVectorType const* bxs;

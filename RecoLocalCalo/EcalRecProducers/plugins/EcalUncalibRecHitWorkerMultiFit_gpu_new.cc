@@ -169,8 +169,6 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
   cudaMalloc((void**)&d_data.pulse_covariances,
     MAX_CHANNELS * sizeof(ecal::multifit::FullSampleMatrix));
 
-  cudaMalloc((void**)&d_data.noisecorrs,
-    3 * sizeof(ecal::multifit::SampleMatrixD)); // size of std::array
   cudaMalloc((void**)&d_data.noisecov,
     MAX_CHANNELS * sizeof(ecal::multifit::SampleMatrix));
   cudaMalloc((void**)&d_data.pulse_matrix,
@@ -371,7 +369,6 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.covariances);
         cudaFree(d_data.pulse_covariances);
 
-        cudaFree(d_data.noisecorrs);
         cudaFree(d_data.sample_mask);
 
         cudaFree(d_data.noisecov);
@@ -454,28 +451,6 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::set(const edm::EventSetup& es)
 
         // for the time correction methods
         es.get<EcalTimeBiasCorrectionsRcd>().get(timeCorrBias_);
-
-        /*
-        int nnoise = SampleVector::RowsAtCompileTime;
-        SampleMatrix &noisecorEBg12 = noisecors_[1][0];
-        SampleMatrix &noisecorEBg6 = noisecors_[1][1];
-        SampleMatrix &noisecorEBg1 = noisecors_[1][2];
-        SampleMatrix &noisecorEEg12 = noisecors_[0][0];
-        SampleMatrix &noisecorEEg6 = noisecors_[0][1];
-        SampleMatrix &noisecorEEg1 = noisecors_[0][2];
-                
-        for (int i=0; i<nnoise; ++i) {
-          for (int j=0; j<nnoise; ++j) {
-            int vidx = std::abs(j-i);
-            noisecorEBg12(i,j) = noisecovariances->EBG12SamplesCorrelation[vidx];
-            noisecorEEg12(i,j) = noisecovariances->EEG12SamplesCorrelation[vidx];
-            noisecorEBg6(i,j)  = noisecovariances->EBG6SamplesCorrelation[vidx];
-            noisecorEEg6(i,j)  = noisecovariances->EEG6SamplesCorrelation[vidx];
-            noisecorEBg1(i,j)  = noisecovariances->EBG1SamplesCorrelation[vidx];
-            noisecorEEg1(i,j)  = noisecovariances->EEG1SamplesCorrelation[vidx];
-          }
-	}
-    */
 }
 
 void
@@ -532,7 +507,6 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
     std::vector<EcalPulseShape> vpulseshapes;
     std::vector<EcalPulseCovariance> vcovariances;
     std::vector<float> vtimeCalibConstants;
-    const SampleMatrixGainArray &noisecors = noisecor(barrel);
 
     // 
     // TODO: employ hashed index on the device directly!
@@ -593,39 +567,6 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
                 << detid.rawId()
                 << "! something wrong with EcalTimeCalibConstants in your DB? ";
 
-        /*
-        EcalTBWeights::EcalTDCId tdcid{1};
-        auto const& weightMap = wgts->getMap();
-        EcalTBWeights::EcalTBWeightMap::const_iterator wit;
-        wit = weightMap.find(std::make_pair(*gid, tdcid));
-        if (wit == weightMap.end()) {
-            edm::LogError("EcalUncalibRecHitError") 
-                << "No weights found for EcalGroupId: "
-                << gid->id() << " and  Eca    lTDCId: " << tdcid
-                << "\n  skipping digi with     id: " << detid.rawId();
-            // TODO: digis array will need to be properly updated if
-            // this digi does not need to be sent to the device
-            assert(0);
-        }
-        EcalWeightSet const& wset = wit->second;
-        auto const& mat1 = wset.getWeightsBeforeGainSwitch();
-        auto const& mat2 = wset.getWeightsAfterGainSwitch();
-        ecal::multifit::EMatrix m1,m2;
-        for (unsigned int irow=0; 
-             irow<EcalWeightSet::EcalWeightMatrix::rep_type::kRows;
-             irow++)
-            for (unsigned int icol=0;
-                 icol<EcalWeightSet::EcalWeightMatrix::rep_type::kCols;
-                 icol++) {
-                m1(irow, icol) = mat1(irow, icol);
-                m2(irow, icol) = mat2(irow, icol);
-            }
-        vweights.push_back(m1);
-        vweights.push_back(m2);
-        */
-
-//        vpedestals.push_back(*aped);
-//        vgains.push_back(*aGain);
         ped_data.mean_x12.push_back(aped->mean_x12);
         ped_data.rms_x12.push_back(aped->rms_x12);
         ped_data.mean_x6.push_back(aped->mean_x6);
@@ -654,7 +595,7 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
     ecal::multifit::host_data h_data{&digis,
                                      ped_data, gainratio_data, sample_mask,
                                      &vxtals, &vpulseshapes, &vcovariances,
-                                     &noisecors, &(*timeCorrBias_),
+                                     &(*timeCorrBias_),
                                      vtimeCalibConstants, 
                                      &bxs, result, noisecovariances.product()};
     ecal::multifit::scatter(h_data, d_data, conf);
