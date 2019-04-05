@@ -61,9 +61,6 @@ class EcalUncalibRecHitWorkerMultiFitGPUNew final : public EcalUncalibRecHitWork
                 edm::ESHandle<EcalPulseShapes> pulseshapes;
                 edm::ESHandle<EcalPulseCovariances> pulsecovariances;
 
-                double timeCorrection(float ampli,
-                    const std::vector<float>& amplitudeBins, const std::vector<float>& shiftBins);
-
                 const SampleMatrix & noisecor(bool barrel, int gain) const { return noisecors_[barrel?1:0][gain];}
                 const SampleMatrixGainArray &noisecor(bool barrel) const { return noisecors_[barrel?1:0]; }
                 
