@@ -101,7 +101,10 @@ void kernel_update_covariance_matrix(
         return;
 
     // configure shared mem
-    __shared__ FullSampleMatrix shrFullPulseCovariance;
+    __shared__ FullSampleMatrix::Scalar smem[
+        FullSampleMatrix::RowsAtCompileTime * FullSampleMatrix::ColsAtCompileTime];
+    Eigen::Map<FullSampleMatrix> shrFullPulseCovariance{smem};
+
     for (unsigned int ity=ty; ity<FullSampleMatrix::RowsAtCompileTime; 
          ity+=nsamples)
         for (unsigned int itx=tx; itx<FullSampleMatrix::ColsAtCompileTime;
