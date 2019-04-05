@@ -26,8 +26,10 @@ class EcalUncalibRecHitWorkerBaseClass {
 
   virtual void run(const edm::Event& evt, const EcalDigiCollection & digis, EcalUncalibratedRecHitCollection & result) = 0;
   virtual void run(const edm::Event& evt,
-                   const EcalDigiCollection& digis,
-                   ecal::SoAUncalibratedRecHitCollection& result) {}
+                   const EBDigiCollection& digisEB,
+                   const EEDigiCollection& digisEE,
+                   ecal::SoAUncalibratedRecHitCollection& resultEB,
+                   ecal::SoAUncalibratedRecHitCollection& resultEE) {}
 
   virtual edm::ParameterSetDescription getAlgoDescription() = 0;
 };

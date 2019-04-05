@@ -270,7 +270,7 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
   d_data.h_minimizationStatesPerBlock.resize(MAX_BLOCKS_FOR_STATE_REDUCTION);
   cudaMalloc((void**)&d_data.minimizationStatePerBlock,
     sizeof(char) * MAX_BLOCKS_FOR_STATE_REDUCTION);
-  ecal::cuda::assert_if_error();
+  AssertIfError
 
   //
   // for configuration parameters, transfer once
@@ -420,7 +420,7 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.G12SamplesCorrelation);
         cudaFree(d_data.G6SamplesCorrelation);
         cudaFree(d_data.G1SamplesCorrelation);
-        ecal::cuda::assert_if_error();
+        AssertIfError
     }
 }
 
@@ -485,15 +485,12 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::set(const edm::Event& evt)
 
 void
 EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
-                const EcalDigiCollection & digis,
-                ecal::SoAUncalibratedRecHitCollection& result )
+                const EBDigiCollection & digisEB,
+                const EEDigiCollection & digisEE,
+                ecal::SoAUncalibratedRecHitCollection& resultEB,
+                ecal::SoAUncalibratedRecHitCollection& resultEE)
 {
-    if (digis.empty())
-      return;
-
-    // assume all digis come from the same subdetector (either barrel or endcap)
-    DetId detid(digis.begin()->id());
-    bool barrel = (detid.subdetId()==EcalBarrel);
+    unsigned int totalSize = digisEB.size() + digisEE.size();
 
     //
     // gather conditions to send to device
@@ -512,49 +509,40 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
     // TODO: employ hashed index on the device directly!
     // need  to resort conditions in the order of digis
     //
-//    vpedestals.reserve(digis.size());
-//    vgains.reserve(digis.size());
-    ped_data.mean_x12.reserve(digis.size());
-    ped_data.rms_x12.reserve(digis.size());
-    ped_data.mean_x6.reserve(digis.size());
-    ped_data.rms_x6.reserve(digis.size());
-    ped_data.mean_x1.reserve(digis.size());
-    ped_data.rms_x1.reserve(digis.size());
+    ped_data.mean_x12.reserve(totalSize);
+    ped_data.rms_x12.reserve(totalSize);
+    ped_data.mean_x6.reserve(totalSize);
+    ped_data.rms_x6.reserve(totalSize);
+    ped_data.mean_x1.reserve(totalSize);
+    ped_data.rms_x1.reserve(totalSize);
 
-    gainratio_data.gain12Over6.reserve(digis.size());
-    gainratio_data.gain6Over1.reserve(digis.size());
+    gainratio_data.gain12Over6.reserve(totalSize);
+    gainratio_data.gain6Over1.reserve(totalSize);
 
     ecal::multifit::BXVectorType bxs;
     bxs << -5, -4, -3, -2, -1, 0, 1, 2, 3, 4;
 
-    vxtals.reserve(digis.size());
-    vpulseshapes.reserve(digis.size());
-    vcovariances.reserve(digis.size());
-    vtimeCalibConstants.reserve(digis.size());
-    for (auto const& digi : digis) {
+    vxtals.reserve(totalSize);
+    vpulseshapes.reserve(totalSize);
+    vcovariances.reserve(totalSize);
+    vtimeCalibConstants.reserve(totalSize);
+    
+    // iterate over EB
+    for (auto const& digi : digisEB) {
         DetId detid(digi.id());
         const EcalPedestals::Item * aped = nullptr;
         const EcalMGPAGainRatio * aGain = nullptr;
         const EcalXtalGroupId * gid = nullptr;
         const EcalPulseShapes::Item * aPulse = nullptr;
         const EcalPulseCovariances::Item * aPulseCov = nullptr;
-        if (barrel) {
-            unsigned int hashedIndex = EBDetId(detid).hashedIndex();
-            aped       = &peds->barrel(hashedIndex);
-            aGain      = &gains->barrel(hashedIndex);
-            gid        = &grps->barrel(hashedIndex);
-            aPulse     = &pulseshapes->barrel(hashedIndex);
-            aPulseCov  = &pulsecovariances->barrel(hashedIndex);
-            d_data.offsetTimeValue = offtime->getEBValue();
-        } else {
-            unsigned int hashedIndex = EEDetId(detid).hashedIndex();
-            aped       = &peds->endcap(hashedIndex);
-            aGain      = &gains->endcap(hashedIndex);
-            gid        = &grps->endcap(hashedIndex);
-            aPulse     = &pulseshapes->endcap(hashedIndex);
-            aPulseCov  = &pulsecovariances->endcap(hashedIndex);
-            d_data.offsetTimeValue = offtime->getEEValue();
-        }
+
+        unsigned int hashedIndex = EBDetId(detid).hashedIndex();
+        aped       = &peds->barrel(hashedIndex);
+        aGain      = &gains->barrel(hashedIndex);
+        gid        = &grps->barrel(hashedIndex);
+        aPulse     = &pulseshapes->barrel(hashedIndex);
+        aPulseCov  = &pulsecovariances->barrel(hashedIndex);
+        d_data.offsetTimeValue = offtime->getEBValue();
 
         // timeconst
         EcalTimeCalibConstantMap::const_iterator it = itime->find(detid);
@@ -582,22 +570,69 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
         vcovariances.push_back(*aPulseCov);
         vtimeCalibConstants.push_back(itimeconst);
     }
+
+    // iterate over EE
+    for (auto const& digi : digisEE) {
+        DetId detid(digi.id());
+        const EcalPedestals::Item * aped = nullptr;
+        const EcalMGPAGainRatio * aGain = nullptr;
+        const EcalXtalGroupId * gid = nullptr;
+        const EcalPulseShapes::Item * aPulse = nullptr;
+        const EcalPulseCovariances::Item * aPulseCov = nullptr;
+            
+        unsigned int hashedIndex = EEDetId(detid).hashedIndex();
+        aped       = &peds->endcap(hashedIndex);
+        aGain      = &gains->endcap(hashedIndex);
+        gid        = &grps->endcap(hashedIndex);
+        aPulse     = &pulseshapes->endcap(hashedIndex);
+        aPulseCov  = &pulsecovariances->endcap(hashedIndex);
+        d_data.offsetTimeValue = offtime->getEEValue();
+
+        // timeconst
+        EcalTimeCalibConstantMap::const_iterator it = itime->find(detid);
+        auto const itimeconst = it == itime->end()
+            ? 0
+            : *it;
+        if (it == itime->end())
+            edm::LogError("EcalRecHitError") 
+                << "No time intercalib const found for xtal "
+                << detid.rawId()
+                << "! something wrong with EcalTimeCalibConstants in your DB? ";
+
+        ped_data.mean_x12.push_back(aped->mean_x12);
+        ped_data.rms_x12.push_back(aped->rms_x12);
+        ped_data.mean_x6.push_back(aped->mean_x6);
+        ped_data.rms_x6.push_back(aped->rms_x6);
+        ped_data.mean_x1.push_back(aped->mean_x1);
+        ped_data.rms_x1.push_back(aped->rms_x1);
+
+        gainratio_data.gain12Over6.push_back(aGain->gain12Over6());
+        gainratio_data.gain6Over1.push_back(aGain->gain6Over1());
+
+        vxtals.push_back(*gid);
+        vpulseshapes.push_back(*aPulse);
+        vcovariances.push_back(*aPulseCov);
+        vtimeCalibConstants.push_back(itimeconst);
+    }
+    
     EcalSampleMask const& sample_mask = *sampleMaskHand_.product();
     
     // 
     // prepare the result
     //
-    result.resize(digis.size());
+    resultEB.resize(digisEB.size());
+    resultEE.resize(digisEE.size());
     
     // 
     // launch
     //
-    ecal::multifit::host_data h_data{&digis,
+    ecal::multifit::host_data h_data{&digisEB, &digisEE,
                                      ped_data, gainratio_data, sample_mask,
                                      &vxtals, &vpulseshapes, &vcovariances,
                                      &(*timeCorrBias_),
                                      vtimeCalibConstants, 
-                                     &bxs, result, noisecovariances.product()};
+                                     &bxs, resultEB, resultEE, 
+                                     noisecovariances.product()};
     ecal::multifit::scatter(h_data, d_data, conf);
 }
 
