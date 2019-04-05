@@ -497,67 +497,6 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::set(const edm::Event& evt)
  
 }
 
-/**
- * Amplitude-dependent time corrections; EE and EB have separate corrections:
- * EXtimeCorrAmplitudes (ADC) and EXtimeCorrShifts (ns) need to have the same number of elements
- * Bins must be ordered in amplitude. First-last bins take care of under-overflows.
- *
- * The algorithm is the same for EE and EB, only the correction vectors are different.
- *
- * @return Jitter (in clock cycles) which will be added to UncalibRechit.setJitter(), 0 if no correction is applied.
- */
-double EcalUncalibRecHitWorkerMultiFitGPUNew::timeCorrection(
-    float ampli,
-	const std::vector<float>& amplitudeBins,
-    const std::vector<float>& shiftBins) {
-
-  // computed initially in ns. Than turned in the BX's, as
-  // EcalUncalibratedRecHit need be.
-  double theCorrection = 0;
-
-  // sanity check for arrays
-  if (amplitudeBins.empty()) {
-    edm::LogError("EcalRecHitError")
-        << "timeCorrAmplitudeBins is empty, forcing no time bias corrections.";
-
-    return 0;
-  }
-
-  if (amplitudeBins.size() != shiftBins.size()) {
-    edm::LogError("EcalRecHitError")
-        << "Size of timeCorrAmplitudeBins different from "
-           "timeCorrShiftBins. Forcing no time bias corrections. ";
-
-    return 0;
-  }
-
-  // FIXME? what about a binary search?
-  int myBin = -1;
-  for (int bin = 0; bin < (int) amplitudeBins.size(); bin++) {
-    if (ampli > amplitudeBins[bin]) {
-      myBin = bin;
-    } else {
-      break;
-	}
-  }
-
-  if (myBin == -1) {
-    theCorrection = shiftBins[0];
-  } else if (myBin == ((int)(amplitudeBins.size() - 1))) {
-    theCorrection = shiftBins[myBin];
-  } else {
-    // interpolate linearly between two assingned points
-    theCorrection = (shiftBins[myBin + 1] - shiftBins[myBin]);
-    theCorrection *= (((double) ampli) - amplitudeBins[myBin]) /
-                     (amplitudeBins[myBin + 1] - amplitudeBins[myBin]);
-    theCorrection += shiftBins[myBin];
-  }
-
-  // convert ns into clocks
-  constexpr double inv25 = 1./25.;
-  return theCorrection * inv25;
-}
-
 void
 EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
                 const EcalDigiCollection & digis,
@@ -697,14 +636,7 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
     // prepare the result
     //
     result.resize(digis.size());
-    /*
-    result.amplitude.resize(digis.size());
-    result.chi2.resize(digis.size());
-    result.did.resize(digis.size());
-    result.jitter.resize(digis.size());
-    result.jitterError.resize(digis.size());
-    */
-
+    
     // 
     // launch
     //
@@ -721,139 +653,7 @@ void
 EcalUncalibRecHitWorkerMultiFitGPUNew::run( const edm::Event & evt,
                 const EcalDigiCollection & digis,
                 EcalUncalibratedRecHitCollection & result )
-{
-    /*
-    if (digis.empty())
-      return;
-
-    // assume all digis come from the same subdetector (either barrel or endcap)
-    DetId detid(digis.begin()->id());
-    bool barrel = (detid.subdetId()==EcalBarrel);
-
-    //
-    // gather conditions to send to device
-    //
-//    std::vector<EcalPedestal> vpedestals;
-//    std::vector<EcalMGPAGainRatio> vgains;
-    ecal::multifit::v1::pedestal_data ped_data;
-    ecal::multifit::v1::mgpagain_ratio_data gainratio_data;
-
-    std::vector<EcalXtalGroupId> vxtals;
-    std::vector<EcalPulseShape> vpulseshapes;
-    std::vector<EcalPulseCovariance> vcovariances;
-    std::vector<ecal::multifit::v1::EMatrix> vweights;
-    const SampleMatrixGainArray &noisecors = noisecor(barrel);
-
-    // 
-    // TODO: employ hashed index on the device directly!
-    // need  to resort conditions in the order of digis
-    //
-//    vpedestals.reserve(digis.size());
-//    vgains.reserve(digis.size());
-    ped_data.mean_x12.reserve(digis.size());
-    ped_data.rms_x12.reserve(digis.size());
-    ped_data.mean_x6.reserve(digis.size());
-    ped_data.rms_x6.reserve(digis.size());
-    ped_data.mean_x1.reserve(digis.size());
-    ped_data.rms_x1.reserve(digis.size());
-
-    gainratio_data.gain12Over6.reserve(digis.size());
-    gainratio_data.gain6Over1.reserve(digis.size());
-
-    ecal::multifit::v1::BXVectorType bxs;
-    bxs << -5, -4, -3, -2, -1, 0, 1, 2, 3, 4;
-
-    vxtals.reserve(digis.size());
-    vpulseshapes.reserve(digis.size());
-    vcovariances.reserve(digis.size());
-    vweights.reserve(2*digis.size());
-    for (auto const& digi : digis) {
-        DetId detid(digi.id());
-        const EcalPedestals::Item * aped = nullptr;
-        const EcalMGPAGainRatio * aGain = nullptr;
-        const EcalXtalGroupId * gid = nullptr;
-        const EcalPulseShapes::Item * aPulse = nullptr;
-        const EcalPulseCovariances::Item * aPulseCov = nullptr;
-        if (barrel) {
-            unsigned int hashedIndex = EBDetId(detid).hashedIndex();
-            aped       = &peds->barrel(hashedIndex);
-            aGain      = &gains->barrel(hashedIndex);
-            gid        = &grps->barrel(hashedIndex);
-            aPulse     = &pulseshapes->barrel(hashedIndex);
-            aPulseCov  = &pulsecovariances->barrel(hashedIndex);
-        } else {
-            unsigned int hashedIndex = EEDetId(detid).hashedIndex();
-            aped       = &peds->endcap(hashedIndex);
-            aGain      = &gains->endcap(hashedIndex);
-            gid        = &grps->endcap(hashedIndex);
-            aPulse     = &pulseshapes->endcap(hashedIndex);
-            aPulseCov  = &pulsecovariances->endcap(hashedIndex);
-        }
-
-        EcalTBWeights::EcalTDCId tdcid{1};
-        auto const& weightMap = wgts->getMap();
-        EcalTBWeights::EcalTBWeightMap::const_iterator wit;
-        wit = weightMap.find(std::make_pair(*gid, tdcid));
-        if (wit == weightMap.end()) {
-            edm::LogError("EcalUncalibRecHitError") 
-                << "No weights found for EcalGroupId: "
-                << gid->id() << " and  Eca    lTDCId: " << tdcid
-                << "\n  skipping digi with     id: " << detid.rawId();
-            // TODO: digis array will need to be properly updated if
-            // this digi does not need to be sent to the device
-            assert(0);
-        }
-        EcalWeightSet const& wset = wit->second;
-        auto const& mat1 = wset.getWeightsBeforeGainSwitch();
-        auto const& mat2 = wset.getWeightsAfterGainSwitch();
-        ecal::multifit::v1::EMatrix m1,m2;
-        for (unsigned int irow=0; 
-             irow<EcalWeightSet::EcalWeightMatrix::rep_type::kRows;
-             irow++)
-            for (unsigned int icol=0;
-                 icol<EcalWeightSet::EcalWeightMatrix::rep_type::kCols;
-                 icol++) {
-                m1(irow, icol) = mat1(irow, icol);
-                m2(irow, icol) = mat2(irow, icol);
-            }
-        vweights.push_back(m1);
-        vweights.push_back(m2);
-
-//        vpedestals.push_back(*aped);
-//        vgains.push_back(*aGain);
-        ped_data.mean_x12.push_back(aped->mean_x12);
-        ped_data.rms_x12.push_back(aped->rms_x12);
-        ped_data.mean_x6.push_back(aped->mean_x6);
-        ped_data.rms_x6.push_back(aped->rms_x6);
-        ped_data.mean_x1.push_back(aped->mean_x1);
-        ped_data.rms_x1.push_back(aped->rms_x1);
-
-        gainratio_data.gain12Over6.push_back(aGain->gain12Over6());
-        gainratio_data.gain6Over1.push_back(aGain->gain6Over1());
-
-        vxtals.push_back(*gid);
-        vpulseshapes.push_back(*aPulse);
-        vcovariances.push_back(*aPulseCov);
-    }
-    EcalSampleMask const& sample_mask = *sampleMaskHand_.product();
-    
-    // 
-    // prepare the result
-    //
-    result.resize(digis.size());
-    EcalUncalibratedRecHitCollection rechits(digis.size());
-
-    // 
-    // launch
-    //
-    ecal::multifit::v1::host_data h_data{&digis, &result,
-                                     ped_data, gainratio_data,
-                                     &vxtals, &vpulseshapes, &vcovariances,
-                                     &noisecors, &sample_mask, &(*timeCorrBias_),
-                                     &vweights, &bxs};
-    ecal::multifit::v1::scatter(h_data, d_data, conf);
-    */
-}
+{}
 
 edm::ParameterSetDescription 
 EcalUncalibRecHitWorkerMultiFitGPUNew::getAlgoDescription() {
