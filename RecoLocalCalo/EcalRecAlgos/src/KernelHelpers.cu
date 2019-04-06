@@ -49,6 +49,7 @@ __device__
 __forceinline__
 bool positiveZ(uint32_t id) { return id & 0x4000; }
 
+// these constants come from EE Det Id 
 __constant__ 
 const unsigned short kxf[] = {
     41,  51,  41,  51,  41,  51,  36,  51,  36,  51,
