@@ -117,7 +117,8 @@ struct device_data {
     SampleVector::Scalar *timeFitParametersEB, *timeFitParametersEE;
     SampleVector::Scalar *amplitudeMax;
 
-    double *G12SamplesCorrelation, *G6SamplesCorrelation, *G1SamplesCorrelation;
+    double *G12SamplesCorrelationEB, *G6SamplesCorrelationEB, *G1SamplesCorrelationEB;
+    double *G12SamplesCorrelationEE, *G6SamplesCorrelationEE, *G1SamplesCorrelationEE;
 
     // use constant mem?
     SampleVector::Scalar timeConstantTermEB, timeConstantTermEE;
