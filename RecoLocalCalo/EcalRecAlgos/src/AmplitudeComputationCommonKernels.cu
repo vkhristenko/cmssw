@@ -14,6 +14,7 @@
 
 #include "inplace_fnnls.h"
 #include "AmplitudeComputationKernelsV1.h"
+#include "KernelHelpers.h"
 
 namespace ecal { namespace multifit {
 
