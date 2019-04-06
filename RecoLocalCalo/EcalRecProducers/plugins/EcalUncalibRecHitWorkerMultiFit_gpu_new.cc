@@ -259,11 +259,17 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
     sizeof(uint32_t) * MAX_CHANNELS);
   cudaMalloc((void**)&d_data.timeCalibConstants,
     sizeof(float) * MAX_CHANNELS);
-  cudaMalloc((void**)&d_data.G12SamplesCorrelation,
+  cudaMalloc((void**)&d_data.G12SamplesCorrelationEB,
     sizeof(double) * EcalDataFrame::MAXSAMPLES);
-  cudaMalloc((void**)&d_data.G6SamplesCorrelation,
+  cudaMalloc((void**)&d_data.G6SamplesCorrelationEB,
     sizeof(double) * EcalDataFrame::MAXSAMPLES);
-  cudaMalloc((void**)&d_data.G1SamplesCorrelation,
+  cudaMalloc((void**)&d_data.G1SamplesCorrelationEB,
+    sizeof(double) * EcalDataFrame::MAXSAMPLES);
+  cudaMalloc((void**)&d_data.G12SamplesCorrelationEE,
+    sizeof(double) * EcalDataFrame::MAXSAMPLES);
+  cudaMalloc((void**)&d_data.G6SamplesCorrelationEE,
+    sizeof(double) * EcalDataFrame::MAXSAMPLES);
+  cudaMalloc((void**)&d_data.G1SamplesCorrelationEE,
     sizeof(double) * EcalDataFrame::MAXSAMPLES);
 
   // resize the host as well
@@ -417,9 +423,12 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.pedestal);
         cudaFree(d_data.flags);
         cudaFree(d_data.timeCalibConstants);
-        cudaFree(d_data.G12SamplesCorrelation);
-        cudaFree(d_data.G6SamplesCorrelation);
-        cudaFree(d_data.G1SamplesCorrelation);
+        cudaFree(d_data.G12SamplesCorrelationEB);
+        cudaFree(d_data.G6SamplesCorrelationEB);
+        cudaFree(d_data.G1SamplesCorrelationEB);
+        cudaFree(d_data.G12SamplesCorrelationEE);
+        cudaFree(d_data.G6SamplesCorrelationEE);
+        cudaFree(d_data.G1SamplesCorrelationEE);
         AssertIfError
     }
 }

@@ -231,7 +231,7 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
             int const chStart = threadIdx.x - sample_max;
             // thread for the max sample in shared mem
             int const threadMax = threadIdx.x;
-            auto const gainSwitchUseMaxSample = did.subdet() == EcalBarrel
+            auto const gainSwitchUseMaxSample = did.subdetId() == EcalBarrel
                 ? gainSwitchUseMaxSampleEB
                 : gainSwitchUseMaxSampleEE;
             
@@ -309,14 +309,18 @@ __global__
 void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                     FullSampleMatrix* pulse_cov_out,
                     SampleGainVector const* gainNoise,
+                    uint32_t const* dids,
                     float const* rms_x12,
                     float const* rms_x6,
                     float const* rms_x1,
                     float const* gain12Over6,
                     float const* gain6Over1,
-                    double const* G12SamplesCorrelation,
-                    double const* G6SamplesCorrelation,
-                    double const* G1SamplesCorrelation,
+                    double const* G12SamplesCorrelationEB,
+                    double const* G6SamplesCorrelationEB,
+                    double const* G1SamplesCorrelationEB,
+                    double const* G12SamplesCorrelationEE,
+                    double const* G6SamplesCorrelationEE,
+                    double const* G1SamplesCorrelationEE,
                     SampleMatrix* noisecov,
                     PulseMatrixType* pulse_matrix,
                     FullSampleVector const* pulse_shape,
@@ -338,14 +342,19 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
         for (int ix=tx; ix<template_samples; ix+=nsamples)
             pulse_cov_out[ch](iy+7, ix+7) = pulse_cov_in[ch].covval[iy][ix];
 
-    /*
-    for (int iy=ty, ix=tx; ix<=template_samples && iy<=template_samples; 
-        ix+=nsamples, iy+=nsamples)
-        pulse_cov_out[ch](iy+7, ix+7) = pulse_cov_in[ch].covval[iy][ix];
-        */
-    
     bool tmp0 = hasSwitchToGain6[ch];
     bool tmp1 = hasSwitchToGain1[ch];
+    auto const did = DetId{dids[ch]};
+    auto const isBarrel = did.subdetId() == EcalBarrel;
+    auto const G12SamplesCorrelation = isBarrel
+        ? G12SamplesCorrelationEB
+        : G12SamplesCorrelationEE;
+    auto const* G6SamplesCorrelation = isBarrel
+        ? G6SamplesCorrelationEB
+        : G6SamplesCorrelationEE;
+    auto const* G1SamplesCorrelation = isBarrel
+        ? G1SamplesCorrelationEB
+        : G1SamplesCorrelationEE;
     bool tmp2 = isSaturated[ch];
     bool hasGainSwitch = tmp0 || tmp1 || tmp2;
     auto const vidx = ecal::abs(ty - tx);

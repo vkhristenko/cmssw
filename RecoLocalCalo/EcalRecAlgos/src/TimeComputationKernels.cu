@@ -131,10 +131,13 @@ constexpr float fast_logf(float x) { return unsafe_logf<7>(x); }
 __global__
 void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
                                    SampleVector::Scalar const* sample_value_errors,
+                                   uint32_t const* dids,
                                    bool const* useless_sample_values,
                                    char const* pedestal_nums,
-                                   SampleVector::Scalar const* amplitudeFitParameters,
-                                   SampleVector::Scalar const* timeFitParameters,
+                                   SampleVector::Scalar const* amplitudeFitParametersEB,
+                                   SampleVector::Scalar const* amplitudeFitParametersEE,
+                                   SampleVector::Scalar const* timeFitParametersEB,
+                                   SampleVector::Scalar const* timeFitParametersEE,
                                    SampleVector::Scalar const* sumAAsNullHypot,
                                    SampleVector::Scalar const* sum0sNullHypot,
                                    SampleVector::Scalar* tMaxAlphaBetas,
@@ -142,9 +145,12 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
                                    SampleVector::Scalar* g_accTimeMax,
                                    SampleVector::Scalar* g_accTimeWgt,
                                    TimeComputationState* g_state,
-                                   unsigned int const timeFitParameters_size,
-                                   SampleVector::Scalar const timeFitLimits_first,
-                                   SampleVector::Scalar const timeFitLimits_second,
+                                   unsigned int const timeFitParameters_sizeEB,
+                                   unsigned int const timeFitParameters_sizeEE,
+                                   SampleVector::Scalar const timeFitLimits_firstEB,
+                                   SampleVector::Scalar const timeFitLimits_firstEE,
+                                   SampleVector::Scalar const timeFitLimits_secondEB,
+                                   SampleVector::Scalar const timeFitLimits_secondEE,
                                    int const nchannels) {
     using ScalarType = SampleVector::Scalar;
 
@@ -160,6 +166,24 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
     int const ch_start = ch*nsamples;
     int const lch_start = lch*nthreads_per_channel;
     int nchannels_per_block = blockDim.x / nthreads_per_channel;
+
+    auto const did = DetId{dids[ch]};
+    auto const isBarrel = did.subdetId() == EcalBarrel;
+    auto const* amplitudeFitParameters = isBarrel
+        ? amplitudeFitParametersEB
+        : amplitudeFitParametersEE;
+    auto const* timeFitParameters = isBarrel
+        ? timeFitParametersEB
+        : timeFitParametersEE;
+    auto const timeFitParameters_size = isBarrel
+        ? timeFitParameters_sizeEB
+        : timeFitParameters_sizeEE;
+    auto const timeFitLimits_first = isBarrel
+        ? timeFitLimits_firstEB
+        : timeFitLimits_firstEE;
+    auto const timeFitLimits_second = isBarrel
+        ? timeFitLimits_secondEB
+        : timeFitLimits_secondEE;
 
     extern __shared__ char smem[];
     ScalarType* shr_chi2s = reinterpret_cast<ScalarType*>(smem);
@@ -498,12 +522,14 @@ __global__
 void kernel_time_compute_findamplchi2_and_finish(
         SampleVector::Scalar const* sample_values,
         SampleVector::Scalar const* sample_value_errors,
+        uint32_t const* dids,
         bool const* useless_samples,
         SampleVector::Scalar const* g_tMaxAlphaBeta,
         SampleVector::Scalar const* g_tMaxErrorAlphaBeta,
         SampleVector::Scalar const* g_accTimeMax,
         SampleVector::Scalar const* g_accTimeWgt,
-        SampleVector::Scalar const* amplitudeFitParameters,
+        SampleVector::Scalar const* amplitudeFitParametersEB,
+        SampleVector::Scalar const* amplitudeFitParametersEE,
         SampleVector::Scalar const* sumAAsNullHypot,
         SampleVector::Scalar const* sum0sNullHypot,
         SampleVector::Scalar const* chi2sNullHypot,
@@ -534,6 +560,11 @@ void kernel_time_compute_findamplchi2_and_finish(
     if (ch >= nchannels) return;
 
     auto state = g_state[ch];
+    auto const did = DetId{dids[ch]};
+    auto const* amplitudeFitParameters = did.subdetId() == EcalBarrel
+        ? amplitudeFitParametersEB
+        : amplitudeFitParametersEE;
+
 
     // TODO is that better than storing into global and launching another kernel
     // for the first 10 threads
@@ -731,9 +762,11 @@ void kernel_time_compute_fixMGPAslew(uint16_t const* digis,
 __global__
 void kernel_time_compute_ampl(SampleVector::Scalar const* sample_values,
                               SampleVector::Scalar const* sample_value_errors,
+                              uint32_t const* dids,
                               bool const* useless_samples,
                               SampleVector::Scalar const* g_timeMax,
-                              SampleVector::Scalar const* amplitudeFitParameters,
+                              SampleVector::Scalar const* amplitudeFitParametersEB,
+                              SampleVector::Scalar const* amplitudeFitParametersEE,
                               SampleVector::Scalar *g_amplitudeMax,
                               int const nchannels) {
     using ScalarType = SampleVector::Scalar;
@@ -749,6 +782,11 @@ void kernel_time_compute_ampl(SampleVector::Scalar const* sample_values,
     int const sample = threadIdx.x % nsamples;
 
     if (ch >= nchannels) return;
+
+    auto const did = DetId{dids[ch]};
+    auto const* amplitudeFitParameters = did.subdetId() == EcalBarrel
+        ? amplitudeFitParametersEB
+        : amplitudeFitParametersEE;
 
     // configure shared mem
     extern __shared__ char smem[];
@@ -855,7 +893,8 @@ void kernel_time_computation_init(uint16_t const* digis,
                                   SampleVector::Scalar* ampMaxError,
                                   bool* useless_sample_values,
                                   char* pedestal_nums,
-                                  unsigned int const sample_mask,
+                                  unsigned int const sample_maskEB,
+                                  unsigned int const sample_maskEE,
                                   int nchannels) {
     using ScalarType = SampleVector::Scalar;
 
@@ -884,6 +923,10 @@ void kernel_time_computation_init(uint16_t const* digis,
         auto const gainId0 = ecal::mgpa::gainId(digis[ch_start]);
         auto const adc1 = ecal::mgpa::adc(digis[ch_start+1]);
         auto const gainId1 = ecal::mgpa::gainId(digis[ch_start+1]);
+        auto const did = DetId{dids[ch]};
+        auto const sample_mask = did.subdetId() == EcalBarrel
+            ? sample_maskEB
+            : sample_maskEE;
 
         // set pedestal
         // TODO this branch is non-divergent for a group of 10 threads
@@ -1020,8 +1063,11 @@ void kernel_time_correction_and_finalize(
 //        SampleVector::Scalar const* g_amplitude,
         float const* g_amplitude,
         uint16_t const* digis,
-        float const* amplitudeBins,
-        float const* shiftBins,
+        uint32_t const* dids,
+        float const* amplitudeBinsEB,
+        float const* amplitudeBinsEE,
+        float const* shiftBinsEB,
+        float const* shiftBinsEE,
         SampleVector::Scalar const* g_timeMax,
         SampleVector::Scalar const* g_timeError,
         float const* g_rms_x12,
@@ -1029,15 +1075,23 @@ void kernel_time_correction_and_finalize(
         float *g_jitter,
         float *g_jitterError,
         uint32_t *flags,
-        int const amplitudeBinsSize,
-        SampleVector::Scalar const timeConstantTerm,
+        int const amplitudeBinsSizeEB,
+        int const amplitudeBinsSizeEE,
+        SampleVector::Scalar const timeConstantTermEB,
+        SampleVector::Scalar const timeConstantTermEE,
         float const offsetTimeValue,
-        float const timeNconst,
-        float const amplitudeThreshold,
-        float const outOfTimeThreshG12p,
-        float const outOfTimeThreshG12m,
-        float const outOfTimeThreshG61p,
-        float const outOfTimeThreshG61m,
+        float const timeNconstEB,
+        float const timeNconstEE,
+        float const amplitudeThresholdEB,
+        float const amplitudeThresholdEE,
+        float const outOfTimeThreshG12pEB,
+        float const outOfTimeThreshG12pEE,
+        float const outOfTimeThreshG12mEB,
+        float const outOfTimeThreshG12mEE,
+        float const outOfTimeThreshG61pEB,
+        float const outOfTimeThreshG61pEE,
+        float const outOfTimeThreshG61mEB,
+        float const outOfTimeThreshG61mEE,
         int const nchannels) {
     using ScalarType = SampleVector::Scalar;
 
@@ -1053,6 +1107,38 @@ void kernel_time_correction_and_finalize(
     auto const amplitude = g_amplitude[gtx];
     auto const rms_x12 = g_rms_x12[gtx];
     auto const timeCalibConst = timeCalibConstant[gtx];
+
+    auto const isBarrel = DetId{dids[gtx]}.subdetId() == EcalBarrel;
+    auto const* amplitudeBins = isBarrel
+        ? amplitudeBinsEB
+        : amplitudeBinsEE;
+    auto const* shiftBins = isBarrel
+        ? shiftBinsEB
+        : shiftBinsEE;
+    auto const amplitudeBinsSize = isBarrel
+        ? amplitudeBinsSizeEB
+        : amplitudeBinsSizeEE;
+    auto const timeConstantTerm = isBarrel 
+        ? timeConstantTermEB
+        : timeConstantTermEE;
+    auto const timeNconst = isBarrel 
+        ? timeNconstEB
+        : timeNconstEE;
+    auto const amplitudeThreshold = isBarrel
+        ? amplitudeThresholdEB
+        : amplitudeThresholdEE;
+    auto const outOfTimeThreshG12p = isBarrel
+        ? outOfTimeThreshG12pEB
+        : outOfTimeThreshG12pEE;
+    auto const outOfTimeThreshG12m = isBarrel
+        ? outOfTimeThreshG12mEB
+        : outOfTimeThreshG12mEE;
+    auto const outOfTimeThreshG61p = isBarrel
+        ? outOfTimeThreshG61pEB
+        : outOfTimeThreshG61pEE;
+    auto const outOfTimeThreshG61m = isBarrel
+        ? outOfTimeThreshG61mEB
+        : outOfTimeThreshG61mEE;
 
     int myBin = -1;
     for (int bin=0; bin<amplitudeBinsSize; bin++) {
