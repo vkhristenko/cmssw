@@ -109,22 +109,28 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         cudaMemcpyHostToDevice);
 
     // copy sample correlations
-    cudaMemcpy(d_data.G12SamplesCorrelation, 
-               barrel
-                 ? h_data.noiseCovariances->EBG12SamplesCorrelation.data()
-                 : h_data.noiseCovariances->EEG12SamplesCorrelation.data(),
+    cudaMemcpy(d_data.G12SamplesCorrelationEB, 
+               h_data.noiseCovariances->EBG12SamplesCorrelation.data(),
                EcalDataFrame::MAXSAMPLES * sizeof(double),
                cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.G6SamplesCorrelation, 
-               barrel
-                 ? h_data.noiseCovariances->EBG6SamplesCorrelation.data()
-                 : h_data.noiseCovariances->EEG6SamplesCorrelation.data(),
+    cudaMemcpy(d_data.G6SamplesCorrelationEB,
+               h_data.noiseCovariances->EBG6SamplesCorrelation.data(),
                EcalDataFrame::MAXSAMPLES * sizeof(double),
                cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.G1SamplesCorrelation, 
-               barrel
-                 ? h_data.noiseCovariances->EBG1SamplesCorrelation.data()
-                 : h_data.noiseCovariances->EEG1SamplesCorrelation.data(),
+    cudaMemcpy(d_data.G1SamplesCorrelationEB, 
+               h_data.noiseCovariances->EBG1SamplesCorrelation.data(),
+               EcalDataFrame::MAXSAMPLES * sizeof(double),
+               cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.G12SamplesCorrelationEE, 
+               h_data.noiseCovariances->EEG12SamplesCorrelation.data(),
+               EcalDataFrame::MAXSAMPLES * sizeof(double),
+               cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.G6SamplesCorrelationEE,
+               h_data.noiseCovariances->EEG6SamplesCorrelation.data(),
+               EcalDataFrame::MAXSAMPLES * sizeof(double),
+               cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.G1SamplesCorrelationEE, 
+               h_data.noiseCovariances->EEG1SamplesCorrelation.data(),
                EcalDataFrame::MAXSAMPLES * sizeof(double),
                cudaMemcpyHostToDevice);
 
@@ -199,14 +205,18 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     kernel_prep_2d<<<blocks_2d, threads_2d>>>(
         d_data.covariances, d_data.pulse_covariances,
         d_data.gainsNoise,
+        d_data.ids,
         d_data.rms_x12,
         d_data.rms_x6,
         d_data.rms_x1,
         d_data.gain12Over6,
         d_data.gain6Over1,
-        d_data.G12SamplesCorrelation,
-        d_data.G6SamplesCorrelation,
-        d_data.G1SamplesCorrelation,
+        d_data.G12SamplesCorrelationEB,
+        d_data.G6SamplesCorrelationEB,
+        d_data.G1SamplesCorrelationEB,
+        d_data.G12SamplesCorrelationEE,
+        d_data.G6SamplesCorrelationEE,
+        d_data.G1SamplesCorrelationEE,
         d_data.noisecov,
         d_data.pulse_matrix,
         d_data.epulses,
@@ -216,66 +226,6 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.isSaturated);
     AssertIfError
 
-//#define ECAL_RECO_DEBUG_CPU4GPU
-#ifdef ECAL_RECO_DEBUG_CPU4GPU
-
-    // debug quantities before launching minimization
-    std::vector<SampleVector> samples(h_data.digis->size());
-    std::vector<PulseMatrixType> pulse_matrices(h_data.digis->size());
-    std::vector<SampleMatrix> noisecovs(h_data.digis->size());
-    std::vector<FullSampleMatrix> pulse_covariances(h_data.digis->size());
-    std::vector<SampleVector> amplitudes(h_data.digis->size());
-    std::vector<float> energies(h_data.digis->size());
-    std::vector<char> statuses(h_data.digis->size());
-    std::vector<float> chi2s(h_data.digis->size());
-    std::vector<char> isSaturated(h_data.digis->size());
-    std::vector<char> hasSwitchToGain6(h_data.digis->size());
-    std::vector<char> hasSwitchToGain1(h_data.digis->size());
-    cudaMemcpy(samples.data(), d_data.samples,
-        h_data.digis->size() * sizeof(SampleVector),
-        cudaMemcpyDeviceToHost);
-    cudaMemcpy(pulse_matrices.data(), d_data.pulse_matrix,
-        pulse_matrices.size() * sizeof(PulseMatrixType),
-        cudaMemcpyDeviceToHost);
-    cudaMemcpy(noisecovs.data(), d_data.noisecov,
-        noisecovs.size() * sizeof(SampleMatrix),
-        cudaMemcpyDeviceToHost);
-    cudaMemcpy(pulse_covariances.data(), d_data.pulse_covariances,
-        pulse_covariances.size() * sizeof(FullSampleMatrix),
-        cudaMemcpyDeviceToHost);
-    cudaMemcpy(isSaturated.data(), 
-        d_data.isSaturated,
-        isSaturated.size() * sizeof(bool),
-        cudaMemcpyDeviceToHost);
-    cudaMemcpy(hasSwitchToGain6.data(), d_data.hasSwitchToGain6,
-        hasSwitchToGain6.size() * sizeof(bool),
-        cudaMemcpyDeviceToHost);
-    cudaMemcpy(hasSwitchToGain1.data(), d_data.hasSwitchToGain1,
-        hasSwitchToGain1.size() * sizeof(bool),
-        cudaMemcpyDeviceToHost);
-
-    //std::cout << "dumping gpu quantities\n";
-
-    cpu::kernel_minimize(
-        noisecovs.data(),
-        pulse_covariances.data(),
-        h_data.bxs,
-        samples.data(),
-        amplitudes.data(),
-        energies.data(),
-        pulse_matrices.data(),
-        reinterpret_cast<bool*>(statuses.data()),
-        chi2s.data(),
-        reinterpret_cast<bool*>(isSaturated.data()),
-        reinterpret_cast<bool*>(hasSwitchToGain6.data()),
-        reinterpret_cast<bool*>(hasSwitchToGain1.data()),
-        h_data.digis->size(),
-        50,
-        gainSwitchUseMaxSample
-    );
-
-#endif
-    
     if (conf.runV1)
         v1::minimization_procedure(d_data, h_data, conf);
     else
@@ -305,9 +255,8 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.ampMaxError,
         d_data.useless_sample_values,
         d_data.pedestal_nums,
-        barrel 
-            ? h_data.sample_mask.getEcalSampleMaskRecordEB()
-            : h_data.sample_mask.getEcalSampleMaskRecordEE(),
+        h_data.sample_mask.getEcalSampleMaskRecordEB(),
+        h_data.sample_mask.getEcalSampleMaskRecordEE(),
         totalChannels
     );
     AssertIfError
@@ -316,17 +265,22 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     // TODO: small kernel only for EB. It needs to be checked if 
     /// fusing such small kernels is beneficial in here
     //
-    if (barrel) {
-        kernel_time_compute_fixMGPAslew<<<blocks_time_init, threads_time_init>>>(
-            d_data.digis_data,
-            d_data.sample_values,
-            d_data.sample_value_errors,
-            d_data.useless_sample_values,
-            h_data.sample_mask.getEcalSampleMaskRecordEB(),
-            totalChannels
-        );
-        AssertIfError
-    }
+    // we are running only over EB digis
+    // therefore we need to create threads/blocks only for that
+    unsigned int const threadsFixMGPA = threads_1d;
+    unsigned int const blocksFixMGPA = 
+        threadsFixMGPA > 10 * h_data.digisEB->size()
+            ? 1
+            : (10 * h_data.digisEB->size() + threadsFixMGPA - 1) / threadsFixMGPA;
+    kernel_time_compute_fixMGPAslew<<<blocksFixMGPA, threadsFixMGPA>>>(
+        d_data.digis_data,
+        d_data.sample_values,
+        d_data.sample_value_errors,
+        d_data.useless_sample_values,
+        h_data.sample_mask.getEcalSampleMaskRecordEB(),
+        totalChannels
+    );
+    AssertIfError
 
     //
     // 
@@ -357,10 +311,13 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
                                     sharedBytesMakeRatio>>>(
         d_data.sample_values,
         d_data.sample_value_errors,
+        d_data.ids,
         d_data.useless_sample_values,
         d_data.pedestal_nums,
-        barrel ? d_data.amplitudeFitParametersEB : d_data.amplitudeFitParametersEE,
-        barrel ? d_data.timeFitParametersEB : d_data.timeFitParametersEE,
+        d_data.amplitudeFitParametersEB,
+        d_data.amplitudeFitParametersEE,
+        d_data.timeFitParametersEB,
+        d_data.timeFitParametersEE,
         d_data.sumAAsNullHypot,
         d_data.sum0sNullHypot,
         d_data.tMaxAlphaBetas,
@@ -368,9 +325,12 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.accTimeMax,
         d_data.accTimeWgt,
         d_data.tcState,
-        barrel ? d_data.timeFitParametersSizeEB : d_data.timeFitParametersSizeEE,
-        barrel ? d_data.timeFitLimitsFirstEB : d_data.timeFitLimitsFirstEE,
-        barrel ? d_data.timeFitLimitsSecondEB : d_data.timeFitLimitsSecondEE,
+        d_data.timeFitParametersSizeEB, 
+        d_data.timeFitParametersSizeEE,
+        d_data.timeFitLimitsFirstEB,
+        d_data.timeFitLimitsFirstEE,
+        d_data.timeFitLimitsSecondEB,
+        d_data.timeFitLimitsSecondEE,
         totalChannels
     );
     AssertIfError
@@ -387,12 +347,14 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
                                        sharedBytesFindAmplChi2>>>(
         d_data.sample_values,
         d_data.sample_value_errors,
+        d_data.ids,
         d_data.useless_sample_values,
         d_data.tMaxAlphaBetas,
         d_data.tMaxErrorAlphaBetas,
         d_data.accTimeMax,
         d_data.accTimeWgt,
-        barrel ? d_data.amplitudeFitParametersEB : d_data.amplitudeFitParametersEE,
+        d_data.amplitudeFitParametersEB,
+        d_data.amplitudeFitParametersEE,
         d_data.sumAAsNullHypot,
         d_data.sum0sNullHypot,
         d_data.chi2sNullHypot,
@@ -415,9 +377,11 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
                                sharedBytesAmpl>>>(
         d_data.sample_values,
         d_data.sample_value_errors,
+        d_data.ids,
         d_data.useless_sample_values,
         d_data.timeMax,
-        barrel ? d_data.amplitudeFitParametersEB : d_data.amplitudeFitParametersEE,
+        d_data.amplitudeFitParametersEB,
+        d_data.amplitudeFitParametersEE,
         d_data.amplitudeMax,
         totalChannels
     );
@@ -432,8 +396,11 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     kernel_time_correction_and_finalize<<<blocks_timecorr, threads_timecorr>>>(
         d_data.energies,
         d_data.digis_data,
-        barrel ? d_data.EBTimeCorrAmplitudeBins : d_data.EETimeCorrAmplitudeBins,
-        barrel ? d_data.EBTimeCorrShiftBins : d_data.EETimeCorrShiftBins,
+        d_data.ids,
+        d_data.EBTimeCorrAmplitudeBins,
+        d_data.EETimeCorrAmplitudeBins,
+        d_data.EBTimeCorrShiftBins,
+        d_data.EETimeCorrShiftBins,
         d_data.timeMax,
         d_data.timeError,
         d_data.rms_x12,
@@ -441,31 +408,23 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.jitter,
         d_data.jitterError,
         d_data.flags,
-        barrel 
-            ? h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.size() 
-            : h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
-        barrel 
-            ? d_data.timeConstantTermEB
-            : d_data.timeConstantTermEE,
+        h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.size(),
+        h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
+        d_data.timeConstantTermEB,
+        d_data.timeConstantTermEE,
         d_data.offsetTimeValue,
-        barrel 
-            ? d_data.timeNconstEB
-            : d_data.timeNconstEE,
-        barrel 
-            ? d_data.amplitudeThreshEB
-            : d_data.amplitudeThreshEE,
-        barrel
-            ? d_data.outOfTimeThreshG12pEB
-            : d_data.outOfTimeThreshG12pEE,
-        barrel 
-            ? d_data.outOfTimeThreshG12mEB
-            : d_data.outOfTimeThreshG12mEE,
-        barrel
-            ? d_data.outOfTimeThreshG61pEB
-            : d_data.outOfTimeThreshG61pEE,
-        barrel
-            ? d_data.outOfTimeThreshG61mEB
-            : d_data.outOfTimeThreshG61mEE,
+        d_data.timeNconstEB,
+        d_data.timeNconstEE,
+        d_data.amplitudeThreshEB,
+        d_data.amplitudeThreshEE,
+        d_data.outOfTimeThreshG12pEB,
+        d_data.outOfTimeThreshG12pEE,
+        d_data.outOfTimeThreshG12mEB,
+        d_data.outOfTimeThreshG12mEE,
+        d_data.outOfTimeThreshG61pEB,
+        d_data.outOfTimeThreshG61pEE,
+        d_data.outOfTimeThreshG61mEB,
+        d_data.outOfTimeThreshG61mEE,
         totalChannels
     );
     AssertIfError
