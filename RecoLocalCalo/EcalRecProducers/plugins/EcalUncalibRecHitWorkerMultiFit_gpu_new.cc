@@ -278,6 +278,9 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
     sizeof(char) * MAX_BLOCKS_FOR_STATE_REDUCTION);
   AssertIfError
 
+  // cuda stream
+  cudaStreamCreate(&conf.cuStream);
+
   //
   // for configuration parameters, transfer once
   //
@@ -295,14 +298,19 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
     EEamplitudeFitParameters_[0]);
   eeAmplitudeFitParameters[1] = static_cast<SampleVector::Scalar>(
     EEamplitudeFitParameters_[1]);
-  cudaMemcpy(d_data.amplitudeFitParametersEB,
+
+  // these transfers are not really async
+  // vector has default allocator
+  cudaMemcpyAsync(d_data.amplitudeFitParametersEB,
              ebAmplitudeFitParameters.data(),
              ebAmplitudeFitParameters.size() * sizeof(SampleVector::Scalar),
-             cudaMemcpyHostToDevice);
-  cudaMemcpy(d_data.amplitudeFitParametersEE,
+             cudaMemcpyHostToDevice,
+             conf.cuStream);
+  cudaMemcpyAsync(d_data.amplitudeFitParametersEE,
              eeAmplitudeFitParameters.data(),
              eeAmplitudeFitParameters.size() * sizeof(SampleVector::Scalar),
-             cudaMemcpyHostToDevice);
+             cudaMemcpyHostToDevice,
+             conf.cuStream);
 
   d_data.timeFitParametersSizeEB = EBtimeFitParameters_.size();
   d_data.timeFitParametersSizeEE = EEtimeFitParameters_.size();
@@ -321,14 +329,16 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::EcalUncalibRecHitWorkerMultiFitGPUNew(con
       timeFitParametersEE[i] = static_cast<SampleVector::Scalar>(
         EEtimeFitParameters_[i]);
   }
-  cudaMemcpy(d_data.timeFitParametersEB,
+  cudaMemcpyAsync(d_data.timeFitParametersEB,
              timeFitParametersEB.data(),
              timeFitParametersEB.size() * sizeof(SampleVector::Scalar),
-             cudaMemcpyHostToDevice);
-  cudaMemcpy(d_data.timeFitParametersEE,
+             cudaMemcpyHostToDevice,
+             conf.cuStream);
+  cudaMemcpyAsync(d_data.timeFitParametersEE,
              timeFitParametersEE.data(),
              timeFitParametersEE.size() * sizeof(SampleVector::Scalar),
-             cudaMemcpyHostToDevice);
+             cudaMemcpyHostToDevice,
+             conf.cuStream);
 
   d_data.timeConstantTermEB = EBtimeConstantTerm_;
   d_data.timeConstantTermEE = EEtimeConstantTerm_;
@@ -430,6 +440,8 @@ EcalUncalibRecHitWorkerMultiFitGPUNew::~EcalUncalibRecHitWorkerMultiFitGPUNew() 
         cudaFree(d_data.G6SamplesCorrelationEE);
         cudaFree(d_data.G1SamplesCorrelationEE);
         AssertIfError
+
+        cudaStreamDestroy(conf.cuStream);
     }
 }
 

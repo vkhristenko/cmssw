@@ -3,6 +3,9 @@
 
 #include <vector>
 
+#include <cuda.h>
+#include <cuda_runtime.h>
+
 #include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes_gpu.h"
 #include "DataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
 #include "DataFormats/EcalRecHitSoA/interface/RecoTypes.h"
@@ -140,6 +143,7 @@ struct xyz {
 struct conf_data {
     xyz threads;
     bool runV1;
+    cudaStream_t cuStream;
 };
 
 struct pedestal_data {
