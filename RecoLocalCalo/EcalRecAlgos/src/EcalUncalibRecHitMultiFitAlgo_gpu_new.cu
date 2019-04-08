@@ -52,110 +52,136 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
 
     // 
     // copy digis data
+    // again, this will not be really async with default std::vector allocator
     //
-    cudaMemcpy(d_data.digis_data, 
+    cudaMemcpyAsync(d_data.digis_data, 
                h_data.digisEB->data().data(),
                h_data.digisEB->data().size() * sizeof(digis_type::value_type),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.digis_data + h_data.digisEB->data().size(), 
+               cudaMemcpyHostToDevice,
+               conf.cuStream);
+    cudaMemcpyAsync(d_data.digis_data + h_data.digisEB->data().size(), 
                h_data.digisEE->data().data(),
                h_data.digisEE->data().size() * sizeof(digis_type::value_type),
-               cudaMemcpyHostToDevice);
+               cudaMemcpyHostToDevice,
+               conf.cuStream);
 
     // copy ids
-    cudaMemcpy(d_data.ids, 
+    cudaMemcpyAsync(d_data.ids, 
                h_data.digisEB->ids().data(),
                h_data.digisEB->ids().size() * sizeof(dids_type::value_type),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.ids + h_data.digisEB->ids().size(), 
+               cudaMemcpyHostToDevice,
+               conf.cuStream);
+    cudaMemcpyAsync(d_data.ids + h_data.digisEB->ids().size(), 
                h_data.digisEE->ids().data(),
                h_data.digisEE->ids().size() * sizeof(dids_type::value_type),
-               cudaMemcpyHostToDevice);
+               cudaMemcpyHostToDevice,
+               conf.cuStream);
 
     // copy pedestal means/rmss
-    cudaMemcpy(d_data.mean_x12, h_data.ped_data.mean_x12.data(),
+    cudaMemcpyAsync(d_data.mean_x12, h_data.ped_data.mean_x12.data(),
         h_data.ped_data.mean_x12.size() * sizeof(float),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.rms_x12, h_data.ped_data.rms_x12.data(),
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
+    cudaMemcpyAsync(d_data.rms_x12, h_data.ped_data.rms_x12.data(),
         h_data.ped_data.rms_x12.size() * sizeof(float),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.mean_x6, h_data.ped_data.mean_x6.data(),
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
+    cudaMemcpyAsync(d_data.mean_x6, h_data.ped_data.mean_x6.data(),
         h_data.ped_data.mean_x6.size() * sizeof(float),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.rms_x6, h_data.ped_data.rms_x6.data(),
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
+    cudaMemcpyAsync(d_data.rms_x6, h_data.ped_data.rms_x6.data(),
         h_data.ped_data.rms_x6.size() * sizeof(float),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.mean_x1, h_data.ped_data.mean_x1.data(),
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
+    cudaMemcpyAsync(d_data.mean_x1, h_data.ped_data.mean_x1.data(),
         h_data.ped_data.mean_x1.size() * sizeof(float),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.rms_x1, h_data.ped_data.rms_x1.data(),
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
+    cudaMemcpyAsync(d_data.rms_x1, h_data.ped_data.rms_x1.data(),
         h_data.ped_data.rms_x1.size() * sizeof(float),
-        cudaMemcpyHostToDevice);
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
 
     // copy gains
-    cudaMemcpy(d_data.gain12Over6, h_data.gainratio_data.gain12Over6.data(),
+    cudaMemcpyAsync(d_data.gain12Over6, h_data.gainratio_data.gain12Over6.data(),
         h_data.gainratio_data.gain12Over6.size() * sizeof(float),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.gain6Over1, h_data.gainratio_data.gain6Over1.data(),
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
+    cudaMemcpyAsync(d_data.gain6Over1, h_data.gainratio_data.gain6Over1.data(),
         h_data.gainratio_data.gain6Over1.size() * sizeof(float),
-        cudaMemcpyHostToDevice);
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
 
     // copy pulse shape information
-    cudaMemcpy(d_data.pulses, h_data.pulse_shapes->data(),
+    cudaMemcpyAsync(d_data.pulses, h_data.pulse_shapes->data(),
         h_data.pulse_shapes->size() * sizeof(EcalPulseShape),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.covariances, h_data.pulse_covariances->data(),
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
+    cudaMemcpyAsync(d_data.covariances, h_data.pulse_covariances->data(),
         h_data.pulse_covariances->size() * sizeof(EcalPulseCovariance),
-        cudaMemcpyHostToDevice);
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
 
     // copy sample correlations
-    cudaMemcpy(d_data.G12SamplesCorrelationEB, 
+    cudaMemcpyAsync(d_data.G12SamplesCorrelationEB, 
                h_data.noiseCovariances->EBG12SamplesCorrelation.data(),
                EcalDataFrame::MAXSAMPLES * sizeof(double),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.G6SamplesCorrelationEB,
+               cudaMemcpyHostToDevice,
+               conf.cuStream);
+    cudaMemcpyAsync(d_data.G6SamplesCorrelationEB,
                h_data.noiseCovariances->EBG6SamplesCorrelation.data(),
                EcalDataFrame::MAXSAMPLES * sizeof(double),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.G1SamplesCorrelationEB, 
+               cudaMemcpyHostToDevice,
+               conf.cuStream);
+    cudaMemcpyAsync(d_data.G1SamplesCorrelationEB, 
                h_data.noiseCovariances->EBG1SamplesCorrelation.data(),
                EcalDataFrame::MAXSAMPLES * sizeof(double),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.G12SamplesCorrelationEE, 
+               cudaMemcpyHostToDevice,
+               conf.cuStream);
+    cudaMemcpyAsync(d_data.G12SamplesCorrelationEE, 
                h_data.noiseCovariances->EEG12SamplesCorrelation.data(),
                EcalDataFrame::MAXSAMPLES * sizeof(double),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.G6SamplesCorrelationEE,
+               cudaMemcpyHostToDevice,
+               conf.cuStream);
+    cudaMemcpyAsync(d_data.G6SamplesCorrelationEE,
                h_data.noiseCovariances->EEG6SamplesCorrelation.data(),
                EcalDataFrame::MAXSAMPLES * sizeof(double),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.G1SamplesCorrelationEE, 
+               cudaMemcpyHostToDevice,
+               conf.cuStream);
+    cudaMemcpyAsync(d_data.G1SamplesCorrelationEE, 
                h_data.noiseCovariances->EEG1SamplesCorrelation.data(),
                EcalDataFrame::MAXSAMPLES * sizeof(double),
-               cudaMemcpyHostToDevice);
+               cudaMemcpyHostToDevice,
+               conf.cuStream);
 
     // copy time bias corrections
-    cudaMemcpy(d_data.EBTimeCorrAmplitudeBins, 
+    cudaMemcpyAsync(d_data.EBTimeCorrAmplitudeBins, 
         h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.data(),
         sizeof(float) * h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.size(),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.EBTimeCorrShiftBins, 
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
+    cudaMemcpyAsync(d_data.EBTimeCorrShiftBins, 
         h_data.time_bias_corrections->EBTimeCorrShiftBins.data(),
         sizeof(float) * h_data.time_bias_corrections->EBTimeCorrShiftBins.size(),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.EETimeCorrAmplitudeBins, 
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
+    cudaMemcpyAsync(d_data.EETimeCorrAmplitudeBins, 
         h_data.time_bias_corrections->EETimeCorrAmplitudeBins.data(),
         sizeof(float) * h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
-        cudaMemcpyHostToDevice);
-    cudaMemcpy(d_data.EETimeCorrShiftBins, 
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
+    cudaMemcpyAsync(d_data.EETimeCorrShiftBins, 
         h_data.time_bias_corrections->EETimeCorrShiftBins.data(),
         sizeof(float) * h_data.time_bias_corrections->EETimeCorrShiftBins.size(),
-        cudaMemcpyHostToDevice);
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
    
     // copy bxs
-    cudaMemcpy(d_data.bxs, h_data.bxs,
+    cudaMemcpyAsync(d_data.bxs, h_data.bxs,
         sizeof(BXVectorType),
-        cudaMemcpyHostToDevice);
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
     AssertIfError
 
     // 
@@ -170,7 +196,8 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         + sizeof(bool)
     );
     std::cout << "nchannels = " << totalChannels << std::endl;
-    kernel_prep_1d_and_initialize<<<blocks_1d, threads_1d, shared_bytes>>>(
+    kernel_prep_1d_and_initialize<<<blocks_1d, threads_1d, 
+                                    shared_bytes, conf.cuStream>>>(
         d_data.pulses, d_data.epulses,
         d_data.digis_data, 
         d_data.ids,
@@ -202,7 +229,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     //
     int blocks_2d = totalChannels;
     dim3 threads_2d{10, 10};
-    kernel_prep_2d<<<blocks_2d, threads_2d>>>(
+    kernel_prep_2d<<<blocks_2d, threads_2d, 0, conf.cuStream>>>(
         d_data.covariances, d_data.pulse_covariances,
         d_data.gainsNoise,
         d_data.ids,
@@ -229,7 +256,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     if (conf.runV1)
         v1::minimization_procedure(d_data, h_data, conf);
     else
-        v2::minimization_procedure(d_data, h_data);
+        v2::minimization_procedure(d_data, h_data, conf);
     AssertIfError
 
     //
@@ -240,7 +267,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     unsigned int blocks_time_init = blocks_1d;
     int sharedBytesInit = 2 * threads_time_init * sizeof(SampleVector::Scalar);
     kernel_time_computation_init<<<blocks_time_init, threads_time_init,
-                                   sharedBytesInit>>>(
+                                   sharedBytesInit, conf.cuStream>>>(
         d_data.digis_data, d_data.ids,
         d_data.rms_x12,
         d_data.rms_x6,
@@ -272,7 +299,8 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         threadsFixMGPA > 10 * h_data.digisEB->size()
             ? 1
             : (10 * h_data.digisEB->size() + threadsFixMGPA - 1) / threadsFixMGPA;
-    kernel_time_compute_fixMGPAslew<<<blocksFixMGPA, threadsFixMGPA>>>(
+    kernel_time_compute_fixMGPAslew<<<blocksFixMGPA, threadsFixMGPA, 
+                                      0, conf.cuStream>>>(
         d_data.digis_data,
         d_data.sample_values,
         d_data.sample_value_errors,
@@ -290,7 +318,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     auto const threads_nullhypot = threads_1d;
     auto const blocks_nullhypot = blocks_1d;
     kernel_time_compute_nullhypot<<<blocks_nullhypot, threads_nullhypot, 
-                                    sharedBytes>>>(
+                                    sharedBytes, conf.cuStream>>>(
         d_data.sample_values,
         d_data.sample_value_errors,
         d_data.useless_sample_values,
@@ -308,7 +336,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         : (totalChannels * 45 + threads_makeratio - 1) / threads_makeratio;
     int sharedBytesMakeRatio = 5 * threads_makeratio * sizeof(SampleVector::Scalar);
     kernel_time_compute_makeratio<<<blocks_makeratio, threads_makeratio,
-                                    sharedBytesMakeRatio>>>(
+                                    sharedBytesMakeRatio, conf.cuStream>>>(
         d_data.sample_values,
         d_data.sample_value_errors,
         d_data.ids,
@@ -344,7 +372,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         sizeof(SampleVector::Scalar);
     kernel_time_compute_findamplchi2_and_finish<<<blocks_findamplchi2,
                                        threads_findamplchi2,
-                                       sharedBytesFindAmplChi2>>>(
+                                       sharedBytesFindAmplChi2, conf.cuStream>>>(
         d_data.sample_values,
         d_data.sample_value_errors,
         d_data.ids,
@@ -374,7 +402,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     auto const blocks_ampl = blocks_1d;
     int const sharedBytesAmpl = 5 * threads_ampl * sizeof(SampleVector::Scalar);
     kernel_time_compute_ampl<<<blocks_ampl, threads_ampl,
-                               sharedBytesAmpl>>>(
+                               sharedBytesAmpl, conf.cuStream>>>(
         d_data.sample_values,
         d_data.sample_value_errors,
         d_data.ids,
@@ -393,7 +421,8 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     auto const threads_timecorr = 32;
     auto const blocks_timecorr = threads_timecorr > totalChannels
         ? 1 : (totalChannels + threads_timecorr-1) / threads_timecorr;
-    kernel_time_correction_and_finalize<<<blocks_timecorr, threads_timecorr>>>(
+    kernel_time_correction_and_finalize<<<blocks_timecorr, threads_timecorr,
+                                          0, conf.cuStream>>>(
         d_data.energies,
         d_data.digis_data,
         d_data.ids,
@@ -434,102 +463,118 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     //
 
     // amplitude
-    cudaMemcpy(h_data.rechits_soa_eb.amplitude.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_eb.amplitude.data(),
                d_data.energies,
                h_data.rechits_soa_eb.amplitude.size() * sizeof(float),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
-    cudaMemcpy(h_data.rechits_soa_ee.amplitude.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_ee.amplitude.data(),
                d_data.energies + h_data.rechits_soa_eb.amplitude.size(),
                h_data.rechits_soa_ee.amplitude.size() * sizeof(float),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
 
     // pedestal
-    cudaMemcpy(h_data.rechits_soa_eb.pedestal.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_eb.pedestal.data(),
                d_data.pedestal,
                h_data.rechits_soa_eb.pedestal.size() * sizeof(float),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
-    cudaMemcpy(h_data.rechits_soa_ee.pedestal.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_ee.pedestal.data(),
                d_data.pedestal + h_data.rechits_soa_eb.pedestal.size(),
                h_data.rechits_soa_ee.pedestal.size() * sizeof(float),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
 
     // chi2
-    cudaMemcpy(h_data.rechits_soa_eb.chi2.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_eb.chi2.data(),
                d_data.chi2,
                h_data.rechits_soa_eb.chi2.size() * sizeof(float),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
-    cudaMemcpy(h_data.rechits_soa_ee.chi2.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_ee.chi2.data(),
                d_data.chi2 + h_data.rechits_soa_eb.chi2.size(),
                h_data.rechits_soa_ee.chi2.size() * sizeof(float),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
 
     // detector ids
-    cudaMemcpy(h_data.rechits_soa_eb.did.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_eb.did.data(),
                d_data.ids,
                h_data.rechits_soa_eb.did.size() * sizeof(uint32_t),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
-    cudaMemcpy(h_data.rechits_soa_ee.did.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_ee.did.data(),
                d_data.ids + h_data.rechits_soa_eb.did.size(),
                h_data.rechits_soa_ee.did.size() * sizeof(uint32_t),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
 
     // flags
-    cudaMemcpy(h_data.rechits_soa_eb.flags.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_eb.flags.data(),
                d_data.flags,
                h_data.rechits_soa_eb.flags.size() * sizeof(uint32_t),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
-    cudaMemcpy(h_data.rechits_soa_ee.flags.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_ee.flags.data(),
                d_data.flags + h_data.rechits_soa_eb.flags.size(),
                h_data.rechits_soa_ee.flags.size() * sizeof(uint32_t),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
 
     // jitter
-    cudaMemcpy(h_data.rechits_soa_eb.jitter.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_eb.jitter.data(),
                d_data.jitter,
                h_data.rechits_soa_eb.jitter.size() * sizeof(float),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
-    cudaMemcpy(h_data.rechits_soa_ee.jitter.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_ee.jitter.data(),
                d_data.jitter + h_data.rechits_soa_eb.jitter.size(),
                h_data.rechits_soa_ee.jitter.size() * sizeof(float),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
 
     // jitter error
-    cudaMemcpy(h_data.rechits_soa_eb.jitterError.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_eb.jitterError.data(),
                d_data.jitterError,
                h_data.rechits_soa_eb.jitterError.size() * sizeof(float),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
-    cudaMemcpy(h_data.rechits_soa_ee.jitterError.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_ee.jitterError.data(),
                d_data.jitterError + h_data.rechits_soa_eb.jitterError.size(),
                h_data.rechits_soa_ee.jitterError.size() * sizeof(float),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
 
     // amplitudes per sample
-    cudaMemcpy(h_data.rechits_soa_eb.amplitudesAll.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_eb.amplitudesAll.data(),
                d_data.amplitudes,
                h_data.rechits_soa_eb.amplitudesAll.size() * 
                sizeof(::ecal::reco::ComputationScalarType),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
-    cudaMemcpy(h_data.rechits_soa_ee.amplitudesAll.data(),
+    cudaMemcpyAsync(h_data.rechits_soa_ee.amplitudesAll.data(),
                d_data.amplitudes + 
                h_data.rechits_soa_eb.amplitudesAll.size() / EcalDataFrame::MAXSAMPLES,
                h_data.rechits_soa_ee.amplitudesAll.size() * 
                sizeof(::ecal::reco::ComputationScalarType),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost,
+               conf.cuStream);
     AssertIfError
 
     cudaEventRecord(end_event, 0);

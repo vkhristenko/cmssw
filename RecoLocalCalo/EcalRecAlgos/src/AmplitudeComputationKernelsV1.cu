@@ -251,7 +251,7 @@ void minimization_procedure(
     unsigned int blocks_min = threads_min > totalChannels
         ? 1
         : (totalChannels + threads_min - 1) / threads_min;
-    kernel_minimize<<<blocks_min, threads_min>>>(
+    kernel_minimize<<<blocks_min, threads_min, 0, conf.cuStream>>>(
         d_data.noisecov,
         d_data.pulse_covariances,
         d_data.activeBXs,
@@ -279,7 +279,8 @@ void minimization_procedure(
         ? 1
         : (32 * totalChannels + threadsPermute - 1) / threadsPermute;
     int bytesPermute = threadsPermute * sizeof(SampleVector::Scalar);
-    kernel_permute_results<<<blocksPermute, threadsPermute, bytesPermute>>>(
+    kernel_permute_results<<<blocksPermute, threadsPermute, 
+                             bytesPermute, conf.cuStream>>>(
         d_data.amplitudes,
         d_data.activeBXs,
         d_data.energies,

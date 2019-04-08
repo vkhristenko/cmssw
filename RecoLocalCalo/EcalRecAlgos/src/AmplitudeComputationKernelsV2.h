@@ -24,7 +24,8 @@ namespace v2 {
 
 void minimization_procedure(
         device_data& d_data, 
-        host_data& h_data);
+        host_data& h_data,
+        conf_data const& conf);
 
 }
 
