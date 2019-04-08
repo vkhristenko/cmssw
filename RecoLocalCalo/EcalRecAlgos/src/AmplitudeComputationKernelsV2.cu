@@ -248,7 +248,8 @@ namespace v2 {
 
 void minimization_procedure(
         device_data& d_data, 
-        host_data& h_data) {
+        host_data& h_data,
+        conf_data const& conf) {
     int iterations = 0;
     int const maxIterations = 50;
     unsigned int const totalChannels = h_data.digisEB->size() + 
@@ -262,7 +263,8 @@ void minimization_procedure(
     unsigned int blocksInit = threadsInit > totalChannels
         ? 1
         : (totalChannels + threadsInit - 1) / threadsInit;
-    kernelInitializeBeforeMinimizationProcedure<<<blocksInit, threadsInit>>>(
+    kernelInitializeBeforeMinimizationProcedure<<<blocksInit, threadsInit,
+                                                  0, conf.cuStream>>>(
         d_data.npassive,
         d_data.minimizationStatePerBlock,
         d_data.activeBXs,
@@ -281,7 +283,8 @@ void minimization_procedure(
         dim3 threadsUpdateCov = {EcalDataFrame::MAXSAMPLES,
             EcalDataFrame::MAXSAMPLES};
         unsigned int blocksUpdateCov = totalChannels;
-        kernel_update_covariance_matrix<<<blocksUpdateCov, threadsUpdateCov>>>(
+        kernel_update_covariance_matrix<<<blocksUpdateCov, threadsUpdateCov,
+                                          0, conf.cuStream>>>(
             d_data.noisecov, 
             d_data.pulse_covariances,
             d_data.amplitudes,
@@ -318,7 +321,8 @@ void minimization_procedure(
         unsigned int blocksMatrixLU = threadsMatrixLU > totalChannels
             ? 1
             : (totalChannels + threadsMatrixLU - 1) / threadsMatrixLU;
-        kernel_matrix_ludecomp<<<blocksMatrixLU, threadsMatrixLU>>>(
+        kernel_matrix_ludecomp<<<blocksMatrixLU, threadsMatrixLU,
+                                 0, conf.cuStream>>>(
             d_data.updatedNoiseCovariance,
             d_data.acState,
             d_data.noiseMatrixDecomposition,
@@ -334,7 +338,8 @@ void minimization_procedure(
         unsigned int blocksNNLS = threadsNNLS > totalChannels
             ? 1
             : (totalChannels + threadsNNLS - 1) / threadsNNLS;
-        kernel_fast_nnls<<<blocksNNLS, threadsNNLS>>>(
+        kernel_fast_nnls<<<blocksNNLS, threadsNNLS,
+                           0, conf.cuStream>>>(
             d_data.noiseMatrixDecomposition,
             d_data.samples,
             d_data.acState,
@@ -355,17 +360,19 @@ void minimization_procedure(
         unsigned int blocksForStateReduce = threadsState > totalChannels
             ? 1
             : (totalChannels + threadsState - 1) / threadsState;
-        kernel_reduce_state<threadsState><<<blocksForStateReduce, threadsState>>>(
+        kernel_reduce_state<threadsState><<<blocksForStateReduce, threadsState,
+                                            0, conf.cuStream>>>(
             d_data.acState, 
             d_data.minimizationStatePerBlock,
             totalChannels);
         AssertIfError
 
         // transfer the reductions per block back
-        cudaMemcpy(d_data.h_minimizationStatesPerBlock.data(),
+        cudaMemcpyAsync(d_data.h_minimizationStatesPerBlock.data(),
                    d_data.minimizationStatePerBlock,
                    blocksForStateReduce * sizeof(MinimizationState),
-                   cudaMemcpyDeviceToHost);
+                   cudaMemcpyDeviceToHost,
+                   conf.cuStream);
         AssertIfError
         // reduce on the host (should be tiny)
         bool acc = true;
@@ -387,7 +394,8 @@ void minimization_procedure(
         ? 1
         : (32 * totalChannels + threadsPermute - 1) / threadsPermute;
     int bytesPermute = threadsPermute * sizeof(SampleVector::Scalar);
-    kernel_permute_results<<<blocksPermute, threadsPermute, bytesPermute>>>(
+    kernel_permute_results<<<blocksPermute, threadsPermute, bytesPermute,
+                             conf.cuStream>>>(
         d_data.amplitudes,
         d_data.activeBXs,
         d_data.energies,
