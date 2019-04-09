@@ -15,6 +15,9 @@
 
 #include <iostream>
 
+#include "CondFormats/DataRecord/interface/EcalPedestalsRcd.h"
+#include "EcalPedestalsGPU.h"
+
 class EcalUncalibRecHitProducerGPU
     : public edm::stream::EDProducer<edm::ExternalWork>
 {
@@ -63,6 +66,10 @@ void EcalUncalibRecHitProducerGPU::acquire(
 {
     // raii
     CUDAScopedContext ctx{event.streamID(), std::move(holder)};
+
+    // retrieve device ptrs to conditions
+    edm::ESHandle<EcalPedestalsGPU> pedestals;
+    setup.get<EcalPedestalsRcd>().get(pedestals);
 
     std::cout << "acquire\n";
 
