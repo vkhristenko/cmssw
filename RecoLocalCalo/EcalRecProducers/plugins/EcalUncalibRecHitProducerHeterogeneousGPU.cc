@@ -1,9 +1,8 @@
 // framework
-#include "FWCore/Framework/interface/stream/EDProducer.h"
-//#include "HeterogeneousCore/Producer/interface/HeterogeneousEDProducer.h"
-//#include "HeterogeneousCore/Producer/interface/HeterogeneousEvent.h"
-
-#include "HeterogeneousCore/CUDACore/interface/CUDAScopedContext.h"
+//#include "FWCore/Framework/interface/stream/EDProducer.h"
+#include "HeterogeneousCore/Producer/interface/HeterogeneousEDProducer.h"
+#include "HeterogeneousCore/Producer/interface/HeterogeneousEvent.h"
+#include "HeterogeneousCore/CUDACore/interface/GPUCuda.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/EventSetup.h"
@@ -13,32 +12,35 @@
 #include "DataFormats/EcalDigi/interface/EcalDigiCollections.h"
 #include "DataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
 
-#include <iostream>
-
-class EcalUncalibRecHitProducerGPU
-    : public edm::stream::EDProducer<edm::ExternalWork>
+class EcalUncalibRecHitProducerHeterogeneousGPU
+    : public HeterogeneousEDProducer<
+        heterogeneous::HeterogeneousDevices<heterogeneous::GPUCuda,
+                                            heterogeneous::CPU>
+      > 
 {
 public:
-    explicit EcalUncalibRecHitProducerGPU(edm::ParameterSet const& ps);
-    ~EcalUncalibRecHitProducerGPU() override;
+    explicit EcalUncalibRecHitProducerHeterogeneousGPU(edm::ParameterSet const& ps);
+    ~EcalUncalibRecHitProducerHeterogeneousGPU() override;
 
 private:
-    void acquire(edm::Event const&, 
-                 edm::EventSetup const&,
-                 edm::WaitingTaskWithArenaHolder) override;
-    void produce(edm::Event&, edm::EventSetup const&) override;
+    void acquireGPUCuda(edm::HeterogeneousEvent const&,
+                        edm::EventSetup const&,
+                        cuda::stream_t<>& cudaStream) override;
+    void produceCPU(edm::HeterogeneousEvent&, edm::EventSetup const&) override;
+    void produceGPUCuda(edm::HeterogeneousEvent&, 
+                        edm::EventSetup const&,
+                        cuda::stream_t<>& cudaStream) override;
 
 private:
     edm::EDGetTokenT<EBDigiCollection> digisTokenEB_;
     edm::EDGetTokenT<EEDigiCollection> digisTokenEE_;
 
     std::string recHitsLabelEB_, recHitsLabelEE_;
-
-    CUDAContextToken ctxToken_;
 };
 
-EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(
+EcalUncalibRecHitProducerHeterogeneousGPU::EcalUncalibRecHitProducerHeterogeneousGPU(
         const edm::ParameterSet& ps) 
+    : HeterogeneousEDProducer{ps}
 {
     digisTokenEB_ = consumes<EBDigiCollection>(
         ps.getUntrackedParameter<edm::InputTag>("digisLabelEB"));
@@ -52,30 +54,30 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(
     produces<ecal::SoAUncalibratedRecHitCollection>(recHitsLabelEE_);
 }
 
-EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
+EcalUncalibRecHitProducerHeterogeneousGPU::~EcalUncalibRecHitProducerHeterogeneousGPU() {
     //
 }
 
-void EcalUncalibRecHitProducerGPU::acquire(
-        edm::Event const& event,
+void EcalUncalibRecHitProducerHeterogeneousGPU::acquireGPUCuda(
+        edm::HeterogeneousEvent const& event,
         edm::EventSetup const& setup,
-        edm::WaitingTaskWithArenaHolder holder) 
+        cuda::stream_t<>& cudaStream) 
 {
-    // raii
-    CUDAScopedContext ctx{event.streamID(), std::move(holder)};
 
-    std::cout << "acquire\n";
-
-    ctxToken_ = ctx.toToken();
 }
 
-void EcalUncalibRecHitProducerGPU::produce(
-        edm::Event& event, 
+void EcalUncalibRecHitProducerHeterogeneousGPU::produceCPU(
+        edm::HeterogeneousEvent& event, 
         edm::EventSetup const& setup) 
 {
-    CUDAScopedContext ctx{std::move(ctxToken_)};
+    throw cms::Exception{"NotImplmented"} << "CPU version is not supported";
+}
 
-    std::cout << "produce\n";
+void EcalUncalibRecHitProducerHeterogeneousGPU::produceGPUCuda(
+        edm::HeterogeneousEvent& event,
+        edm::EventSetup const& setup,
+        cuda::stream_t<>& cudaStream) 
+{
 }
 
 /*
@@ -97,4 +99,4 @@ void EcalUncalibRecHitProducerGPU::produce(edm::Event& e, const edm::EventSetup&
 }
 */
 
-DEFINE_FWK_MODULE(EcalUncalibRecHitProducerGPU);
+DEFINE_FWK_MODULE(EcalUncalibRecHitProducerHeterogeneousGPU);

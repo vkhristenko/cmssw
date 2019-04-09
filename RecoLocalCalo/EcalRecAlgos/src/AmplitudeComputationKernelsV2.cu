@@ -374,6 +374,9 @@ void minimization_procedure(
                    cudaMemcpyDeviceToHost,
                    conf.cuStream);
         AssertIfError
+
+        cudaStreamSynchronize(conf.cuStream);
+
         // reduce on the host (should be tiny)
         bool acc = true;
         for (unsigned int i=0; i<blocksForStateReduce; i++)
