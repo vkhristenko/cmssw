@@ -1,4 +1,4 @@
-#include "EcalPedestalsGPU.h"
+#include "RecoLocalCalo/EcalRecProducers/interface/EcalPedestalsGPU.h"
 
 #include "FWCore/Utilities/interface/typelookup.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
