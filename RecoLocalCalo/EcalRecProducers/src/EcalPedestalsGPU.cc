@@ -10,7 +10,10 @@ EcalPedestalsGPU::EcalPedestalsGPU(EcalPedestals const& pedestals)
     , rms_x6_(pedestals.size())
     , mean_x1_(pedestals.size())
     , rms_x1_(pedestals.size())
-{
+{   
+
+    std::cout << __PRETTY_FUNCTION__ << std::endl;
+    
     // fill in eb
     auto const& barrelValues = pedestals.barrelItems();
     for (unsigned int i=0; i<barrelValues.size(); i++) {

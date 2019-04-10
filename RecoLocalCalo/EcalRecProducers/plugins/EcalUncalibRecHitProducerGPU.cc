@@ -12,6 +12,7 @@
 // algorithm specific
 #include "DataFormats/EcalDigi/interface/EcalDigiCollections.h"
 #include "DataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 
 #include <iostream>
 
@@ -49,6 +50,15 @@ private:
     edm::EDGetTokenT<EEDigiCollection> digisTokenEE_;
 
     std::string recHitsLabelEB_, recHitsLabelEE_;
+    
+    // conditions handles
+    edm::ESHandle<EcalPedestalsGPU> pedestalsHandle_;
+    edm::ESHandle<EcalGainRatiosGPU> gainRatiosHandle_;
+    edm::ESHandle<EcalPulseShapesGPU> pulseShapesHandle_;
+    edm::ESHandle<EcalPulseCovariancesGPU> pulseCovariancesHandle_;
+    edm::ESHandle<EcalSamplesCorrelationGPU> samplesCorrelationHandle_;
+    edm::ESHandle<EcalTimeBiasCorrectionsGPU> timeBiasCorrectionsHandle_;
+    edm::ESHandle<EcalTimeCalibConstantsGPU> timeCalibConstantsHandle_;
 
     CUDAContextToken ctxToken_;
 };
@@ -77,26 +87,20 @@ void EcalUncalibRecHitProducerGPU::acquire(
         edm::EventSetup const& setup,
         edm::WaitingTaskWithArenaHolder holder) 
 {
+    DurationMeasurer<std::chrono::milliseconds> timer{std::string{"acquire duration"}};
+
     // raii
     CUDAScopedContext ctx{event.streamID(), std::move(holder)};
 
-    // retrieve device ptrs to conditions
-    edm::ESHandle<EcalPedestalsGPU> pedestals;
-    edm::ESHandle<EcalGainRatiosGPU> gainRatios;
-    edm::ESHandle<EcalPulseShapesGPU> pulseShapes;
-    edm::ESHandle<EcalPulseCovariancesGPU> pulseCovariances;
-    edm::ESHandle<EcalSamplesCorrelationGPU> samplesCorrelation;
-    edm::ESHandle<EcalTimeBiasCorrectionsGPU> timeBiasCorrections;
-    edm::ESHandle<EcalTimeCalibConstantsGPU> timeCalibConstants;
+    setup.get<EcalPedestalsRcd>().get(pedestalsHandle_);
+    setup.get<EcalGainRatiosRcd>().get(gainRatiosHandle_);
+    setup.get<EcalPulseShapesRcd>().get(pulseShapesHandle_);
+    setup.get<EcalPulseCovariancesRcd>().get(pulseCovariancesHandle_);
+    setup.get<EcalSamplesCorrelationRcd>().get(samplesCorrelationHandle_);
+    setup.get<EcalTimeBiasCorrectionsRcd>().get(timeBiasCorrectionsHandle_);
+    setup.get<EcalTimeCalibConstantsRcd>().get(timeCalibConstantsHandle_);
 
-    setup.get<EcalPedestalsRcd>().get(pedestals);
-    setup.get<EcalGainRatiosRcd>().get(gainRatios);
-    setup.get<EcalPulseShapesRcd>().get(pulseShapes);
-    setup.get<EcalPulseCovariancesRcd>().get(pulseCovariances);
-    setup.get<EcalSamplesCorrelationRcd>().get(samplesCorrelation);
-    setup.get<EcalTimeBiasCorrectionsRcd>().get(timeBiasCorrections);
-    setup.get<EcalTimeCalibConstantsRcd>().get(timeCalibConstants);
-
+    /*
     auto const& pedProduct = pedestals->getProduct(ctx.stream());
     auto const& gainsProduct = gainRatios->getProduct(ctx.stream());
     auto const& pulseShapesProduct = pulseShapes->getProduct(ctx.stream());
@@ -104,6 +108,7 @@ void EcalUncalibRecHitProducerGPU::acquire(
     auto const& samplesCorrelationProduct = samplesCorrelation->getProduct(ctx.stream());
     auto const& timeBiasCorrectionsProduct = timeBiasCorrections->getProduct(ctx.stream());
     auto const& timeCalibConstantsProduct = timeCalibConstants->getProduct(ctx.stream());
+    */
     std::cout << "acquire\n";
 
     ctxToken_ = ctx.toToken();
@@ -113,6 +118,7 @@ void EcalUncalibRecHitProducerGPU::produce(
         edm::Event& event, 
         edm::EventSetup const& setup) 
 {
+    DurationMeasurer<std::chrono::milliseconds> timer{std::string{"produce duration"}};
     CUDAScopedContext ctx{std::move(ctxToken_)};
 
     std::cout << "produce\n";
