@@ -18,10 +18,13 @@ public:
         : label_{ps.getParameter<std::string>("label")}
     {
         std::string name = ps.getParameter<std::string>("ComponentName");
-        setWhatProduced(this, name);
+        setWhatProduced(this, &EcalESProducerGPU<Target, Source, Record>::produce,
+                        edm::es::Label{name});
     }
    
     std::unique_ptr<Target> produce(Record const& record) {
+        std::cout << __PRETTY_FUNCTION__ << std::endl;
+        
         // retrieve conditions in old format 
         edm::ESTransientHandle<Source> product;
         record.get(label_, product);
