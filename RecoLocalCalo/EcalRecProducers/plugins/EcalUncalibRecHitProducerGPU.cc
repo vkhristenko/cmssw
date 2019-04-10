@@ -71,6 +71,8 @@ void EcalUncalibRecHitProducerGPU::acquire(
     edm::ESHandle<EcalPedestalsGPU> pedestals;
     setup.get<EcalPedestalsRcd>().get(pedestals);
 
+    auto const& pedProduct = pedestals->getProduct(ctx.stream());
+
     std::cout << "acquire\n";
 
     ctxToken_ = ctx.toToken();
