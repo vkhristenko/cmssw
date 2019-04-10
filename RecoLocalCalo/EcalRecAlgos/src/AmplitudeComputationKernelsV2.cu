@@ -375,6 +375,7 @@ void minimization_procedure(
                    conf.cuStream);
         AssertIfError
 
+        // sync host with the cuda stream before computing global state
         cudaStreamSynchronize(conf.cuStream);
 
         // reduce on the host (should be tiny)
