@@ -1,4 +1,4 @@
-#include "EcalTimeBiasCorrectionsGPU.h"
+#include "RecoLocalCalo/EcalRecProducers/interface/EcalTimeBiasCorrectionsGPU.h"
 
 #include "FWCore/Utilities/interface/typelookup.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"

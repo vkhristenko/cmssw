@@ -8,13 +8,13 @@
 #include "CondFormats/DataRecord/interface/EcalTimeBiasCorrectionsRcd.h"
 #include "CondFormats/DataRecord/interface/EcalTimeCalibConstantsRcd.h"
 
-#include "EcalPedestalsGPU.h"
-#include "EcalGainRatiosGPU.h"
-#include "EcalPulseShapesGPU.h"
-#include "EcalPulseCovariancesGPU.h"
-#include "EcalSamplesCorrelationGPU.h"
-#include "EcalTimeBiasCorrectionsGPU.h"
-#include "EcalTimeCalibConstantsGPU.h"
+#include "RecoLocalCalo/EcalRecProducers/interface/EcalPedestalsGPU.h"
+#include "RecoLocalCalo/EcalRecProducers/interface/EcalGainRatiosGPU.h"
+#include "RecoLocalCalo/EcalRecProducers/interface/EcalPulseShapesGPU.h"
+#include "RecoLocalCalo/EcalRecProducers/interface/EcalPulseCovariancesGPU.h"
+#include "RecoLocalCalo/EcalRecProducers/interface/EcalSamplesCorrelationGPU.h"
+#include "RecoLocalCalo/EcalRecProducers/interface/EcalTimeBiasCorrectionsGPU.h"
+#include "RecoLocalCalo/EcalRecProducers/interface/EcalTimeCalibConstantsGPU.h"
 
 #include <iostream>
 

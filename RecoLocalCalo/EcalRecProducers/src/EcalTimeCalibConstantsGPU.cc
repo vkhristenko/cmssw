@@ -1,45 +1,43 @@
-#include "EcalPulseCovariancesGPU.h"
+#include "RecoLocalCalo/EcalRecProducers/interface/EcalTimeCalibConstantsGPU.h"
 
 #include "FWCore/Utilities/interface/typelookup.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
 
-EcalPulseCovariancesGPU::EcalPulseCovariancesGPU(EcalPulseCovariances const& values) 
+EcalTimeCalibConstantsGPU::EcalTimeCalibConstantsGPU(
+        EcalTimeCalibConstants const& values) 
     : valuesEB_{values.barrelItems()}
     , valuesEE_{values.endcapItems()}
 {}
 
-EcalPulseCovariancesGPU::Product::~Product() {
+EcalTimeCalibConstantsGPU::Product::~Product() {
     // deallocation
     cudaCheck( cudaFree(values) );
 }
 
-EcalPulseCovariancesGPU::Product const& EcalPulseCovariancesGPU::getProduct(
+EcalTimeCalibConstantsGPU::Product const& EcalTimeCalibConstantsGPU::getProduct(
         cuda::stream_t<>& cudaStream) const
 {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](EcalPulseCovariancesGPU::Product& product, cuda::stream_t<>& cudaStream) {
+        [this](EcalTimeCalibConstantsGPU::Product& product, cuda::stream_t<>& cudaStream) {
             // malloc
             cudaCheck( cudaMalloc((void**)&product.values,
-                                  (this->valuesEE_.size() + this->valuesEB_.size()) 
-                                  * sizeof(EcalPulseCovariance)) );
-           
-            // offset in terms floats not total bytes
-            uint32_t offset = this->valuesEB_.size() 
-                * EcalPulseShape::TEMPLATESAMPLES * EcalPulseShape::TEMPLATESAMPLES;
+                                  (this->valuesEB_.size() + this->valuesEE_.size()) * 
+                                  sizeof(float)) );
 
-            // transfer eb 
+            // offset in floats, not bytes
+            auto const offset = this->valuesEB_.size();
+
+            // transfer 
             cudaCheck( cudaMemcpyAsync(product.values,
                                        this->valuesEB_.data(),
                                        this->valuesEB_.size() * 
-                                       sizeof(EcalPulseCovariance),
+                                       sizeof(float),
                                        cudaMemcpyHostToDevice,
                                        cudaStream.id()) );
-
-            // transfer ee starting at values + offset
             cudaCheck( cudaMemcpyAsync(product.values + offset,
                                        this->valuesEE_.data(),
                                        this->valuesEE_.size() * 
-                                       sizeof(EcalPulseCovariance),
+                                       sizeof(float),
                                        cudaMemcpyHostToDevice,
                                        cudaStream.id()) );
         }
@@ -48,4 +46,4 @@ EcalPulseCovariancesGPU::Product const& EcalPulseCovariancesGPU::getProduct(
     return product;
 }
 
-TYPELOOKUP_DATA_REG(EcalPulseCovariancesGPU);
+TYPELOOKUP_DATA_REG(EcalTimeCalibConstantsGPU);

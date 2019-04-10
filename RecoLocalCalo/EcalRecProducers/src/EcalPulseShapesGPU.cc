@@ -1,43 +1,44 @@
-#include "EcalTimeCalibConstantsGPU.h"
+#include "RecoLocalCalo/EcalRecProducers/interface/EcalPulseShapesGPU.h"
 
 #include "FWCore/Utilities/interface/typelookup.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
 
-EcalTimeCalibConstantsGPU::EcalTimeCalibConstantsGPU(
-        EcalTimeCalibConstants const& values) 
+EcalPulseShapesGPU::EcalPulseShapesGPU(EcalPulseShapes const& values) 
     : valuesEB_{values.barrelItems()}
     , valuesEE_{values.endcapItems()}
 {}
 
-EcalTimeCalibConstantsGPU::Product::~Product() {
+EcalPulseShapesGPU::Product::~Product() {
     // deallocation
     cudaCheck( cudaFree(values) );
 }
 
-EcalTimeCalibConstantsGPU::Product const& EcalTimeCalibConstantsGPU::getProduct(
+EcalPulseShapesGPU::Product const& EcalPulseShapesGPU::getProduct(
         cuda::stream_t<>& cudaStream) const
 {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](EcalTimeCalibConstantsGPU::Product& product, cuda::stream_t<>& cudaStream) {
+        [this](EcalPulseShapesGPU::Product& product, cuda::stream_t<>& cudaStream) {
             // malloc
             cudaCheck( cudaMalloc((void**)&product.values,
-                                  (this->valuesEB_.size() + this->valuesEE_.size()) * 
-                                  sizeof(float)) );
+                                  (this->valuesEE_.size() + this->valuesEB_.size()) 
+                                  * sizeof(EcalPulseShape)) );
+           
+            // offset in terms floats not total bytes
+            uint32_t offset = this->valuesEB_.size() * EcalPulseShape::TEMPLATESAMPLES;
 
-            // offset in floats, not bytes
-            auto const offset = this->valuesEB_.size();
-
-            // transfer 
+            // transfer eb 
             cudaCheck( cudaMemcpyAsync(product.values,
                                        this->valuesEB_.data(),
                                        this->valuesEB_.size() * 
-                                       sizeof(float),
+                                       sizeof(EcalPulseShape),
                                        cudaMemcpyHostToDevice,
                                        cudaStream.id()) );
+
+            // transfer ee starting at values + offset
             cudaCheck( cudaMemcpyAsync(product.values + offset,
                                        this->valuesEE_.data(),
                                        this->valuesEE_.size() * 
-                                       sizeof(float),
+                                       sizeof(EcalPulseShape),
                                        cudaMemcpyHostToDevice,
                                        cudaStream.id()) );
         }
@@ -46,4 +47,4 @@ EcalTimeCalibConstantsGPU::Product const& EcalTimeCalibConstantsGPU::getProduct(
     return product;
 }
 
-TYPELOOKUP_DATA_REG(EcalTimeCalibConstantsGPU);
+TYPELOOKUP_DATA_REG(EcalPulseShapesGPU);
