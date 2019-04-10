@@ -28,6 +28,8 @@ EcalSamplesCorrelationGPU::Product const& EcalSamplesCorrelationGPU::getProduct(
 {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
         [this](EcalSamplesCorrelationGPU::Product& product, cuda::stream_t<>& cudaStream) {
+            std::cout << __PRETTY_FUNCTION__ << std::endl;
+            
             // malloc
             cudaCheck( cudaMalloc((void**)&product.EBG12SamplesCorrelation,
                                   this->EBG12SamplesCorrelation_.size() * 

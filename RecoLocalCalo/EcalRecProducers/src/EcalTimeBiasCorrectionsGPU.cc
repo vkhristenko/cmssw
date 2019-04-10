@@ -24,6 +24,8 @@ EcalTimeBiasCorrectionsGPU::Product const& EcalTimeBiasCorrectionsGPU::getProduc
 {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
         [this](EcalTimeBiasCorrectionsGPU::Product& product, cuda::stream_t<>& cudaStream) {
+            std::cout << __PRETTY_FUNCTION__ << std::endl;
+
             // malloc
             cudaCheck( cudaMalloc((void**)&product.EBTimeCorrAmplitudeBins,
                                   this->EBTimeCorrAmplitudeBins_.size() * 

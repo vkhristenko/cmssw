@@ -18,6 +18,8 @@ EcalPulseCovariancesGPU::Product const& EcalPulseCovariancesGPU::getProduct(
 {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
         [this](EcalPulseCovariancesGPU::Product& product, cuda::stream_t<>& cudaStream) {
+            std::cout << __PRETTY_FUNCTION__ << std::endl;
+
             // malloc
             cudaCheck( cudaMalloc((void**)&product.values,
                                   (this->valuesEE_.size() + this->valuesEB_.size()) 
