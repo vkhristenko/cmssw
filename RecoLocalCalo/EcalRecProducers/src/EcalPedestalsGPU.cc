@@ -48,10 +48,10 @@ EcalPedestalsGPU::Product::~Product() {
 EcalPedestalsGPU::Product const& EcalPedestalsGPU::getProduct(
         cuda::stream_t<>& cudaStream) const
 {
-    std::cout << __PRETTY_FUNCTION__ << std::endl;
-
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
         [this](EcalPedestalsGPU::Product& product, cuda::stream_t<>& cudaStream) {
+            std::cout << __PRETTY_FUNCTION__ << std::endl;
+
             // malloc
             cudaCheck( cudaMalloc((void**)&product.mean_x12,
                                   this->mean_x12_.size() * sizeof(float)) );

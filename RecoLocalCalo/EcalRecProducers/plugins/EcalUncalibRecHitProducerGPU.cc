@@ -82,13 +82,13 @@ void EcalUncalibRecHitProducerGPU::acquire(
 
     // retrieve device ptrs to conditions
     edm::ESHandle<EcalPedestalsGPU> pedestals;
-    /*
     edm::ESHandle<EcalGainRatiosGPU> gainRatios;
     edm::ESHandle<EcalPulseShapesGPU> pulseShapes;
     edm::ESHandle<EcalPulseCovariancesGPU> pulseCovariances;
     edm::ESHandle<EcalSamplesCorrelationGPU> samplesCorrelation;
     edm::ESHandle<EcalTimeBiasCorrectionsGPU> timeBiasCorrections;
     edm::ESHandle<EcalTimeCalibConstantsGPU> timeCalibConstants;
+
     setup.get<EcalPedestalsRcd>().get(pedestals);
     setup.get<EcalGainRatiosRcd>().get(gainRatios);
     setup.get<EcalPulseShapesRcd>().get(pulseShapes);
@@ -96,18 +96,14 @@ void EcalUncalibRecHitProducerGPU::acquire(
     setup.get<EcalSamplesCorrelationRcd>().get(samplesCorrelation);
     setup.get<EcalTimeBiasCorrectionsRcd>().get(timeBiasCorrections);
     setup.get<EcalTimeCalibConstantsRcd>().get(timeCalibConstants);
-    */
 
     auto const& pedProduct = pedestals->getProduct(ctx.stream());
-    /*
     auto const& gainsProduct = gainRatios->getProduct(ctx.stream());
     auto const& pulseShapesProduct = pulseShapes->getProduct(ctx.stream());
     auto const& pulseCovariancesProduct = pulseCovariances->getProduct(ctx.stream());
     auto const& samplesCorrelationProduct = samplesCorrelation->getProduct(ctx.stream());
-    auto const timeBiasCorrectionsProduct = timeBiasCorrections->getProduct(ctx.stream());
+    auto const& timeBiasCorrectionsProduct = timeBiasCorrections->getProduct(ctx.stream());
     auto const& timeCalibConstantsProduct = timeCalibConstants->getProduct(ctx.stream());
-    */
-
     std::cout << "acquire\n";
 
     ctxToken_ = ctx.toToken();

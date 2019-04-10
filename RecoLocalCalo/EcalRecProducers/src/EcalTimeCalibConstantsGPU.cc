@@ -19,6 +19,8 @@ EcalTimeCalibConstantsGPU::Product const& EcalTimeCalibConstantsGPU::getProduct(
 {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
         [this](EcalTimeCalibConstantsGPU::Product& product, cuda::stream_t<>& cudaStream) {
+            std::cout << __PRETTY_FUNCTION__ << std::endl;
+
             // malloc
             cudaCheck( cudaMalloc((void**)&product.values,
                                   (this->valuesEB_.size() + this->valuesEE_.size()) * 
