@@ -6,12 +6,15 @@
 #include "CondFormats/DataRecord/interface/EcalPulseCovariancesRcd.h"
 #include "CondFormats/DataRecord/interface/EcalSamplesCorrelationRcd.h"
 #include "CondFormats/DataRecord/interface/EcalTimeBiasCorrectionsRcd.h"
+#include "CondFormats/DataRecord/interface/EcalTimeCalibConstantsRcd.h"
+
 #include "EcalPedestalsGPU.h"
 #include "EcalGainRatiosGPU.h"
 #include "EcalPulseShapesGPU.h"
 #include "EcalPulseCovariancesGPU.h"
 #include "EcalSamplesCorrelationGPU.h"
 #include "EcalTimeBiasCorrectionsGPU.h"
+#include "EcalTimeCalibConstantsGPU.h"
 
 #include <iostream>
 
@@ -37,9 +40,15 @@ using EcalTimeBiasCorrectionsGPUESProducer = EcalESProducerGPU<
     EcalTimeBiasCorrections,
     EcalTimeBiasCorrectionsRcd>;
 
+using EcalTimeCalibConstantsGPUESProducer = EcalESProducerGPU<
+    EcalTimeCalibConstantsGPU,
+    EcalTimeCalibConstants,
+    EcalTimeCalibConstantsRcd>;
+
 DEFINE_FWK_EVENTSETUP_MODULE(EcalPedestalsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(EcalGainRatiosGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(EcalPulseShapesGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(EcalPulseCovariancesGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(EcalSamplesCorrelationGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(EcalTimeBiasCorrectionsGPUESProducer);
+DEFINE_FWK_EVENTSETUP_MODULE(EcalTimeCalibConstantsGPUESProducer);

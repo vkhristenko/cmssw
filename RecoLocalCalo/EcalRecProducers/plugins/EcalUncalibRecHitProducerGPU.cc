@@ -16,7 +16,20 @@
 #include <iostream>
 
 #include "CondFormats/DataRecord/interface/EcalPedestalsRcd.h"
+#include "CondFormats/DataRecord/interface/EcalGainRatiosRcd.h"
+#include "CondFormats/DataRecord/interface/EcalPulseShapesRcd.h"
+#include "CondFormats/DataRecord/interface/EcalPulseCovariancesRcd.h"
+#include "CondFormats/DataRecord/interface/EcalSamplesCorrelationRcd.h"
+#include "CondFormats/DataRecord/interface/EcalTimeBiasCorrectionsRcd.h"
+#include "CondFormats/DataRecord/interface/EcalTimeCalibConstantsRcd.h"
+
 #include "EcalPedestalsGPU.h"
+#include "EcalGainRatiosGPU.h"
+#include "EcalPulseShapesGPU.h"
+#include "EcalPulseCovariancesGPU.h"
+#include "EcalSamplesCorrelationGPU.h"
+#include "EcalTimeBiasCorrectionsGPU.h"
+#include "EcalTimeCalibConstantsGPU.h"
 
 class EcalUncalibRecHitProducerGPU
     : public edm::stream::EDProducer<edm::ExternalWork>
@@ -69,9 +82,31 @@ void EcalUncalibRecHitProducerGPU::acquire(
 
     // retrieve device ptrs to conditions
     edm::ESHandle<EcalPedestalsGPU> pedestals;
+    /*
+    edm::ESHandle<EcalGainRatiosGPU> gainRatios;
+    edm::ESHandle<EcalPulseShapesGPU> pulseShapes;
+    edm::ESHandle<EcalPulseCovariancesGPU> pulseCovariances;
+    edm::ESHandle<EcalSamplesCorrelationGPU> samplesCorrelation;
+    edm::ESHandle<EcalTimeBiasCorrectionsGPU> timeBiasCorrections;
+    edm::ESHandle<EcalTimeCalibConstantsGPU> timeCalibConstants;
     setup.get<EcalPedestalsRcd>().get(pedestals);
+    setup.get<EcalGainRatiosRcd>().get(gainRatios);
+    setup.get<EcalPulseShapesRcd>().get(pulseShapes);
+    setup.get<EcalPulseCovariancesRcd>().get(pulseCovariances);
+    setup.get<EcalSamplesCorrelationRcd>().get(samplesCorrelation);
+    setup.get<EcalTimeBiasCorrectionsRcd>().get(timeBiasCorrections);
+    setup.get<EcalTimeCalibConstantsRcd>().get(timeCalibConstants);
+    */
 
     auto const& pedProduct = pedestals->getProduct(ctx.stream());
+    /*
+    auto const& gainsProduct = gainRatios->getProduct(ctx.stream());
+    auto const& pulseShapesProduct = pulseShapes->getProduct(ctx.stream());
+    auto const& pulseCovariancesProduct = pulseCovariances->getProduct(ctx.stream());
+    auto const& samplesCorrelationProduct = samplesCorrelation->getProduct(ctx.stream());
+    auto const timeBiasCorrectionsProduct = timeBiasCorrections->getProduct(ctx.stream());
+    auto const& timeCalibConstantsProduct = timeCalibConstants->getProduct(ctx.stream());
+    */
 
     std::cout << "acquire\n";
 

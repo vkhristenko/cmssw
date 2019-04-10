@@ -24,13 +24,14 @@ EcalPedestalsGPU::EcalPedestalsGPU(EcalPedestals const& pedestals)
     
     // fill in ee
     auto const& endcapValues = pedestals.endcapItems();
+    auto const offset = barrelValues.size();
     for (unsigned int i=0; i<endcapValues.size(); i++) {
-        mean_x12_[i] = endcapValues[i].mean_x12;
-        rms_x12_[i] = endcapValues[i].rms_x12;
-        mean_x6_[i] = endcapValues[i].mean_x6;
-        rms_x6_[i] = endcapValues[i].rms_x6;
-        mean_x1_[i] = endcapValues[i].mean_x1;
-        rms_x1_[i] = endcapValues[i].rms_x1;
+        mean_x12_[offset + i] = endcapValues[i].mean_x12;
+        rms_x12_[offset + i] = endcapValues[i].rms_x12;
+        mean_x6_[offset + i] = endcapValues[i].mean_x6;
+        rms_x6_[offset + i] = endcapValues[i].rms_x6;
+        mean_x1_[offset + i] = endcapValues[i].mean_x1;
+        rms_x1_[offset + i] = endcapValues[i].rms_x1;
     }
 }
 
@@ -47,6 +48,8 @@ EcalPedestalsGPU::Product::~Product() {
 EcalPedestalsGPU::Product const& EcalPedestalsGPU::getProduct(
         cuda::stream_t<>& cudaStream) const
 {
+    std::cout << __PRETTY_FUNCTION__ << std::endl;
+
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
         [this](EcalPedestalsGPU::Product& product, cuda::stream_t<>& cudaStream) {
             // malloc
