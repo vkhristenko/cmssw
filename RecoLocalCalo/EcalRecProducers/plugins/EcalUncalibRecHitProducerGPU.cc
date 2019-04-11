@@ -40,6 +40,9 @@ public:
     ~EcalUncalibRecHitProducerGPU() override;
 
 private:
+    // TODO: we should not need this guy in the future
+    // right now, all parameters are brought
+    void beginStream(edm::StreamID) override;
     void acquire(edm::Event const&, 
                  edm::EventSetup const&,
                  edm::WaitingTaskWithArenaHolder) override;
@@ -60,6 +63,9 @@ private:
     edm::ESHandle<EcalTimeBiasCorrectionsGPU> timeBiasCorrectionsHandle_;
     edm::ESHandle<EcalTimeCalibConstantsGPU> timeCalibConstantsHandle_;
 
+    // parameters to send to device
+    
+
     CUDAContextToken ctxToken_;
 };
 
@@ -76,10 +82,50 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(
 
     produces<ecal::SoAUncalibratedRecHitCollection>(recHitsLabelEB_);
     produces<ecal::SoAUncalibratedRecHitCollection>(recHitsLabelEE_);
+
+    //
+    // parameters
+    //
+
+    // get cuda stream to transfer parameters
+    /*
+    edm::Service<CUDAService> cudaService;
+    auto cudaStream = cudaService->getCUDAStream();
+
+    // 
+    // transfer parameters to the device
+    //
+    std::vector<SampleVector::Scalar> 
+        ebAmplitudeFitParameters(EBamplitudeFitParameters_.size()), 
+        eeAmplitudeFitParameters(EEamplitudeFitParameters_.size());
+    ebAmplitudeFitParameters[0] = static_cast<SampleVector::Scalar>(
+        EBamplitudeFitParameters_[0]);
+    ebAmplitudeFitParameters[1] = static_cast<SampleVector::Scalar>(
+        EBamplitudeFitParameters_[1]);
+    eeAmplitudeFitParameters[0] = static_cast<SampleVector::Scalar>(
+        EEamplitudeFitParameters_[0]);
+    eeAmplitudeFitParameters[1] = static_cast<SampleVector::Scalar>(
+        EEamplitudeFitParameters_[1]);
+
+    cudaMemcpyAsync(d_data.amplitudeFitParametersEB,
+        ebAmplitudeFitParameters.data(),
+        ebAmplitudeFitParameters.size() * sizeof(SampleVector::Scalar),
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
+    cudaMemcpyAsync(d_data.amplitudeFitParametersEE,
+        eeAmplitudeFitParameters.data(),
+        eeAmplitudeFitParameters.size() * sizeof(SampleVector::Scalar),
+        cudaMemcpyHostToDevice,
+        conf.cuStream);
+        */
 }
 
 EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
     //
+}
+
+void EcalUncalibRecHit::beginStream(edm::StreamID) {
+
 }
 
 void EcalUncalibRecHitProducerGPU::acquire(
