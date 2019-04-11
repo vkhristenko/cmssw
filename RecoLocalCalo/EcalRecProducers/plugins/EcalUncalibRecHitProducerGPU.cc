@@ -100,15 +100,13 @@ void EcalUncalibRecHitProducerGPU::acquire(
     setup.get<EcalTimeBiasCorrectionsRcd>().get(timeBiasCorrectionsHandle_);
     setup.get<EcalTimeCalibConstantsRcd>().get(timeCalibConstantsHandle_);
 
-    /*
-    auto const& pedProduct = pedestals->getProduct(ctx.stream());
-    auto const& gainsProduct = gainRatios->getProduct(ctx.stream());
-    auto const& pulseShapesProduct = pulseShapes->getProduct(ctx.stream());
-    auto const& pulseCovariancesProduct = pulseCovariances->getProduct(ctx.stream());
-    auto const& samplesCorrelationProduct = samplesCorrelation->getProduct(ctx.stream());
-    auto const& timeBiasCorrectionsProduct = timeBiasCorrections->getProduct(ctx.stream());
-    auto const& timeCalibConstantsProduct = timeCalibConstants->getProduct(ctx.stream());
-    */
+    auto const& pedProduct = pedestalsHandle_->getProduct(ctx.stream());
+    auto const& gainsProduct = gainRatiosHandle_->getProduct(ctx.stream());
+    auto const& pulseShapesProduct = pulseShapesHandle_->getProduct(ctx.stream());
+    auto const& pulseCovariancesProduct = pulseCovariancesHandle_->getProduct(ctx.stream());
+    auto const& samplesCorrelationProduct = samplesCorrelationHandle_->getProduct(ctx.stream());
+    auto const& timeBiasCorrectionsProduct = timeBiasCorrectionsHandle_->getProduct(ctx.stream());
+    auto const& timeCalibConstantsProduct = timeCalibConstantsHandle_->getProduct(ctx.stream());
     std::cout << "acquire\n";
 
     ctxToken_ = ctx.toToken();

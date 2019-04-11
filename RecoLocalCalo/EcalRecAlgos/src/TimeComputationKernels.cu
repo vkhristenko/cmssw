@@ -11,6 +11,7 @@
 #include "DataFormats/Math/interface/approx_log.h"
 
 #include "TimeComputationKernels.h"
+#include "KernelHelpers.h"
 
 //#define DEBUG
 
@@ -24,9 +25,6 @@ bool use_sample(unsigned int sample_mask, unsigned int sample) {
     return sample_mask & (0x1 << (EcalDataFrame::MAXSAMPLES - (sample + 1)));
 }
 
-//#define DEBUG_TC_NULLHYPOT
-#define RUN_NULLHYPOT
-#ifdef RUN_NULLHYPOT
 __global__
 void kernel_time_compute_nullhypot(SampleVector::Scalar const* sample_values,
                                    SampleVector::Scalar const* sample_value_errors,
@@ -113,14 +111,11 @@ void kernel_time_compute_nullhypot(SampleVector::Scalar const* sample_values,
         }
     }
 }
-#endif
 
 constexpr float fast_expf(float x) { return unsafe_expf<6>(x); }
 constexpr float fast_logf(float x) { return unsafe_logf<7>(x); }
 
 //#define DEBUG_TC_MAKERATIO
-#define RUN_MAKERATIO
-#ifdef RUN_MAKERATIO
 //
 // launch ctx parameters are 
 // 45 threads per channel, X channels per block, Y blocks
@@ -510,14 +505,11 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
 #endif
     }
 }
-#endif
 
 /// launch ctx parameters are 
 /// 10 threads per channel, N channels per block, Y blocks
 /// TODO: do we need to keep the state around or can be removed?!
 //#define DEBUG_FINDAMPLCHI2_AND_FINISH
-#define RUN_FINDAMPLCHI2_AND_FINISH
-#ifdef RUN_FINDAMPLCHI2_AND_FINISH
 __global__
 void kernel_time_compute_findamplchi2_and_finish(
         SampleVector::Scalar const* sample_values,
@@ -723,7 +715,6 @@ void kernel_time_compute_findamplchi2_and_finish(
         }
     }
 }
-#endif
 
 __global__
 void kernel_time_compute_fixMGPAslew(uint16_t const* digis,
@@ -757,8 +748,6 @@ void kernel_time_compute_fixMGPAslew(uint16_t const* digis,
     }
 }
 
-#define RUN_AMPL
-#ifdef RUN_AMPL
 __global__
 void kernel_time_compute_ampl(SampleVector::Scalar const* sample_values,
                               SampleVector::Scalar const* sample_value_errors,
@@ -874,7 +863,6 @@ void kernel_time_compute_ampl(SampleVector::Scalar const* sample_values,
         g_amplitudeMax[ch] = amplitudeMax;
     }
 }
-#endif
 
 //#define ECAL_RECO_CUDA_TC_INIT_DEBUG
 __global__
@@ -893,6 +881,7 @@ void kernel_time_computation_init(uint16_t const* digis,
                                   SampleVector::Scalar* ampMaxError,
                                   bool* useless_sample_values,
                                   char* pedestal_nums,
+                                  uint32_t const offsetForHashes,
                                   unsigned int const sample_maskEB,
                                   unsigned int const sample_maskEE,
                                   int nchannels) {
@@ -924,9 +913,13 @@ void kernel_time_computation_init(uint16_t const* digis,
         auto const adc1 = ecal::mgpa::adc(digis[ch_start+1]);
         auto const gainId1 = ecal::mgpa::gainId(digis[ch_start+1]);
         auto const did = DetId{dids[ch]};
+        auto const isBarrel = did.subdetId() == EcalBarrel;
         auto const sample_mask = did.subdetId() == EcalBarrel
             ? sample_maskEB
             : sample_maskEE;
+        auto const hashedId = isBarrel
+            ? hashedIndexEB(did.rawId())
+            : offsetForHashes + hashedIndexEE(did.rawId());
 
         // set pedestal
         // TODO this branch is non-divergent for a group of 10 threads
@@ -936,7 +929,7 @@ void kernel_time_computation_init(uint16_t const* digis,
 
             auto const diff = adc1 - adc0;
             if (gainId1 == 1 && use_sample(sample_mask, 1)
-                && std::abs(diff) < 3*rms_x12[ch]) {
+                && std::abs(diff) < 3*rms_x12[hashedId]) {
                 pedestal = 
                     (pedestal + static_cast<SampleVector::Scalar>(adc1)) / 2.0;
                 num=2;
@@ -952,21 +945,24 @@ void kernel_time_computation_init(uint16_t const* digis,
         bool bad = false;
         SampleVector::Scalar sample_value, sample_value_error;
         // TODO divergent branch
+        // TODO: piece below is general both for amplitudes and timing
+        // potentially there is a way to reduce the amount of code...
         if (!use_sample(sample_mask, sample)) {
             bad = true;
             sample_value = 0;
             sample_value_error = 0;
         } else if (gainId == 1) {
             sample_value = static_cast<SampleVector::Scalar>(adc) - pedestal;
-            sample_value_error = rms_x12[ch];
+            sample_value_error = rms_x12[hashedId];
         } else if (gainId == 2) {
-            sample_value =  (static_cast<SampleVector::Scalar>(adc) - mean_x6[ch]) 
-                * gain12Over6[ch]; 
-            sample_value_error = rms_x6[ch] * gain12Over6[ch];
+            sample_value =  (static_cast<SampleVector::Scalar>(adc) 
+                - mean_x6[hashedId]) * gain12Over6[hashedId]; 
+            sample_value_error = rms_x6[hashedId] * gain12Over6[hashedId];
         } else if (gainId == 3) {
-            sample_value = (static_cast<SampleVector::Scalar>(adc) - mean_x1[ch])
-                * gain6Over1[ch] * gain12Over6[ch];
-            sample_value_error = rms_x1[ch] * gain6Over1[ch] * gain12Over6[ch];
+            sample_value = (static_cast<SampleVector::Scalar>(adc) 
+                - mean_x1[hashedId]) * gain6Over1[hashedId] * gain12Over6[hashedId];
+            sample_value_error = rms_x1[hashedId] 
+                * gain6Over1[hashedId] * gain12Over6[hashedId];
         } else {
             sample_value = 0;
             sample_value_error = 0;
@@ -1092,6 +1088,7 @@ void kernel_time_correction_and_finalize(
         float const outOfTimeThreshG61pEE,
         float const outOfTimeThreshG61mEB,
         float const outOfTimeThreshG61mEE,
+        uint32_t const offsetForHashes,
         int const nchannels) {
     using ScalarType = SampleVector::Scalar;
 
@@ -1104,11 +1101,11 @@ void kernel_time_correction_and_finalize(
     // filter out outside of range threads
     if (gtx >= nchannels) return;
 
-    auto const amplitude = g_amplitude[gtx];
-    auto const rms_x12 = g_rms_x12[gtx];
-    auto const timeCalibConst = timeCalibConstant[gtx];
-
-    auto const isBarrel = DetId{dids[gtx]}.subdetId() == EcalBarrel;
+    auto const did = DetId{dids[gtx]};
+    auto const isBarrel = did.subdetId() == EcalBarrel;
+    auto const hashedId = isBarrel
+        ? hashedIndexEB(did.rawId())
+        : offsetForHashes + hashedIndexEE(did.rawId());
     auto const* amplitudeBins = isBarrel
         ? amplitudeBinsEB
         : amplitudeBinsEE;
@@ -1139,6 +1136,11 @@ void kernel_time_correction_and_finalize(
     auto const outOfTimeThreshG61m = isBarrel
         ? outOfTimeThreshG61mEB
         : outOfTimeThreshG61mEE;
+    
+    // load some
+    auto const amplitude = g_amplitude[gtx];
+    auto const rms_x12 = g_rms_x12[hashedId];
+    auto const timeCalibConst = timeCalibConstant[hashedId];
 
     int myBin = -1;
     for (int bin=0; bin<amplitudeBinsSize; bin++) {

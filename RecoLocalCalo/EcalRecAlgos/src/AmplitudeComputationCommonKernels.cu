@@ -46,9 +46,10 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
                     ::ecal::reco::StorageScalarType* g_pedestal,
                     uint32_t *flags,
                     char* acState,
-                    bool gainSwitchUseMaxSampleEB,
-                    bool gainSwitchUseMaxSampleEE,
-                    int nchannels) {
+                    uint32_t const offsetForHashes,
+                    bool const gainSwitchUseMaxSampleEB,
+                    bool const gainSwitchUseMaxSampleEE,
+                    int const nchannels) {
     constexpr bool dynamicPedestal = false;
     constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
     constexpr int sample_max = 5;
@@ -77,24 +78,36 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
             shr_hasSwitchToGain0_tmp) + nchannels_per_block*nsamples;
 
         //
+        // indices
+        //
+        auto const did = DetId{dids[ch]};
+        auto const isBarrel = did.subdetId() == EcalBarrel;
+        // TODO offset for ee, 0 for eb
+        auto const hashedId = isBarrel
+            ? hashedIndexEB(did.rawId())
+            : offsetForHashes + hashedIndexEE(did.rawId());
+        
+        //
         // pulse shape template
         //
         int sample = threadIdx.x % nsamples;
         for (int isample=sample; isample<EcalPulseShape::TEMPLATESAMPLES; 
             isample+=nsamples)
-            shapes_out[ch](isample + 7) = shapes_in[ch].pdfval[isample];
+            shapes_out[ch](isample + 7) = shapes_in[hashedId].pdfval[isample];
+        
+        // will be used in the future for setting state
+        auto const rmsForChecking = rms_x12[hashedId];
 
         //
         // amplitudes
         //
-        int adc = ecal::mgpa::adc(digis_in[tx]);
-        int gainId = ecal::mgpa::gainId(digis_in[tx]);
-        auto const did = DetId{dids[ch]};
-        auto const rmsForChecking = rms_x12[ch];
+        int const adc = ecal::mgpa::adc(digis_in[tx]);
+        int const gainId = ecal::mgpa::gainId(digis_in[tx]);
         SampleVector::Scalar amplitude = 0.;
         SampleVector::Scalar pedestal = 0.;
         SampleVector::Scalar gainratio = 0.;
 
+        // store into shared mem for initialization
         shr_hasSwitchToGain6[threadIdx.x] = gainId == EcalMgpaBitwiseGain6;
         shr_hasSwitchToGain1[threadIdx.x] = gainId == EcalMgpaBitwiseGain1;
         shr_hasSwitchToGain0_tmp[threadIdx.x] = gainId == EcalMgpaBitwiseGain0;
@@ -182,18 +195,18 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
 
         // TODO: divergent branch
         if (gainId==0 || gainId==3) {
-            pedestal = mean_x1[ch];
-            gainratio = gain6Over1[ch] * gain12Over6[ch];
+            pedestal = mean_x1[hashedId];
+            gainratio = gain6Over1[hashedId] * gain12Over6[hashedId];
             gainsNoise[ch](sample) = 2;
             gainsPedestal[ch](sample) = dynamicPedestal ? 2 : -1;
         } else if (gainId==1) {
-            pedestal = mean_x12[ch];
+            pedestal = mean_x12[hashedId];
             gainratio = 1.;
             gainsNoise[ch](sample) = 0;
             gainsPedestal[ch](sample) = dynamicPedestal ? 0 : -1;
         } else if (gainId==2) {
-            pedestal = mean_x6[ch];
-            gainratio = gain12Over6[ch];
+            pedestal = mean_x6[hashedId];
+            gainratio = gain12Over6[hashedId];
             gainsNoise[ch](sample)  = 1;
             gainsPedestal[ch](sample) = dynamicPedestal ? 1 : -1;
         }
@@ -232,7 +245,7 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
             int const chStart = threadIdx.x - sample_max;
             // thread for the max sample in shared mem
             int const threadMax = threadIdx.x;
-            auto const gainSwitchUseMaxSample = did.subdetId() == EcalBarrel
+            auto const gainSwitchUseMaxSample = isBarrel
                 ? gainSwitchUseMaxSampleEB
                 : gainSwitchUseMaxSampleEE;
             
@@ -328,7 +341,8 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                     BXVectorType const* bxs,
                     bool const* hasSwitchToGain6,
                     bool const* hasSwitchToGain1,
-                    bool const* isSaturated) {
+                    bool const* isSaturated,
+                    uint32_t const offsetForHashes) {
     int ch = blockIdx.x;
     int tx = threadIdx.x;
     int ty = threadIdx.y;
@@ -338,15 +352,13 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
     constexpr bool simplifiedNoiseModelForGainSwitch = true;
     constexpr int template_samples = EcalPulseShape::TEMPLATESAMPLES;
 
-    // only ty == 0 and 1 will go for a second iteration
-    for (int iy=ty; iy<template_samples; iy+=nsamples)
-        for (int ix=tx; ix<template_samples; ix+=nsamples)
-            pulse_cov_out[ch](iy+7, ix+7) = pulse_cov_in[ch].covval[iy][ix];
-
     bool tmp0 = hasSwitchToGain6[ch];
     bool tmp1 = hasSwitchToGain1[ch];
     auto const did = DetId{dids[ch]};
     auto const isBarrel = did.subdetId() == EcalBarrel;
+    auto const hashedId = isBarrel
+        ? hashedIndexEB(did.rawId())
+        : offsetForHashes + hashedIndexEE(did.rawId());
     auto const G12SamplesCorrelation = isBarrel
         ? G12SamplesCorrelationEB
         : G12SamplesCorrelationEE;
@@ -359,6 +371,12 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
     bool tmp2 = isSaturated[ch];
     bool hasGainSwitch = tmp0 || tmp1 || tmp2;
     auto const vidx = ecal::abs(ty - tx);
+
+    // only ty == 0 and 1 will go for a second iteration
+    for (int iy=ty; iy<template_samples; iy+=nsamples)
+        for (int ix=tx; ix<template_samples; ix+=nsamples)
+            pulse_cov_out[ch](iy+7, ix+7) = pulse_cov_in[hashedId].covval[iy][ix];
+
     // non-divergent branch for all threads per block
     if (hasGainSwitch) {
         // TODO: did not include simplified noise model
@@ -375,19 +393,21 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
             // non-divergent branches
             if (gainidx==0)
                 //noise_value = rms_x12[ch]*rms_x12[ch]*noisecorrs[0](ty, tx);
-                noise_value = rms_x12[ch]*rms_x12[ch]
+                noise_value = rms_x12[hashedId]*rms_x12[hashedId]
                     * G12SamplesCorrelation[vidx];
             if (gainidx==1) 
 //                noise_value = gain12Over6[ch]*gain12Over6[ch] * rms_x6[ch]*rms_x6[ch]
 //                    *noisecorrs[1](ty, tx);
-                noise_value = gain12Over6[ch]*gain12Over6[ch] * rms_x6[ch]*rms_x6[ch]
+                noise_value = gain12Over6[hashedId]*gain12Over6[hashedId] 
+                    * rms_x6[hashedId]*rms_x6[hashedId]
                     * G6SamplesCorrelation[vidx];
             if (gainidx==2)
 //                noise_value = gain12Over6[ch]*gain12Over6[ch]
 //                    * gain6Over1[ch]*gain6Over1[ch] * rms_x1[ch]*rms_x1[ch]
 //                    * noisecorrs[2](ty, tx);
-                noise_value = gain12Over6[ch]*gain12Over6[ch]
-                    * gain6Over1[ch]*gain6Over1[ch] * rms_x1[ch]*rms_x1[ch]
+                noise_value = gain12Over6[hashedId]*gain12Over6[hashedId]
+                    * gain6Over1[hashedId]*gain6Over1[hashedId] 
+                    * rms_x1[hashedId]*rms_x1[hashedId]
                     * G1SamplesCorrelation[vidx];
             if (!dynamicPedestal && addPedestalUncertainty>0.f)
                 noise_value += addPedestalUncertainty*addPedestalUncertainty;
@@ -398,7 +418,7 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
             int pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
 //            noise_value += /* gainratio is 1*/ rms_x12[ch]*rms_x12[ch]
 //                *pedestal*noisecorrs[0](ty, tx);
-            noise_value += /* gainratio is 1*/ rms_x12[ch]*rms_x12[ch]
+            noise_value += /* gainratio is 1*/ rms_x12[hashedId]*rms_x12[hashedId]
                 * pedestal* G12SamplesCorrelation[vidx];
             // non-divergent branch
             if (!dynamicPedestal && addPedestalUncertainty>0.f) {
@@ -412,12 +432,12 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
             pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
 //            noise_value += gain12Over6[ch]*gain12Over6[ch]
 //                *rms_x6[ch]*rms_x6[ch]*pedestal*noisecorrs[1](ty, tx);
-            noise_value += gain12Over6[ch]*gain12Over6[ch]
-                *rms_x6[ch]*rms_x6[ch]*pedestal
+            noise_value += gain12Over6[hashedId]*gain12Over6[hashedId]
+                *rms_x6[hashedId]*rms_x6[hashedId]*pedestal
                 * G6SamplesCorrelation[vidx];
             // non-divergent branch
             if (!dynamicPedestal && addPedestalUncertainty>0.f) {
-                noise_value += gain12Over6[ch]*gain12Over6[ch]
+                noise_value += gain12Over6[hashedId]*gain12Over6[hashedId]
                     *addPedestalUncertainty*addPedestalUncertainty
                     *pedestal;
             }
@@ -426,10 +446,10 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
             gainidx=2;
             mask = gainidx;
             pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
-            float tmp = gain6Over1[ch] * gain12Over6[ch];
+            float tmp = gain6Over1[hashedId] * gain12Over6[hashedId];
 //            noise_value += tmp*tmp * rms_x1[ch]*rms_x1[ch]
 //                *pedestal*noisecorrs[2](ty, tx);
-            noise_value += tmp*tmp * rms_x1[ch]*rms_x1[ch]
+            noise_value += tmp*tmp * rms_x1[hashedId]*rms_x1[hashedId]
                 *pedestal* G1SamplesCorrelation[vidx];
             // non-divergent branch
             if (!dynamicPedestal && addPedestalUncertainty>0.f) {
@@ -440,7 +460,7 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
 
         noisecov[ch](ty, tx) = noise_value;
     } else {
-        auto rms = rms_x12[ch];
+        auto rms = rms_x12[hashedId];
         float noise_value = rms*rms * G12SamplesCorrelation[vidx];
         if (!dynamicPedestal && addPedestalUncertainty>0.f)
             noise_value += addPedestalUncertainty*addPedestalUncertainty;

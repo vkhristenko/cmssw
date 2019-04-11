@@ -19,8 +19,6 @@
 
 namespace ecal { namespace multifit {
 
-#define RUN_NULLHYPOT
-#ifdef RUN_NULLHYPOT
 __global__
 void kernel_time_compute_nullhypot(SampleVector::Scalar const* sample_values,
                                    SampleVector::Scalar const* sample_value_errors,
@@ -29,10 +27,6 @@ void kernel_time_compute_nullhypot(SampleVector::Scalar const* sample_values,
                                    SampleVector::Scalar* sum0s,
                                    SampleVector::Scalar* sumAAs,
                                    int const nchannels);
-#endif
-
-#define RUN_MAKERATIO
-#ifdef RUN_MAKERATIO
 //
 // launch ctx parameters are 
 // 45 threads per channel, X channels per block, Y blocks
@@ -64,14 +58,11 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
                                    SampleVector::Scalar const timeFitLimits_secondEB,
                                    SampleVector::Scalar const timeFitLimits_secondEE,
                                    int const nchannels);
-#endif
 
 /// launch ctx parameters are 
 /// 10 threads per channel, N channels per block, Y blocks
 /// TODO: do we need to keep the state around or can be removed?!
 //#define DEBUG_FINDAMPLCHI2_AND_FINISH
-#define RUN_FINDAMPLCHI2_AND_FINISH
-#ifdef RUN_FINDAMPLCHI2_AND_FINISH
 __global__
 void kernel_time_compute_findamplchi2_and_finish(
         SampleVector::Scalar const* sample_values,
@@ -93,7 +84,6 @@ void kernel_time_compute_findamplchi2_and_finish(
         SampleVector::Scalar* g_timeMax,
         SampleVector::Scalar* g_timeError,
         int const nchannels);
-#endif
 
 __global__
 void kernel_time_compute_fixMGPAslew(uint16_t const* digis,
@@ -103,8 +93,6 @@ void kernel_time_compute_fixMGPAslew(uint16_t const* digis,
                                      unsigned int const sample_mask,
                                      int const nchannels);
 
-#define RUN_AMPL
-#ifdef RUN_AMPL
 __global__
 void kernel_time_compute_ampl(SampleVector::Scalar const* sample_values,
                               SampleVector::Scalar const* sample_value_errors,
@@ -115,7 +103,6 @@ void kernel_time_compute_ampl(SampleVector::Scalar const* sample_values,
                               SampleVector::Scalar const* amplitudeFitParametersEE,
                               SampleVector::Scalar *g_amplitudeMax,
                               int const nchannels);
-#endif
 
 //#define ECAL_RECO_CUDA_TC_INIT_DEBUG
 __global__
@@ -134,6 +121,7 @@ void kernel_time_computation_init(uint16_t const* digis,
                                   SampleVector::Scalar* ampMaxError,
                                   bool* useless_sample_values,
                                   char* pedestal_nums,
+                                  uint32_t const offsetForHashes,
                                   unsigned int const sample_maskEB,
                                   unsigned int const sample_maskEE,
                                   int nchannels);
@@ -176,6 +164,7 @@ void kernel_time_correction_and_finalize(
         float const outOfTimeThreshG61pEE,
         float const outOfTimeThreshG61mEB,
         float const outOfTimeThreshG61mEE,
+        uint32_t const offsetForHashes,
         int const nchannels);
 
 }}
