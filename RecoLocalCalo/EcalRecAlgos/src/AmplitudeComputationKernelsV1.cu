@@ -170,7 +170,6 @@ void kernel_minimize(SampleMatrix const* noisecov,
                      bool const* isSaturated,
                      bool const* hasSwitchToGain6,
                      bool const* hasSwitchToGain1,
-                     float const* rms_x12,
                      char *acState,
                      int nchannels,
                      int max_iterations) {
@@ -264,7 +263,6 @@ void minimization_procedure(
         d_data.isSaturated,
         d_data.hasSwitchToGain6,
         d_data.hasSwitchToGain1,
-        d_data.rms_x12,
         d_data.acState,
         totalChannels,
         50);

@@ -35,6 +35,9 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     bool const gainSwitchUseMaxSampleEB = true; // accodring to the cpu setup
     bool const gainSwitchUseMaxSampleEE = false;
 
+    // TODO: handle this properly
+    uint32_t const offsetForHashesPlaceholder = 1000;
+
     unsigned int totalChannels = h_data.digisEB->size() + h_data.digisEE->size();
     
     // temporary for recording
@@ -219,6 +222,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.pedestal,
         d_data.flags,
         d_data.acState,
+        offsetForHashesPlaceholder,
         gainSwitchUseMaxSampleEB,
         gainSwitchUseMaxSampleEE,
         totalChannels);
@@ -250,7 +254,8 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.bxs,
         d_data.hasSwitchToGain6,
         d_data.hasSwitchToGain1,
-        d_data.isSaturated);
+        d_data.isSaturated,
+        offsetForHashesPlaceholder);
     AssertIfError
 
     if (conf.runV1)
@@ -282,6 +287,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.ampMaxError,
         d_data.useless_sample_values,
         d_data.pedestal_nums,
+        offsetForHashesPlaceholder,
         h_data.sample_mask.getEcalSampleMaskRecordEB(),
         h_data.sample_mask.getEcalSampleMaskRecordEE(),
         totalChannels
@@ -454,6 +460,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         d_data.outOfTimeThreshG61pEE,
         d_data.outOfTimeThreshG61mEB,
         d_data.outOfTimeThreshG61mEE,
+        offsetForHashesPlaceholder,
         totalChannels
     );
     AssertIfError

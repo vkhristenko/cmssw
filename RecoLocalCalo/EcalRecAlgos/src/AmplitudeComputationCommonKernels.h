@@ -40,9 +40,10 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
                     ::ecal::reco::StorageScalarType* pedestal,
                     uint32_t *flags,
                     char* acState,
-                    bool gainSwitchUseMaxSampleEB,
-                    bool gainSwitchUseMaxSampleEE,
-                    int nchannels);
+                    uint32_t offsetForHashes,
+                    bool const gainSwitchUseMaxSampleEB,
+                    bool const gainSwitchUseMaxSampleEE,
+                    int const nchannels);
 
 ///
 /// assume kernel launch configuration is 
@@ -70,7 +71,8 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                     BXVectorType const* bxs,
                     bool const* hasSwitchToGain6,
                     bool const* hasSwitchToGain1,
-                    bool const* isSaturated);
+                    bool const* isSaturated,
+                    uint32_t const offsetForHashes);
 
 __global__
 void kernel_permute_results(
