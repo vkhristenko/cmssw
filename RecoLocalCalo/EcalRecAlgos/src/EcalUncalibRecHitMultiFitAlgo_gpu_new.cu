@@ -577,6 +577,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
                conf.cuStream);
     AssertIfError
 
+    cudaStreamSynchronize(conf.cuStream);
     cudaEventRecord(end_event, 0);
     cudaEventSynchronize(end_event);
     float ms;
