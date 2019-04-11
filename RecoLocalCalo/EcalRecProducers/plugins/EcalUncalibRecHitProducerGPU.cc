@@ -124,8 +124,10 @@ EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
     //
 }
 
-void EcalUncalibRecHit::beginStream(edm::StreamID) {
+void EcalUncalibRecHit::beginStream(edm::StreamID sid) {
+    CUDAScopedContext ctx{sid};
 
+    // do stuff
 }
 
 void EcalUncalibRecHitProducerGPU::acquire(
