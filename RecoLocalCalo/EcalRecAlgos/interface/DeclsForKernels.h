@@ -42,6 +42,32 @@ using EMatrix = Eigen::Matrix<double,
     EcalWeightSet::EcalWeightMatrix::rep_type::kRows,
     EcalWeightSet::EcalWeightMatrix::rep_type::kCols>;
 
+// parameters have a fixed type
+// Can we go by with single precision
+struct ConfigurationParameters {
+    using type = double;
+    // device ptrs
+    type *amplitudeFitParametersEB=nullptr, *amplitudeFitParametersEE=nullptr;
+
+    uint32_t timeFitParametersSizeEB, timeFitParametersSizeEE;
+    // device ptrs
+    type *timeFitParametersEB=nullptr, *timeFitParametersEE=nullptr;
+
+    type timeFitLimitsFirstEB, timeFitLimitsFirstEE;
+    type timeFitLimitsSecondEB, timeFitLimitsSecondEE;
+
+    type timeConstantTermEB, timeConstantTermEE;
+
+    type timeNconstEB, timeNconstEE;
+
+    type amplitudeThreshEE, amplitudeThreshEB;
+
+    type outOfTimeThreshG12pEB, outOfTimeThreshG12mEB;
+    type outOfTimeThreshG12pEE, outOfTimeThreshG12mEE;
+    type outOfTimeThreshG61pEE, outOfTimeThreshG61mEE;
+    type outOfTimeThreshG61pEB, outOfTimeThreshG61mEB;
+};
+
 struct device_data {
     uint16_t *digis_data = nullptr;
     uint32_t *ids = nullptr;
