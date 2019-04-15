@@ -25,13 +25,13 @@
 #include "CondFormats/DataRecord/interface/EcalTimeBiasCorrectionsRcd.h"
 #include "CondFormats/DataRecord/interface/EcalTimeCalibConstantsRcd.h"
 
-#include "RecoLocalCalo/EcalRecProducers/interface/EcalPedestalsGPU.h"
-#include "RecoLocalCalo/EcalRecProducers/interface/EcalGainRatiosGPU.h"
-#include "RecoLocalCalo/EcalRecProducers/interface/EcalPulseShapesGPU.h"
-#include "RecoLocalCalo/EcalRecProducers/interface/EcalPulseCovariancesGPU.h"
-#include "RecoLocalCalo/EcalRecProducers/interface/EcalSamplesCorrelationGPU.h"
-#include "RecoLocalCalo/EcalRecProducers/interface/EcalTimeBiasCorrectionsGPU.h"
-#include "RecoLocalCalo/EcalRecProducers/interface/EcalTimeCalibConstantsGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalPedestalsGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalGainRatiosGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalPulseShapesGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalPulseCovariancesGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalSamplesCorrelationGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalTimeBiasCorrectionsGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalTimeCalibConstantsGPU.h"
 
 #include "RecoLocalCalo/EcalRecAlgos/interface/DeclsForKernels.h"
 
@@ -63,11 +63,20 @@ private:
     edm::ESHandle<EcalSamplesCorrelationGPU> samplesCorrelationHandle_;
     edm::ESHandle<EcalTimeBiasCorrectionsGPU> timeBiasCorrectionsHandle_;
     edm::ESHandle<EcalTimeCalibConstantsGPU> timeCalibConstantsHandle_;
+    edm::ESHandle<EcalSampleMask> sampleMaskHandle_;
+    edm::ESHandle<EcalTimeOffsetConstant> timeOffsetConstantHandle_;
 
     // configuration parameters
     ecal::multifit::ConfigurationParameters configParameters;
 
+    // event input data
+    EventInputDataGPU eventInputDataGPU_;
+    EventOutputDataGPU eventOutputDataGPU_;
+    EventDataForScratchGPU eventDataForScratchGPU_;
+
     CUDAContextToken ctxToken_;
+
+    uint32_t maxNumberHits_;
 };
 
 void EcalUncalibRecHitProducerGPU::fillDescriptions(
@@ -106,6 +115,7 @@ void EcalUncalibRecHitProducerGPU::fillDescriptions(
     desc.add<double>("outOfTimeThresholdGain61mEE", 1000);
     desc.add<double>("amplitudeThresholdEB", 10);
     desc.add<double>("amplitudeThresholdEE", 10);
+    desc.add<uint32_t>("maxNumberHits", 20000);
 
     std::string label = "ecalUncalibRecHitProducerGPU";
     confDesc.add(label, desc);
@@ -159,6 +169,9 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(
         "outOfTimeThresholdGain61mEE");
     auto amplitudeThreshEB = ps.getParameter<double>("amplitudeThresholdEB");
     auto amplitudeThreshEE = ps.getParameter<double>("amplitudeThresholdEE");
+
+    // max number of digis to allocate for
+    maxNumberHits_ = ps.getParameter<uint32_t>("maxNumberHits");
 
     produces<ecal::SoAUncalibratedRecHitCollection>(recHitsLabelEB_);
     produces<ecal::SoAUncalibratedRecHitCollection>(recHitsLabelEE_);
@@ -232,6 +245,15 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(
     configParameters.outOfTimeThreshG12mEE = outOfTimeThreshG12mEE;
     configParameters.outOfTimeThreshG61mEB = outOfTimeThreshG61mEB;
     configParameters.outOfTimeThreshG61mEE = outOfTimeThreshG61mEE;
+
+    // allocate event input data
+    eventInputDataGPU_.allocate(maxNumberHits_);
+
+    // allocate event output data
+    eventOutputDataGPU_.allocate(maxNumberHits_);
+
+    // allocate scratch data for gpu
+    eventScratchDataGPU_.allocate(maxNumberHits_);
 }
 
 EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
@@ -245,6 +267,15 @@ EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
         cudaCheck( cudaFree(configParameters.amplitudeFitParametersEE) );
         cudaCheck( cudaFree(configParameters.timeFitParametersEB) );
         cudaCheck( cudaFree(configParameters.timeFitParametersEE) );
+
+        // free event input data
+        eventInputDataGPU_.deallocate();
+
+        // free event ouput data 
+        eventOutputDataGPU_.deallocate();
+
+        // free event scratch data
+        eventScratchDataGPU_.deallocate();
     }
 }
 
@@ -265,6 +296,8 @@ void EcalUncalibRecHitProducerGPU::acquire(
     setup.get<EcalSamplesCorrelationRcd>().get(samplesCorrelationHandle_);
     setup.get<EcalTimeBiasCorrectionsRcd>().get(timeBiasCorrectionsHandle_);
     setup.get<EcalTimeCalibConstantsRcd>().get(timeCalibConstantsHandle_);
+    setup.get<EcalSampleMaskRcd>().get(sampleMaskHandle_);
+    setup.get<EcalTimeOffsetConstantRcd>().get(timeOffsetConstantHandle_);
 
     auto const& pedProduct = pedestalsHandle_->getProduct(ctx.stream());
     auto const& gainsProduct = gainRatiosHandle_->getProduct(ctx.stream());
@@ -273,6 +306,17 @@ void EcalUncalibRecHitProducerGPU::acquire(
     auto const& samplesCorrelationProduct = samplesCorrelationHandle_->getProduct(ctx.stream());
     auto const& timeBiasCorrectionsProduct = timeBiasCorrectionsHandle_->getProduct(ctx.stream());
     auto const& timeCalibConstantsProduct = timeCalibConstantsHandle_->getProduct(ctx.stream());
+
+    // bundle up conditions. no copies, just const refs
+    ecal::multifit::ConditionsParameters conditions {
+        pedProduct, gainsProduct, pulseShapesProduct,
+        pulseCovariancesProduct, 
+        samplesCorrelationProduct,
+        timeBiasCorrectionsProduct,
+        timeCalibConstantsProduct,
+        *sampleMaskHandle_,
+        *timeOffsetHandle_
+    };
     
     //
     // retrieve collections
@@ -282,10 +326,12 @@ void EcalUncalibRecHitProducerGPU::acquire(
     event.getByToken(digisTokenEB_, ebDigis);
     event.getByToken(digisTokenEE_, eeDigis);
 
+    EventInputDataCPU input{ebDigis, eeDigis};
+
     //
     // run algorithms
     //
-//    ecal::multifit::entryPoint();
+    ecal::multifit::entryPoint();
 
     // preserve token
     ctxToken_ = ctx.toToken();
