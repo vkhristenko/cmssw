@@ -403,7 +403,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
 
     //
     //
-    //
+    /*
     auto const threads_ampl = threads_1d;
     auto const blocks_ampl = blocks_1d;
     int const sharedBytesAmpl = 5 * threads_ampl * sizeof(SampleVector::Scalar);
@@ -420,6 +420,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         totalChannels
     );
     AssertIfError
+    */
 
     //
     //
