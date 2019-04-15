@@ -13,6 +13,7 @@ namespace Tag {
 
 struct soa {};
 struct aos {};
+struct ptr {};
 
 }
 
@@ -24,6 +25,11 @@ struct type_wrapper {
 template<typename T>
 struct type_wrapper<T, Tag::aos> {
     using type = T;
+};
+
+template<typename T>
+struct type_wrapper<T, Tag::ptr> {
+    using type = T*;
 };
 
 template<typename L = Tag::soa>

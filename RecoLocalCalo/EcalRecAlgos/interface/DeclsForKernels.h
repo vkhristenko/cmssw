@@ -42,6 +42,43 @@ using EMatrix = Eigen::Matrix<double,
     EcalWeightSet::EcalWeightMatrix::rep_type::kRows,
     EcalWeightSet::EcalWeightMatrix::rep_type::kCols>;
 
+// event input data on cpu, just const refs
+struct EventInputDataCPU {
+    EBDigiCollection const& ebDigis;
+    EEDigiCollection const& eeDigis;
+};
+
+//
+struct EventInputDataGPU {
+    uint16_t *digis;
+    uint32_t *ids;
+
+    void allocate(uint32_t size) {
+
+    }
+
+    void deallocate() {
+
+    }
+};
+
+struct EventOutputDataGPU final : public ::ecal::UncalibratedRecHit<::ecal::Tag::ptr> 
+{
+    void allocate(uint32_t size) {
+    }
+
+    void deallocate() {
+    }
+};
+
+struct EventDataForScratchGPU {
+    void allocate(uint32_t) {
+    }
+
+    void deallocate() {
+    }
+};
+
 // parameters have a fixed type
 // Can we go by with single precision
 struct ConfigurationParameters {
