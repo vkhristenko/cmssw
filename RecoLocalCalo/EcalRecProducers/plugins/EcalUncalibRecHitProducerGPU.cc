@@ -17,6 +17,8 @@
 
 #include <iostream>
 
+#include "CondFormats/EcalObjects/interface/EcalTimeOffsetConstant.h"
+
 #include "CondFormats/DataRecord/interface/EcalPedestalsRcd.h"
 #include "CondFormats/DataRecord/interface/EcalGainRatiosRcd.h"
 #include "CondFormats/DataRecord/interface/EcalPulseShapesRcd.h"
@@ -24,6 +26,8 @@
 #include "CondFormats/DataRecord/interface/EcalSamplesCorrelationRcd.h"
 #include "CondFormats/DataRecord/interface/EcalTimeBiasCorrectionsRcd.h"
 #include "CondFormats/DataRecord/interface/EcalTimeCalibConstantsRcd.h"
+#include "CondFormats/DataRecord/interface/EcalTimeOffsetConstantRcd.h"
+#include "CondFormats/DataRecord/interface/EcalSampleMaskRcd.h"
 
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalPedestalsGPU.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalGainRatiosGPU.h"
@@ -70,9 +74,9 @@ private:
     ecal::multifit::ConfigurationParameters configParameters;
 
     // event input data
-    EventInputDataGPU eventInputDataGPU_;
-    EventOutputDataGPU eventOutputDataGPU_;
-    EventDataForScratchGPU eventDataForScratchGPU_;
+    ecal::multifit::EventInputDataGPU eventInputDataGPU_;
+    ecal::multifit::EventOutputDataGPU eventOutputDataGPU_;
+    ecal::multifit::EventDataForScratchGPU eventDataForScratchGPU_;
 
     CUDAContextToken ctxToken_;
 
@@ -253,7 +257,7 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(
     eventOutputDataGPU_.allocate(maxNumberHits_);
 
     // allocate scratch data for gpu
-    eventScratchDataGPU_.allocate(maxNumberHits_);
+    eventDataForScratchGPU_.allocate(maxNumberHits_);
 }
 
 EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
@@ -275,7 +279,7 @@ EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
         eventOutputDataGPU_.deallocate();
 
         // free event scratch data
-        eventScratchDataGPU_.deallocate();
+        eventDataForScratchGPU_.deallocate();
     }
 }
 
@@ -326,12 +330,19 @@ void EcalUncalibRecHitProducerGPU::acquire(
     event.getByToken(digisTokenEB_, ebDigis);
     event.getByToken(digisTokenEE_, eeDigis);
 
-    EventInputDataCPU input{ebDigis, eeDigis};
+    ecal::multifit::EventInputDataCPU eventInputDataCPU{*ebDigis, *eeDigis};
 
     //
-    // run algorithms
+    // schedule algorithms
     //
-    ecal::multifit::entryPoint();
+    ecal::multifit::entryPoint(
+        eventInputDataCPU,
+        eventInputDataGPU_,
+        eventOutputDataGPU_,
+        eventDataForScratchGPU_,
+        conditions,
+        configParameters
+    );
 
     // preserve token
     ctxToken_ = ctx.toToken();

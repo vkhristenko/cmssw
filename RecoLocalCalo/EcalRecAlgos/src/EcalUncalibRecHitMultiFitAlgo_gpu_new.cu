@@ -27,7 +27,7 @@
 //#define ECAL_RECO_CUDA_DEBUG
 
 namespace ecal { namespace multifit {
-    
+   
 void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     using digis_type = std::vector<uint16_t>;
     using dids_type = std::vector<uint32_t>;
