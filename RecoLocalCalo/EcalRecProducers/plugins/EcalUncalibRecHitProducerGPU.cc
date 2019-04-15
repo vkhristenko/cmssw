@@ -40,9 +40,6 @@ public:
     ~EcalUncalibRecHitProducerGPU() override;
 
 private:
-    // TODO: we should not need this guy in the future
-    // right now, all parameters are brought
-    void beginStream(edm::StreamID) override;
     void acquire(edm::Event const&, 
                  edm::EventSetup const&,
                  edm::WaitingTaskWithArenaHolder) override;
@@ -63,8 +60,7 @@ private:
     edm::ESHandle<EcalTimeBiasCorrectionsGPU> timeBiasCorrectionsHandle_;
     edm::ESHandle<EcalTimeCalibConstantsGPU> timeCalibConstantsHandle_;
 
-    // parameters to send to device
-    
+    // configuration parameters
 
     CUDAContextToken ctxToken_;
 };
@@ -80,54 +76,40 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(
     recHitsLabelEB_ = ps.getUntrackedParameter<std::string>("recHitsLabelEB");
     recHitsLabelEE_ = ps.getUntrackedParameter<std::string>("recHitsLabelEE");
 
+    EBamplitudeFitParameters = ps.getParameter<std::vector<float>>(
+        "EBamplitudeFitParameters");
+    EEamplitudeFitParameters = ps.getParameter<std::vector<float>>(
+        "EEamplitudeFitParameters");
+
     produces<ecal::SoAUncalibratedRecHitCollection>(recHitsLabelEB_);
     produces<ecal::SoAUncalibratedRecHitCollection>(recHitsLabelEE_);
 
     //
-    // parameters
+    // configuration and physics parameters: done once
+    // assume there is a single device
+    // use sync copying
     //
 
-    // get cuda stream to transfer parameters
-    /*
-    edm::Service<CUDAService> cudaService;
-    auto cudaStream = cudaService->getCUDAStream();
+    // amplitude fit parameters copying
+    cudaMemcpy(configParameters.amplitudeFitParametersEB,
+        EBamplitudeFitParameters.data(),
+        EBamplitudeFitParameters.size() * sizeof(SampleVector::Scalar),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(d_data.amplitudeFitParametersEE,
+        EEamplitudeFitParameters.data(),
+        EEamplitudeFitParameters.size() * sizeof(SampleVector::Scalar),
+        cudaMemcpyHostToDevice);
 
-    // 
-    // transfer parameters to the device
-    //
-    std::vector<SampleVector::Scalar> 
-        ebAmplitudeFitParameters(EBamplitudeFitParameters_.size()), 
-        eeAmplitudeFitParameters(EEamplitudeFitParameters_.size());
-    ebAmplitudeFitParameters[0] = static_cast<SampleVector::Scalar>(
-        EBamplitudeFitParameters_[0]);
-    ebAmplitudeFitParameters[1] = static_cast<SampleVector::Scalar>(
-        EBamplitudeFitParameters_[1]);
-    eeAmplitudeFitParameters[0] = static_cast<SampleVector::Scalar>(
-        EEamplitudeFitParameters_[0]);
-    eeAmplitudeFitParameters[1] = static_cast<SampleVector::Scalar>(
-        EEamplitudeFitParameters_[1]);
-
-    cudaMemcpyAsync(d_data.amplitudeFitParametersEB,
-        ebAmplitudeFitParameters.data(),
-        ebAmplitudeFitParameters.size() * sizeof(SampleVector::Scalar),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-    cudaMemcpyAsync(d_data.amplitudeFitParametersEE,
-        eeAmplitudeFitParameters.data(),
-        eeAmplitudeFitParameters.size() * sizeof(SampleVector::Scalar),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-        */
+      d_data.timeFitParametersSizeEB = EBtimeFitParameters_.size();
+        d_data.timeFitParametersSizeEE = EEtimeFitParameters_.size();
+          d_data.timeFitLimitsFirstEB = EBtimeFitLimits_.first;
+            d_data.timeFitLimitsSecondEB = EBtimeFitLimits_.second;
+              d_data.timeFitLimitsFirstEE = EEtimeFitLimits_.first;
+                d_data.timeFitLimitsSecondEE = EEtimeFitLimits_.second;
 }
 
 EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
     //
-}
-
-void EcalUncalibRecHit::beginStream(edm::StreamID sid) {
-    CUDAScopedContext ctx{sid};
-
-    // do stuff
 }
 
 void EcalUncalibRecHitProducerGPU::acquire(
@@ -155,8 +137,21 @@ void EcalUncalibRecHitProducerGPU::acquire(
     auto const& samplesCorrelationProduct = samplesCorrelationHandle_->getProduct(ctx.stream());
     auto const& timeBiasCorrectionsProduct = timeBiasCorrectionsHandle_->getProduct(ctx.stream());
     auto const& timeCalibConstantsProduct = timeCalibConstantsHandle_->getProduct(ctx.stream());
-    std::cout << "acquire\n";
+    
+    //
+    // retrieve collections
+    //
+    Handle<EBDigiCollection> ebDigis;
+    Hanlde<EEDigicollection> eeDigis;
+    evt.getByToken(digisTokenEB_, ebDigis);
+    evt.getByToken(digisTokenEE_, eeDigis);
 
+    //
+    // run algorithms
+    //
+    ecal::multifit::entryPoint();
+
+    // preserve token
     ctxToken_ = ctx.toToken();
 }
 
@@ -167,26 +162,17 @@ void EcalUncalibRecHitProducerGPU::produce(
     DurationMeasurer<std::chrono::milliseconds> timer{std::string{"produce duration"}};
     CUDAScopedContext ctx{std::move(ctxToken_)};
 
-    std::cout << "produce\n";
+    // rec hits
+    auto ebRecHits = std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>();
+    auto eeRecHits = std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>();
+    ebRecHits.resize(ebDigisSize);
+    eeRecHits.resize(eeDigisSize);
+   
+    // transfer results back
+    ecal::multifit::transferToHost();
+
+    evt.put(std::move(ebRecHits), recHitsLabelEB_);
+    evt.put(std::move(eeRecHits), recHitsLabelEE_);
 }
-
-/*
-void EcalUncalibRecHitProducerGPU::produce(edm::Event& e, const edm::EventSetup&) {
-    // input products
-    edm::Handle<EBDigiCollection> digisEB;
-    edm::Handle<EEDigiCollection> digisEE;
-    e.getByToken(digisTokenEB_, digisEB);
-    e.getByToken(digisTokenEE_, digisEE);
-
-    // output products
-    auto recHitsEB =
-        std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>();
-    auto recHitsEE =
-        std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>();
-
-    e.put(std::move(recHitsEB), recHitsLabelEB_);
-    e.put(std::move(recHitsEE), recHitsLabelEE_);
-}
-*/
 
 DEFINE_FWK_MODULE(EcalUncalibRecHitProducerGPU);
