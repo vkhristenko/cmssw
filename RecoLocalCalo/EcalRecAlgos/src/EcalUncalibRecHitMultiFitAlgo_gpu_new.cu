@@ -165,7 +165,6 @@ void entryPoint(
         v2::minimization_procedure(d_data, h_data, conf);
         */
 
-    /*
     //
     // TODO: this guy can run concurrently with other kernels,
     // there is no dependence on the order of execution
@@ -174,24 +173,25 @@ void entryPoint(
     unsigned int blocks_time_init = blocks_1d;
     int sharedBytesInit = 2 * threads_time_init * sizeof(SampleVector::Scalar);
     kernel_time_computation_init<<<blocks_time_init, threads_time_init,
-                                   sharedBytesInit, conf.cuStream>>>(
-        d_data.digis_data, d_data.ids,
-        d_data.rms_x12,
-        d_data.rms_x6,
-        d_data.rms_x1,
-        d_data.mean_x12,
-        d_data.mean_x6,
-        d_data.mean_x1,
-        d_data.gain12Over6,
-        d_data.gain6Over1,
-        d_data.sample_values,
-        d_data.sample_value_errors,
-        d_data.ampMaxError,
-        d_data.useless_sample_values,
-        d_data.pedestal_nums,
-        offsetForHashesPlaceholder,
-        h_data.sample_mask.getEcalSampleMaskRecordEB(),
-        h_data.sample_mask.getEcalSampleMaskRecordEE(),
+                                   sharedBytesInit, cudaStream.id()>>>(
+        eventInputGPU.digis, 
+        eventInputGPU.ids,
+        conditions.pedestals.rms_x12,
+        conditions.pedestals.rms_x6,
+        conditions.pedestals.rms_x1,
+        conditions.pedestals.mean_x12,
+        conditions.pedestals.mean_x6,
+        conditions.pedestals.mean_x1,
+        conditions.gainRatios.gain12Over6,
+        conditions.gainRatios.gain6Over1,
+        scratch.sample_values,
+        scratch.sample_value_errors,
+        scratch.ampMaxError,
+        scratch.useless_sample_values,
+        scratch.pedestal_nums,
+        offsetForHashes,
+        conditions.sampleMask.getEcalSampleMaskRecordEB(),
+        conditions.sampleMask.getEcalSampleMaskRecordEE(),
         totalChannels
     );
     AssertIfError
@@ -204,19 +204,21 @@ void entryPoint(
     // therefore we need to create threads/blocks only for that
     unsigned int const threadsFixMGPA = threads_1d;
     unsigned int const blocksFixMGPA = 
-        threadsFixMGPA > 10 * h_data.digisEB->size()
+        threadsFixMGPA > 10 * eventInputCPU.ebDigis.size()
             ? 1
-            : (10 * h_data.digisEB->size() + threadsFixMGPA - 1) / threadsFixMGPA;
+            : (10 * eventInputCPU.ebDigis.size() + threadsFixMGPA - 1) 
+                / threadsFixMGPA;
     kernel_time_compute_fixMGPAslew<<<blocksFixMGPA, threadsFixMGPA, 
-                                      0, conf.cuStream>>>(
-        d_data.digis_data,
-        d_data.sample_values,
-        d_data.sample_value_errors,
-        d_data.useless_sample_values,
-        h_data.sample_mask.getEcalSampleMaskRecordEB(),
+                                      0, cudaStream.id()>>>(
+        eventInputGPU.digis,
+        scratch.sample_values,
+        scratch.sample_value_errors,
+        scratch.useless_sample_values,
+        conditions.sampleMask.getEcalSampleMaskRecordEB(),
         totalChannels
     );
     AssertIfError
+    /*
 
     //
     // 
