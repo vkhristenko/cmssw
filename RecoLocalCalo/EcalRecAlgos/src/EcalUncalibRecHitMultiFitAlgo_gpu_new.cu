@@ -152,14 +152,20 @@ void entryPoint(
         scratch.isSaturated,
         offsetForHashes);
     AssertIfError
-    /*
+    
+    // run minimization kernels
+    v1::minimization_procedure(
+        eventInputCPU, eventInputGPU, eventOutputGPU,
+        scratch, conditions, configParameters, cudaStream);
 
+        /*
     if (conf.runV1)
         v1::minimization_procedure(d_data, h_data, conf);
     else
         v2::minimization_procedure(d_data, h_data, conf);
-    AssertIfError
+        */
 
+    /*
     //
     // TODO: this guy can run concurrently with other kernels,
     // there is no dependence on the order of execution

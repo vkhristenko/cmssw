@@ -165,11 +165,7 @@ void kernel_minimize(SampleMatrix const* noisecov,
                      SampleVector* amplitudes,
                      float* energies,
                      PulseMatrixType* pulse_matrix, 
-                     bool* statuses,
                      float* chi2s,
-                     bool const* isSaturated,
-                     bool const* hasSwitchToGain6,
-                     bool const* hasSwitchToGain1,
                      char *acState,
                      int nchannels,
                      int max_iterations) {
@@ -246,27 +242,24 @@ void minimization_procedure(
         ConditionsProducts const& conditions,
         ConfigurationParameters const& configParameters,
         cuda::stream_t<>& cudaStream) {
-    /*
-    unsigned int totalChannels = h_data.digisEB->size() + h_data.digisEE->size();
-
-    unsigned int threads_min = conf.threads.x;
+    unsigned int totalChannels = eventInputCPU.ebDigis.size() 
+        + eventInputCPU.eeDigis.size();
+//    unsigned int threads_min = conf.threads.x;
+    // TODO: configure from python
+    unsigned int threads_min = 32;
     unsigned int blocks_min = threads_min > totalChannels
         ? 1
         : (totalChannels + threads_min - 1) / threads_min;
-    kernel_minimize<<<blocks_min, threads_min, 0, conf.cuStream>>>(
-        d_data.noisecov,
-        d_data.pulse_covariances,
-        d_data.activeBXs,
-        d_data.samples,
-        d_data.amplitudes,
-        d_data.energies,
-        d_data.pulse_matrix,
-        d_data.statuses,
-        d_data.chi2,
-        d_data.isSaturated,
-        d_data.hasSwitchToGain6,
-        d_data.hasSwitchToGain1,
-        d_data.acState,
+    kernel_minimize<<<blocks_min, threads_min, 0, cudaStream.id()>>>(
+        scratch.noisecov,
+        scratch.pulse_covariances,
+        scratch.activeBXs,
+        scratch.samples,
+        (SampleVector*)eventOutputGPU.amplitudesAll,
+        eventOutputGPU.amplitude,
+        scratch.pulse_matrix,
+        eventOutputGPU.chi2,
+        scratch.acState,
         totalChannels,
         50);
     AssertIfError
@@ -281,14 +274,13 @@ void minimization_procedure(
         : (32 * totalChannels + threadsPermute - 1) / threadsPermute;
     int bytesPermute = threadsPermute * sizeof(SampleVector::Scalar);
     kernel_permute_results<<<blocksPermute, threadsPermute, 
-                             bytesPermute, conf.cuStream>>>(
-        d_data.amplitudes,
-        d_data.activeBXs,
-        d_data.energies,
-        d_data.acState,
+                             bytesPermute, cudaStream.id()>>>(
+        (SampleVector*)eventOutputGPU.amplitudesAll,
+        scratch.activeBXs,
+        eventOutputGPU.amplitude,
+        scratch.acState,
         totalChannels);
     AssertIfError
-    */
 }
 
 }
