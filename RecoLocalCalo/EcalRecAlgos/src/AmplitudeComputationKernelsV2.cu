@@ -20,8 +20,8 @@
 
 #include "inplace_fnnls.h"
 
-#include "AmplitudeComputationKernelsV2.h"
 #include "AmplitudeComputationCommonKernels.h"
+#include "AmplitudeComputationKernelsV2.h"
 
 //#define DEBUG
 
@@ -247,9 +247,12 @@ void kernelInitializeBeforeMinimizationProcedure(
 namespace v2 {
 
 void minimization_procedure(
-        device_data& d_data, 
-        host_data& h_data,
-        conf_data const& conf) {
+        EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
+        EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
+        ConditionsProducts const& conditions,
+        ConfigurationParameters const& configParameters,
+        cuda::stream_t<>& cudaStream) {
+    /*
     int iterations = 0;
     int const maxIterations = 50;
     unsigned int const totalChannels = h_data.digisEB->size() + 
@@ -293,6 +296,7 @@ void minimization_procedure(
             d_data.updatedNoiseCovariance,
             totalChannels);
         AssertIfError
+        */
 
 /*
         // call kernel to compute update covariance matrix
@@ -311,7 +315,7 @@ void minimization_procedure(
         ecal::cuda::assert_if_error();
 */
 
-
+/*
 #ifdef DEBUG_ITERATIONS
         std::cout << "updated covariance matrix\n";
 #endif
@@ -406,6 +410,7 @@ void minimization_procedure(
         d_data.acState,
         totalChannels);
     AssertIfError
+        */
 }
 
 }

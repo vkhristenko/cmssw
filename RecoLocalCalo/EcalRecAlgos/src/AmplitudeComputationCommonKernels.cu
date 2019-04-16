@@ -12,8 +12,8 @@
 #include "CondFormats/EcalObjects/interface/EcalPulseCovariances.h"
 #include "CondFormats/EcalObjects/interface/EcalSamplesCorrelation.h"
 
+#include "AmplitudeComputationCommonKernels.h"
 #include "inplace_fnnls.h"
-#include "AmplitudeComputationKernelsV1.h"
 #include "KernelHelpers.h"
 
 namespace ecal { namespace multifit {
@@ -24,14 +24,14 @@ namespace ecal { namespace multifit {
 /// TODO: is there a point to split this kernel further to separate reductions
 /// 
 __global__
-void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
+void kernel_prep_1d_and_initialize(
+                    EcalPulseShape const* shapes_in,
                     FullSampleVector* shapes_out, 
                     uint16_t const* digis_in,
                     uint32_t const* dids,
                     SampleVector* amplitudes,
                     SampleVector* amplitudesForMinimization,
                     SampleGainVector* gainsNoise,
-                    SampleGainVector* gainsPedestal,
                     float const* mean_x1,
                     float const* mean_x12,
                     float const* rms_x12,
@@ -198,17 +198,14 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
             pedestal = mean_x1[hashedId];
             gainratio = gain6Over1[hashedId] * gain12Over6[hashedId];
             gainsNoise[ch](sample) = 2;
-            gainsPedestal[ch](sample) = dynamicPedestal ? 2 : -1;
         } else if (gainId==1) {
             pedestal = mean_x12[hashedId];
             gainratio = 1.;
             gainsNoise[ch](sample) = 0;
-            gainsPedestal[ch](sample) = dynamicPedestal ? 0 : -1;
         } else if (gainId==2) {
             pedestal = mean_x6[hashedId];
             gainratio = gain12Over6[hashedId];
             gainsNoise[ch](sample)  = 1;
-            gainsPedestal[ch](sample) = dynamicPedestal ? 1 : -1;
         }
 
         // TODO: compile time constant -> branch should be non-divergent

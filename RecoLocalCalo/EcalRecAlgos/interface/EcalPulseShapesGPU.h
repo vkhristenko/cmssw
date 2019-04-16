@@ -3,8 +3,10 @@
 
 #include "CondFormats/EcalObjects/interface/EcalPulseShapes.h"
 
+#ifndef __CUDACC__
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
 #include "HeterogeneousCore/CUDACore/interface/CUDAESProduct.h"
+#endif
 
 #include <cuda/api_wrappers.h>
 
@@ -12,9 +14,10 @@ class EcalPulseShapesGPU {
 public:
     struct Product {
         ~Product();
-        float *values=nullptr;
+        EcalPulseShape *values=nullptr;
     };
 
+#ifndef __CUDACC__
     // rearrange pedestals
     EcalPulseShapesGPU(EcalPulseShapes const&);
 
@@ -33,6 +36,7 @@ private:
     std::vector<EcalPulseShape> const& valuesEE_;
 
     CUDAESProduct<Product> product_;
+#endif
 };
 
 

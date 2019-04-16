@@ -3,8 +3,10 @@
 
 #include "CondFormats/EcalObjects/interface/EcalPulseCovariances.h"
 
+#ifndef __CUDACC__
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
 #include "HeterogeneousCore/CUDACore/interface/CUDAESProduct.h"
+#endif
 
 #include <cuda/api_wrappers.h>
 
@@ -15,6 +17,7 @@ public:
         float *values=nullptr;
     };
 
+#ifndef __CUDACC__
     // rearrange pedestals
     EcalPulseCovariancesGPU(EcalPulseCovariances const&);
 
@@ -33,6 +36,7 @@ private:
     std::vector<EcalPulseCovariance> const& valuesEE_;
 
     CUDAESProduct<Product> product_;
+#endif
 };
 
 

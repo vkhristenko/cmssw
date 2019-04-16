@@ -3,8 +3,10 @@
 
 #include "CondFormats/EcalObjects/interface/EcalGainRatios.h"
 
+#ifndef __CUDACC__
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
 #include "HeterogeneousCore/CUDACore/interface/CUDAESProduct.h"
+#endif
 
 #include <cuda/api_wrappers.h>
 
@@ -14,6 +16,8 @@ public:
         ~Product();
         float *gain12Over6=nullptr, *gain6Over1=nullptr;
     };
+
+#ifndef __CUDACC__
 
     // rearrange pedestals
     EcalGainRatiosGPU(EcalGainRatios const&);
@@ -34,6 +38,8 @@ private:
     std::vector<float, CUDAHostAllocator<float>> gain6Over1_;
 
     CUDAESProduct<Product> product_;
+
+#endif
 };
 
 

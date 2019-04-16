@@ -3,8 +3,10 @@
 
 #include "CondFormats/EcalObjects/interface/EcalPedestals.h"
 
+#ifndef __CUDACC__
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
 #include "HeterogeneousCore/CUDACore/interface/CUDAESProduct.h"
+#endif
 
 #include <cuda/api_wrappers.h>
 
@@ -15,6 +17,8 @@ public:
         float *mean_x12=nullptr, *mean_x6=nullptr, *mean_x1=nullptr;
         float *rms_x12=nullptr, *rms_x6=nullptr, *rms_x1=nullptr;
     };
+
+#ifndef __CUDACC__
 
     // rearrange pedestals
     EcalPedestalsGPU(EcalPedestals const&);
@@ -39,6 +43,7 @@ private:
     std::vector<float, CUDAHostAllocator<float>> rms_x1_;
 
     CUDAESProduct<Product> product_;
+#endif
 };
 
 #endif

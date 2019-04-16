@@ -38,6 +38,7 @@
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalTimeCalibConstantsGPU.h"
 
 #include "RecoLocalCalo/EcalRecAlgos/interface/DeclsForKernels.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalUncalibRecHitMultiFitAlgo_gpu_new.h"
 
 class EcalUncalibRecHitProducerGPU
     : public edm::stream::EDProducer<edm::ExternalWork>
@@ -293,6 +294,7 @@ void EcalUncalibRecHitProducerGPU::acquire(
     // raii
     CUDAScopedContext ctx{event.streamID(), std::move(holder)};
 
+    // conditions
     setup.get<EcalPedestalsRcd>().get(pedestalsHandle_);
     setup.get<EcalGainRatiosRcd>().get(gainRatiosHandle_);
     setup.get<EcalPulseShapesRcd>().get(pulseShapesHandle_);
@@ -311,15 +313,16 @@ void EcalUncalibRecHitProducerGPU::acquire(
     auto const& timeBiasCorrectionsProduct = timeBiasCorrectionsHandle_->getProduct(ctx.stream());
     auto const& timeCalibConstantsProduct = timeCalibConstantsHandle_->getProduct(ctx.stream());
 
-    // bundle up conditions. no copies, just const refs
-    ecal::multifit::ConditionsParameters conditions {
+    // bundle up conditions
+    ecal::multifit::ConditionsProducts conditions {
         pedProduct, gainsProduct, pulseShapesProduct,
         pulseCovariancesProduct, 
         samplesCorrelationProduct,
         timeBiasCorrectionsProduct,
         timeCalibConstantsProduct,
         *sampleMaskHandle_,
-        *timeOffsetHandle_
+        *timeOffsetConstantHandle_,
+        timeCalibConstantsHandle_->getOffset()
     };
     
     //
@@ -341,7 +344,8 @@ void EcalUncalibRecHitProducerGPU::acquire(
         eventOutputDataGPU_,
         eventDataForScratchGPU_,
         conditions,
-        configParameters
+        configParameters,
+        ctx.stream()
     );
 
     // preserve token

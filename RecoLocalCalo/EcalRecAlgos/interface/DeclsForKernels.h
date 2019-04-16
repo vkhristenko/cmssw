@@ -6,6 +6,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
+#include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes_gpu.h"
 #include "DataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
 #include "DataFormats/EcalRecHitSoA/interface/RecoTypes.h"
@@ -15,6 +16,15 @@
 #include "CondFormats/EcalObjects/interface/EcalGainRatios.h"
 #include "CondFormats/EcalObjects/interface/EcalTimeBiasCorrections.h"
 #include "CondFormats/EcalObjects/interface/EcalWeightSet.h"
+#include "CondFormats/EcalObjects/interface/EcalTimeOffsetConstant.h"
+
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalPedestalsGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalGainRatiosGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalPulseShapesGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalPulseCovariancesGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalSamplesCorrelationGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalTimeBiasCorrectionsGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalTimeCalibConstantsGPU.h"
 
 class EcalPulseShape;
 class EcalSampleMask;
@@ -54,30 +64,186 @@ struct EventInputDataGPU {
     uint32_t *ids;
 
     void allocate(uint32_t size) {
-
+        cudaCheck( cudaMalloc((void**)&digis,
+            sizeof(uint16_t) * size * EcalDataFrame::MAXSAMPLES) );
+        cudaCheck( cudaMalloc((void**)&ids,
+            sizeof(uint32_t) * size) );
     }
 
     void deallocate() {
-
+        cudaCheck( cudaFree(digis) );
+        cudaCheck( cudaFree(ids) );
     }
 };
 
 struct EventOutputDataGPU final : public ::ecal::UncalibratedRecHit<::ecal::Tag::ptr> 
 {
     void allocate(uint32_t size) {
+        cudaCheck( cudaMalloc((void**)&amplitudesAll,
+            size * sizeof(SampleVector)) );
+        cudaCheck( cudaMalloc((void**)&amplitude,
+            size * sizeof(::ecal::reco::StorageScalarType)) );
+        cudaCheck( cudaMalloc((void**)&chi2,
+            size * sizeof(::ecal::reco::StorageScalarType)) );
+        cudaCheck( cudaMalloc((void**)&pedestal,
+            size * sizeof(::ecal::reco::StorageScalarType)) );
+        cudaCheck( cudaMalloc((void**)&jitter,
+            size * sizeof(::ecal::reco::StorageScalarType)) );
+        cudaCheck( cudaMalloc((void**)&jitterError,
+            size * sizeof(::ecal::reco::StorageScalarType)) );
+
+        cudaCheck( cudaMalloc((void**)&did,
+            size * sizeof(uint32_t)) );
+        cudaCheck( cudaMalloc((void**)&flags,
+            size * sizeof(uint32_t)) );
     }
 
     void deallocate() {
+        cudaCheck( cudaFree(amplitudesAll) );
+        cudaCheck( cudaFree(amplitude) );
+        cudaCheck( cudaFree(chi2) );
+        cudaCheck( cudaFree(pedestal) );
+        cudaCheck( cudaFree(jitter) );
+        cudaCheck( cudaFree(jitterError) );
+        cudaCheck( cudaFree(did) );
+        cudaCheck( cudaFree(flags) );
     }
 };
 
 struct EventDataForScratchGPU {
-    void allocate(uint32_t) {
+    SampleVector *samples = nullptr;
+    SampleGainVector *gainsNoise = nullptr;
+
+    SampleMatrix* noisecov = nullptr;
+    PulseMatrixType *pulse_matrix = nullptr;
+    FullSampleVector* epulses = nullptr;
+    BXVectorType *activeBXs = nullptr;
+    char *acState = nullptr;
+
+    bool *hasSwitchToGain6=nullptr,
+         *hasSwitchToGain1=nullptr,
+         *isSaturated=nullptr;
+
+    SampleVector::Scalar *sample_values, *sample_value_errors;
+    bool *useless_sample_values;
+    SampleVector::Scalar* chi2sNullHypot;
+    SampleVector::Scalar* sum0sNullHypot;
+    SampleVector::Scalar* sumAAsNullHypot;
+    char* pedestal_nums;
+    SampleVector::Scalar *tMaxAlphaBetas, *tMaxErrorAlphaBetas;
+    SampleVector::Scalar *accTimeMax, *accTimeWgt;
+    SampleVector::Scalar *ampMaxAlphaBeta, *ampMaxError;
+    SampleVector::Scalar *timeMax, *timeError;
+    TimeComputationState *tcState;
+
+    void allocate(uint32_t size) {
+        cudaCheck( cudaMalloc((void**)&samples,
+            size * sizeof(SampleVector)) );
+        cudaCheck( cudaMalloc((void**)&gainsNoise,
+            size * sizeof(SampleGainVector)) );
+
+        cudaCheck( cudaMalloc((void**)&epulses,
+            size * sizeof(FullSampleVector)) );
+        cudaCheck( cudaMalloc((void**)&noisecov,
+            size * sizeof(SampleMatrix)) );
+        cudaCheck( cudaMalloc((void**)&pulse_matrix,
+            size * sizeof(PulseMatrixType)) );
+        cudaCheck( cudaMalloc((void**)&activeBXs,
+            size * sizeof(BXVectorType)) );
+        cudaCheck( cudaMalloc((void**)&acState,
+            size * sizeof(char)) );
+
+        cudaCheck( cudaMalloc((void**)&hasSwitchToGain6,
+            size * sizeof(bool)) );
+        cudaCheck( cudaMalloc((void**)&hasSwitchToGain1,
+            size * sizeof(bool)) );
+        cudaCheck( cudaMalloc((void**)&isSaturated,
+            size * sizeof(bool)) );
+
+        cudaCheck( cudaMalloc((void**)&sample_values,
+            size * sizeof(SampleVector)) );
+        cudaCheck( cudaMalloc((void**)&sample_value_errors,
+            size * sizeof(SampleVector)) );
+        cudaCheck( cudaMalloc((void**)&useless_sample_values,
+            size * sizeof(bool) * EcalDataFrame::MAXSAMPLES) );
+        cudaCheck( cudaMalloc((void**)&chi2sNullHypot,
+            size * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&sum0sNullHypot,
+            size * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&sumAAsNullHypot,
+            size * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&pedestal_nums,
+            size * sizeof(char)) );
+
+        cudaCheck( cudaMalloc((void**)&tMaxAlphaBetas,
+            size * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&tMaxErrorAlphaBetas,
+            size * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&accTimeMax,
+            size * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&accTimeWgt,
+            size * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&ampMaxAlphaBeta,
+            size * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&ampMaxError,
+            size * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&timeMax,
+            size * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&timeError,
+            size * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&tcState,
+            size * sizeof(TimeComputationState)) );
     }
 
     void deallocate() {
+        cudaCheck( cudaFree(samples) );
+        cudaCheck( cudaFree(gainsNoise) );
+
+        cudaCheck( cudaFree(epulses) );
+        cudaCheck( cudaFree(noisecov) );
+        cudaCheck( cudaFree(pulse_matrix) );
+        cudaCheck( cudaFree(activeBXs) );
+        cudaCheck( cudaFree(acState) );
+
+        cudaCheck( cudaFree(hasSwitchToGain6) );
+        cudaCheck( cudaFree(hasSwitchToGain1) );
+        cudaCheck( cudaFree(isSaturated) );
+
+        cudaCheck( cudaFree(sample_values) );
+        cudaCheck( cudaFree(sample_value_errors) );
+        cudaCheck( cudaFree(useless_sample_values) );
+        cudaCheck( cudaFree(chi2sNullHypot) );
+        cudaCheck( cudaFree(sum0sNullHypot) );
+        cudaCheck( cudaFree(sumAAsNullHypot) );
+        cudaCheck( cudaFree(pedestal_nums) );
+
+        cudaCheck( cudaFree(tMaxAlphaBetas) );
+        cudaCheck( cudaFree(tMaxErrorAlphaBetas) );
+        cudaCheck( cudaFree(accTimeMax) );
+        cudaCheck( cudaFree(accTimeWgt) );
+        cudaCheck( cudaFree(ampMaxAlphaBeta) );
+        cudaCheck( cudaFree(ampMaxError) );
+        cudaCheck( cudaFree(timeMax) );
+        cudaCheck( cudaFree(timeError) );
+        cudaCheck( cudaFree(tcState) );
     }
 };
+
+// const refs products to conditions
+struct ConditionsProducts {
+    EcalPedestalsGPU::Product const& pedestals;
+    EcalGainRatiosGPU::Product const& gainRatios;
+    EcalPulseShapesGPU::Product const& pulseShapes;
+    EcalPulseCovariancesGPU::Product const& pulseCovariances;
+    EcalSamplesCorrelationGPU::Product const& samplesCorrelation;
+    EcalTimeBiasCorrectionsGPU::Product const& timeBiasCorrections;
+    EcalTimeCalibConstantsGPU::Product const& timeCalibConstants;
+    EcalSampleMask const& sampleMask;
+    EcalTimeOffsetConstant const& timeOffsetConstant;
+    uint32_t offsetForHashes;
+};
+
+//*/
 
 // parameters have a fixed type
 // Can we go by with single precision
@@ -105,100 +271,6 @@ struct ConfigurationParameters {
     type outOfTimeThreshG61pEB, outOfTimeThreshG61mEB;
 };
 
-struct device_data {
-    uint16_t *digis_data = nullptr;
-    uint32_t *ids = nullptr;
-    SampleVector* samples = nullptr;
-    SampleGainVector* gainsNoise = nullptr;
-    SampleGainVector* gainsPedestal = nullptr;
-    float* mean_x12 = nullptr;
-    float* rms_x12 = nullptr;
-    float* mean_x6 = nullptr;
-    float* rms_x6 = nullptr;
-    float* mean_x1 = nullptr;
-    float* rms_x1 = nullptr;
-//    EcalMGPAGainRatio *gains = nullptr;
-    float* gain12Over6 = nullptr;
-    float* gain6Over1 = nullptr;
-    float* timeCalibConstants = nullptr;
-    EcalPulseShape *pulses = nullptr;
-    FullSampleVector* epulses = nullptr;
-    EcalPulseCovariance *covariances = nullptr;
-    FullSampleMatrix* pulse_covariances = nullptr;
-    EcalSampleMask *sample_mask = nullptr;
-    SampleMatrix* noisecov = nullptr;
-    SampleMatrix* updatedNoiseCovariance = nullptr;
-    SampleMatrix* noiseMatrixDecomposition = nullptr;
-    PulseMatrixType* pulse_matrix = nullptr;
-    BXVectorType* bxs = nullptr;
-    BXVectorType* activeBXs = nullptr;
-    float *EBTimeCorrAmplitudeBins = nullptr;
-    int EBTimeCorrAmplitudeBins_size;
-    float *EBTimeCorrShiftBins = nullptr;
-    int EBTimeCorrShiftBins_size;
-    float *EETimeCorrAmplitudeBins = nullptr;
-    int EETimeCorrAmplitudeBins_size;
-    float *EETimeCorrShiftBins = nullptr;
-    int EETimeCorrShiftBins_size;
-
-    char *acState = nullptr;
-    char *minimizationStatePerBlock = nullptr;
-    int *npassive = nullptr;
-    std::vector<char> h_minimizationStatesPerBlock;
-
-    // rechits
-    bool* statuses = nullptr;
-    SampleVector* amplitudes = nullptr;
-    ::ecal::reco::StorageScalarType* energies = nullptr;
-    ::ecal::reco::StorageScalarType* chi2 = nullptr;
-    ::ecal::reco::StorageScalarType* pedestal = nullptr;
-    uint32_t *flags = nullptr;
-
-
-    bool* hasSwitchToGain6 = nullptr;
-    bool* hasSwitchToGain1 = nullptr;
-    bool* isSaturated = nullptr;
-
-    // from timing computation
-    SampleVector::Scalar *sample_values, *sample_value_errors;
-    bool* useless_sample_values;
-    SampleVector::Scalar* chi2sNullHypot;
-    SampleVector::Scalar* sum0sNullHypot;
-    SampleVector::Scalar* sumAAsNullHypot;
-    char* pedestal_nums;
-
-    // TODO: check if we can use __constant__ memory for these guys
-    SampleVector::Scalar *amplitudeFitParametersEB, *amplitudeFitParametersEE;
-
-    SampleVector::Scalar *tMaxAlphaBetas, *tMaxErrorAlphaBetas;
-    SampleVector::Scalar *accTimeMax, *accTimeWgt;
-    SampleVector::Scalar *ampMaxAlphaBeta, *ampMaxError;
-    SampleVector::Scalar *timeMax, *timeError;
-    float *jitter, *jitterError;
-    TimeComputationState *tcState;
-    unsigned int timeFitParametersSizeEB, timeFitParametersSizeEE;
-    SampleVector::Scalar timeFitLimitsFirstEB, timeFitLimitsSecondEB;
-    SampleVector::Scalar timeFitLimitsFirstEE, timeFitLimitsSecondEE;
-    // check if cosntant mem is better for these 2
-    SampleVector::Scalar *timeFitParametersEB, *timeFitParametersEE;
-    SampleVector::Scalar *amplitudeMax;
-
-    double *G12SamplesCorrelationEB, *G6SamplesCorrelationEB, *G1SamplesCorrelationEB;
-    double *G12SamplesCorrelationEE, *G6SamplesCorrelationEE, *G1SamplesCorrelationEE;
-
-    // use constant mem?
-    SampleVector::Scalar timeConstantTermEB, timeConstantTermEE;
-
-    // time calib constants
-    float offsetTimeValue;
-    float timeNconstEB, timeNconstEE;
-    float amplitudeThreshEE, amplitudeThreshEB;
-    float outOfTimeThreshG12pEB, outOfTimeThreshG12mEB;
-    float outOfTimeThreshG12pEE, outOfTimeThreshG12mEE;
-    float outOfTimeThreshG61pEE, outOfTimeThreshG61mEE;
-    float outOfTimeThreshG61pEB, outOfTimeThreshG61mEB;
-};
-
 struct xyz {
     int x,y,z;
 };
@@ -207,39 +279,6 @@ struct conf_data {
     xyz threads;
     bool runV1;
     cudaStream_t cuStream;
-};
-
-struct pedestal_data {
-    std::vector<float> mean_x12;
-    std::vector<float> rms_x12;
-    std::vector<float> mean_x6;
-    std::vector<float> rms_x6;
-    std::vector<float> mean_x1;
-    std::vector<float> rms_x1;
-};
-
-struct mgpagain_ratio_data {
-    std::vector<float> gain12Over6;
-    std::vector<float> gain6Over1;
-};
-
-struct host_data {
-    EBDigiCollection const *digisEB;
-    EEDigiCollection const *digisEE; 
-//    std::vector<EcalPedestal> const *pedestals;
-    pedestal_data const& ped_data;
-//    std::vector<EcalMGPAGainRatio> const *gains;
-    mgpagain_ratio_data const& gainratio_data;
-    EcalSampleMask const& sample_mask;
-    std::vector<EcalXtalGroupId> const *xtals;
-    std::vector<EcalPulseShape> const *pulse_shapes;
-    std::vector<EcalPulseCovariance> const *pulse_covariances;
-    EcalTimeBiasCorrections const *time_bias_corrections;
-    std::vector<float> const& timeCalibConstants;
-    BXVectorType const* bxs;
-    ecal::UncalibratedRecHit<ecal::Tag::soa>& rechits_soa_eb;
-    ecal::UncalibratedRecHit<ecal::Tag::soa>& rechits_soa_ee;
-    EcalSamplesCorrelation const* noiseCovariances;
 };
 
 }}
