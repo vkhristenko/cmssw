@@ -116,6 +116,7 @@ struct EventDataForScratchGPU {
 
     SampleMatrix* noisecov = nullptr;
     PulseMatrixType *pulse_matrix = nullptr;
+    FullSampleMatrix* pulse_covariances = nullptr;
     FullSampleVector* epulses = nullptr;
     BXVectorType *activeBXs = nullptr;
     char *acState = nullptr;
@@ -144,6 +145,8 @@ struct EventDataForScratchGPU {
 
         cudaCheck( cudaMalloc((void**)&epulses,
             size * sizeof(FullSampleVector)) );
+        cudaCheck( cudaMalloc((void**)&pulse_covariances,
+            size * sizeof(FullSampleMatrix)) );
         cudaCheck( cudaMalloc((void**)&noisecov,
             size * sizeof(SampleMatrix)) );
         cudaCheck( cudaMalloc((void**)&pulse_matrix,
@@ -200,6 +203,7 @@ struct EventDataForScratchGPU {
         cudaCheck( cudaFree(gainsNoise) );
 
         cudaCheck( cudaFree(epulses) );
+        cudaCheck( cudaFree(pulse_covariances) );
         cudaCheck( cudaFree(noisecov) );
         cudaCheck( cudaFree(pulse_matrix) );
         cudaCheck( cudaFree(activeBXs) );

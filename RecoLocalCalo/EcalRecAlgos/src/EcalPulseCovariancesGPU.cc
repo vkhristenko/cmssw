@@ -25,9 +25,8 @@ EcalPulseCovariancesGPU::Product const& EcalPulseCovariancesGPU::getProduct(
                                   (this->valuesEE_.size() + this->valuesEB_.size()) 
                                   * sizeof(EcalPulseCovariance)) );
            
-            // offset in terms floats not total bytes
-            uint32_t offset = this->valuesEB_.size() 
-                * EcalPulseShape::TEMPLATESAMPLES * EcalPulseShape::TEMPLATESAMPLES;
+            // offset in terms of sizeof(EcalPulseCovariance)
+            uint32_t offset = this->valuesEB_.size();
 
             // transfer eb 
             cudaCheck( cudaMemcpyAsync(product.values,
