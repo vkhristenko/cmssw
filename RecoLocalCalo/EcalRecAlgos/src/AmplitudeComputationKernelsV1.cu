@@ -171,10 +171,6 @@ void kernel_minimize(SampleMatrix const* noisecov,
                      int max_iterations) {
     int idx = threadIdx.x + blockDim.x*blockIdx.x;
     if (idx < nchannels) {
-#define DEBUG_KERNEL_MINIMIZE
-#ifdef DEBUG_KERNEL_MINIMIZE
-        printf("idx = %d state = %d\n", idx, static_cast<int>(acState[idx]));
-#endif
         if (static_cast<MinimizationState>(acState[idx]) == 
             MinimizationState::Precomputed)
             return;
