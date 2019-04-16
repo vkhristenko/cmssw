@@ -122,37 +122,37 @@ void entryPoint(
         gainSwitchUseMaxSampleEE,
         totalChannels);
     AssertIfError
-    /*
 
     //
     // 2d preparation kernel
     //
     int blocks_2d = totalChannels;
     dim3 threads_2d{10, 10};
-    kernel_prep_2d<<<blocks_2d, threads_2d, 0, conf.cuStream>>>(
-        d_data.covariances, d_data.pulse_covariances,
-        d_data.gainsNoise,
-        d_data.ids,
-        d_data.rms_x12,
-        d_data.rms_x6,
-        d_data.rms_x1,
-        d_data.gain12Over6,
-        d_data.gain6Over1,
-        d_data.G12SamplesCorrelationEB,
-        d_data.G6SamplesCorrelationEB,
-        d_data.G1SamplesCorrelationEB,
-        d_data.G12SamplesCorrelationEE,
-        d_data.G6SamplesCorrelationEE,
-        d_data.G1SamplesCorrelationEE,
-        d_data.noisecov,
-        d_data.pulse_matrix,
-        d_data.epulses,
-        d_data.bxs,
-        d_data.hasSwitchToGain6,
-        d_data.hasSwitchToGain1,
-        d_data.isSaturated,
-        offsetForHashesPlaceholder);
+    kernel_prep_2d<<<blocks_2d, threads_2d, 0, cudaStream.id()>>>(
+        conditions.pulseCovariances.values, 
+        scratch.pulse_covariances,
+        scratch.gainsNoise,
+        eventInputGPU.ids,
+        conditions.pedestals.rms_x12,
+        conditions.pedestals.rms_x6,
+        conditions.pedestals.rms_x1,
+        conditions.gainRatios.gain12Over6,
+        conditions.gainRatios.gain6Over1,
+        conditions.samplesCorrelation.EBG12SamplesCorrelation,
+        conditions.samplesCorrelation.EBG6SamplesCorrelation,
+        conditions.samplesCorrelation.EBG1SamplesCorrelation,
+        conditions.samplesCorrelation.EEG12SamplesCorrelation,
+        conditions.samplesCorrelation.EEG6SamplesCorrelation,
+        conditions.samplesCorrelation.EEG1SamplesCorrelation,
+        scratch.noisecov,
+        scratch.pulse_matrix,
+        scratch.epulses,
+        scratch.hasSwitchToGain6,
+        scratch.hasSwitchToGain1,
+        scratch.isSaturated,
+        offsetForHashes);
     AssertIfError
+    /*
 
     if (conf.runV1)
         v1::minimization_procedure(d_data, h_data, conf);

@@ -335,7 +335,6 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                     SampleMatrix* noisecov,
                     PulseMatrixType* pulse_matrix,
                     FullSampleVector const* pulse_shape,
-                    BXVectorType const* bxs,
                     bool const* hasSwitchToGain6,
                     bool const* hasSwitchToGain1,
                     bool const* isSaturated,
@@ -465,9 +464,10 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
     }
 
     // pulse matrix
-    int bx = (*bxs)(tx);
-    int offset = 7 - 3 - bx;
-    float value = pulse_shape[ch](offset + ty);
+    int const bx = tx - 5; // -5 -4 -3 ... 3 4
+//    int bx = (*bxs)(tx);
+    int const offset = 7 - 3 - bx;
+    float const value = pulse_shape[ch](offset + ty);
     pulse_matrix[ch](ty, tx) = value;
 }
 

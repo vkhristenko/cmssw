@@ -14,7 +14,7 @@ class EcalPulseCovariancesGPU {
 public:
     struct Product {
         ~Product();
-        float *values=nullptr;
+        EcalPulseCovariance *values=nullptr;
     };
 
 #ifndef __CUDACC__
