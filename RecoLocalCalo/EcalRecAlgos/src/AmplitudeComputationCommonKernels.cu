@@ -259,6 +259,9 @@ void kernel_prep_1d_and_initialize(
 //                energies[ch] = amplitudes[ch][sample_max];
                 energies[ch] = amplitude;
 
+                printf("check_hasSwitchToGain0 is true ch = %d amplitude = %f\n",
+                    ch, static_cast<float>(amplitude));
+
                 // check if samples before sample_max have true
                 bool saturated_before_max = false;
                 #pragma unroll
@@ -294,6 +297,7 @@ void kernel_prep_1d_and_initialize(
                 energies[ch] = max_amplitude / shape_value;
                 acState[ch] = static_cast<char>(MinimizationState::Precomputed);
                 flags[ch] = flag;
+                printf("hasGainSwitch and gainSwitchUseMaxSample is true ch = %d energy = %f\n", ch, static_cast<float>(max_amplitude / shape_value));
                 return;
             }
             
