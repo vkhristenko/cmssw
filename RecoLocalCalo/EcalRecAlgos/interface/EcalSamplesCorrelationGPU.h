@@ -3,8 +3,10 @@
 
 #include "CondFormats/EcalObjects/interface/EcalSamplesCorrelation.h"
 
+#ifndef __CUDACC__
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
 #include "HeterogeneousCore/CUDACore/interface/CUDAESProduct.h"
+#endif
 
 #include <cuda/api_wrappers.h>
 
@@ -20,6 +22,7 @@ public:
                *EEG1SamplesCorrelation=nullptr;
     };
 
+#ifndef __CUDACC__
     // rearrange pedestals
     EcalSamplesCorrelationGPU(EcalSamplesCorrelation const&);
 
@@ -41,6 +44,7 @@ private:
     std::vector<double> const& EEG1SamplesCorrelation_;
 
     CUDAESProduct<Product> product_;
+#endif
 };
 
 

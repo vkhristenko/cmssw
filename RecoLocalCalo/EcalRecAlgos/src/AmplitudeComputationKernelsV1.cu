@@ -241,9 +241,12 @@ void kernel_minimize(SampleMatrix const* noisecov,
 namespace v1 {
 
 void minimization_procedure(
-        device_data& d_data,
-        host_data const& h_data,
-        conf_data const& conf) {
+        EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
+        EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
+        ConditionsProducts const& conditions,
+        ConfigurationParameters const& configParameters,
+        cuda::stream_t<>& cudaStream) {
+    /*
     unsigned int totalChannels = h_data.digisEB->size() + h_data.digisEE->size();
 
     unsigned int threads_min = conf.threads.x;
@@ -285,6 +288,7 @@ void minimization_procedure(
         d_data.acState,
         totalChannels);
     AssertIfError
+    */
 }
 
 }

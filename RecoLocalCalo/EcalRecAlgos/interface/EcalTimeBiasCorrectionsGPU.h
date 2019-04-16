@@ -3,8 +3,10 @@
 
 #include "CondFormats/EcalObjects/interface/EcalTimeBiasCorrections.h"
 
+#ifndef __CUDACC__
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
 #include "HeterogeneousCore/CUDACore/interface/CUDAESProduct.h"
+#endif
 
 #include <cuda/api_wrappers.h>
 
@@ -16,6 +18,7 @@ public:
         float *EETimeCorrAmplitudeBins, *EETimeCorrShiftBins;
     };
 
+#ifndef __CUDACC__
     // rearrange pedestals
     EcalTimeBiasCorrectionsGPU(EcalTimeBiasCorrections const&);
 
@@ -35,6 +38,7 @@ private:
     std::vector<float> const& EETimeCorrShiftBins_;
 
     CUDAESProduct<Product> product_;
+#endif
 };
 
 

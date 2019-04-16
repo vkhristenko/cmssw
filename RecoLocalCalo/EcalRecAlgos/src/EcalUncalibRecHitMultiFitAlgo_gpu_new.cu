@@ -28,25 +28,28 @@
 
 namespace ecal { namespace multifit {
    
-void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
+void entryPoint(
+        EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
+        EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
+        ConditionsProducts const& conditions, 
+        ConfigurationParameters const& configParameters,
+        cuda::stream_t<>& cudaStream) {
     using digis_type = std::vector<uint16_t>;
     using dids_type = std::vector<uint32_t>;
-    bool barrel = true;
     bool const gainSwitchUseMaxSampleEB = true; // accodring to the cpu setup
     bool const gainSwitchUseMaxSampleEE = false;
 
-    // TODO: handle this properly
-    uint32_t const offsetForHashesPlaceholder = 1000;
-
-    unsigned int totalChannels = h_data.digisEB->size() + h_data.digisEE->size();
+    uint32_t const offsetForHashes = conditions.offsetForHashes;
+    unsigned int totalChannels = eventInputCPU.ebDigis.size() 
+        + eventInputCPU.eeDigis.size();
     
     // temporary for recording
     cudaEvent_t start_event;
     cudaEvent_t end_event;
-    cudaEventCreate(&start_event);
-    cudaEventCreate(&end_event);
+    cudaCheck( cudaEventCreate(&start_event) );
+    cudaCheck( cudaEventCreate(&end_event) );
 
-    cudaEventRecord(start_event, 0);
+    cudaCheck (cudaEventRecord(start_event, 0) );
 
     //
     // in what follows we copy eb then ee.
@@ -54,138 +57,30 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     //
 
     // 
-    // copy digis data
-    // again, this will not be really async with default std::vector allocator
+    // copy event data: digis + ids, not really async as vectors have default
+    // allocators
     //
-    cudaMemcpyAsync(d_data.digis_data, 
-               h_data.digisEB->data().data(),
-               h_data.digisEB->data().size() * sizeof(digis_type::value_type),
+    cudaCheck( cudaMemcpyAsync(eventInputGPU.digis, 
+               eventInputCPU.ebDigis.data().data(),
+               eventInputCPU.eeDigis.data().size() * sizeof(digis_type::value_type),
                cudaMemcpyHostToDevice,
-               conf.cuStream);
-    cudaMemcpyAsync(d_data.digis_data + h_data.digisEB->data().size(), 
-               h_data.digisEE->data().data(),
-               h_data.digisEE->data().size() * sizeof(digis_type::value_type),
+               cudaStream.id()) );
+    cudaCheck( cudaMemcpyAsync(eventInputGPU.digis + eventInputCPU.ebDigis.data().size(), 
+               eventInputCPU.eeDigis.data().data(),
+               eventInputCPU.eeDigis.data().size() * sizeof(digis_type::value_type),
                cudaMemcpyHostToDevice,
-               conf.cuStream);
+               cudaStream.id()));
 
-    // copy ids
-    cudaMemcpyAsync(d_data.ids, 
-               h_data.digisEB->ids().data(),
-               h_data.digisEB->ids().size() * sizeof(dids_type::value_type),
+    cudaCheck( cudaMemcpyAsync(eventInputGPU.ids, 
+               eventInputCPU.ebDigis.ids().data(),
+               eventInputCPU.ebDigis.ids().size() * sizeof(dids_type::value_type),
                cudaMemcpyHostToDevice,
-               conf.cuStream);
-    cudaMemcpyAsync(d_data.ids + h_data.digisEB->ids().size(), 
-               h_data.digisEE->ids().data(),
-               h_data.digisEE->ids().size() * sizeof(dids_type::value_type),
+               cudaStream.id()) );
+    cudaCheck (cudaMemcpyAsync(eventInputGPU.ids + eventInputCPU.ebDigis.ids().size(), 
+               eventInputCPU.eeDigis.ids().data(),
+               eventInputCPU.eeDigis.ids().size() * sizeof(dids_type::value_type),
                cudaMemcpyHostToDevice,
-               conf.cuStream);
-
-    // copy pedestal means/rmss
-    cudaMemcpyAsync(d_data.mean_x12, h_data.ped_data.mean_x12.data(),
-        h_data.ped_data.mean_x12.size() * sizeof(float),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-    cudaMemcpyAsync(d_data.rms_x12, h_data.ped_data.rms_x12.data(),
-        h_data.ped_data.rms_x12.size() * sizeof(float),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-    cudaMemcpyAsync(d_data.mean_x6, h_data.ped_data.mean_x6.data(),
-        h_data.ped_data.mean_x6.size() * sizeof(float),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-    cudaMemcpyAsync(d_data.rms_x6, h_data.ped_data.rms_x6.data(),
-        h_data.ped_data.rms_x6.size() * sizeof(float),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-    cudaMemcpyAsync(d_data.mean_x1, h_data.ped_data.mean_x1.data(),
-        h_data.ped_data.mean_x1.size() * sizeof(float),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-    cudaMemcpyAsync(d_data.rms_x1, h_data.ped_data.rms_x1.data(),
-        h_data.ped_data.rms_x1.size() * sizeof(float),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-
-    // copy gains
-    cudaMemcpyAsync(d_data.gain12Over6, h_data.gainratio_data.gain12Over6.data(),
-        h_data.gainratio_data.gain12Over6.size() * sizeof(float),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-    cudaMemcpyAsync(d_data.gain6Over1, h_data.gainratio_data.gain6Over1.data(),
-        h_data.gainratio_data.gain6Over1.size() * sizeof(float),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-
-    // copy pulse shape information
-    cudaMemcpyAsync(d_data.pulses, h_data.pulse_shapes->data(),
-        h_data.pulse_shapes->size() * sizeof(EcalPulseShape),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-    cudaMemcpyAsync(d_data.covariances, h_data.pulse_covariances->data(),
-        h_data.pulse_covariances->size() * sizeof(EcalPulseCovariance),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-
-    // copy sample correlations
-    cudaMemcpyAsync(d_data.G12SamplesCorrelationEB, 
-               h_data.noiseCovariances->EBG12SamplesCorrelation.data(),
-               EcalDataFrame::MAXSAMPLES * sizeof(double),
-               cudaMemcpyHostToDevice,
-               conf.cuStream);
-    cudaMemcpyAsync(d_data.G6SamplesCorrelationEB,
-               h_data.noiseCovariances->EBG6SamplesCorrelation.data(),
-               EcalDataFrame::MAXSAMPLES * sizeof(double),
-               cudaMemcpyHostToDevice,
-               conf.cuStream);
-    cudaMemcpyAsync(d_data.G1SamplesCorrelationEB, 
-               h_data.noiseCovariances->EBG1SamplesCorrelation.data(),
-               EcalDataFrame::MAXSAMPLES * sizeof(double),
-               cudaMemcpyHostToDevice,
-               conf.cuStream);
-    cudaMemcpyAsync(d_data.G12SamplesCorrelationEE, 
-               h_data.noiseCovariances->EEG12SamplesCorrelation.data(),
-               EcalDataFrame::MAXSAMPLES * sizeof(double),
-               cudaMemcpyHostToDevice,
-               conf.cuStream);
-    cudaMemcpyAsync(d_data.G6SamplesCorrelationEE,
-               h_data.noiseCovariances->EEG6SamplesCorrelation.data(),
-               EcalDataFrame::MAXSAMPLES * sizeof(double),
-               cudaMemcpyHostToDevice,
-               conf.cuStream);
-    cudaMemcpyAsync(d_data.G1SamplesCorrelationEE, 
-               h_data.noiseCovariances->EEG1SamplesCorrelation.data(),
-               EcalDataFrame::MAXSAMPLES * sizeof(double),
-               cudaMemcpyHostToDevice,
-               conf.cuStream);
-
-    // copy time bias corrections
-    cudaMemcpyAsync(d_data.EBTimeCorrAmplitudeBins, 
-        h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.data(),
-        sizeof(float) * h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.size(),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-    cudaMemcpyAsync(d_data.EBTimeCorrShiftBins, 
-        h_data.time_bias_corrections->EBTimeCorrShiftBins.data(),
-        sizeof(float) * h_data.time_bias_corrections->EBTimeCorrShiftBins.size(),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-    cudaMemcpyAsync(d_data.EETimeCorrAmplitudeBins, 
-        h_data.time_bias_corrections->EETimeCorrAmplitudeBins.data(),
-        sizeof(float) * h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-    cudaMemcpyAsync(d_data.EETimeCorrShiftBins, 
-        h_data.time_bias_corrections->EETimeCorrShiftBins.data(),
-        sizeof(float) * h_data.time_bias_corrections->EETimeCorrShiftBins.size(),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-   
-    // copy bxs
-    cudaMemcpyAsync(d_data.bxs, h_data.bxs,
-        sizeof(BXVectorType),
-        cudaMemcpyHostToDevice,
-        conf.cuStream);
-    AssertIfError
+               cudaStream.id()) );
 
     // 
     // 1d preparation kernel
@@ -200,33 +95,34 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     );
     std::cout << "nchannels = " << totalChannels << std::endl;
     kernel_prep_1d_and_initialize<<<blocks_1d, threads_1d, 
-                                    shared_bytes, conf.cuStream>>>(
-        d_data.pulses, d_data.epulses,
-        d_data.digis_data, 
-        d_data.ids,
-        d_data.samples,
-        d_data.amplitudes,
-        d_data.gainsNoise,
-        d_data.gainsPedestal,
-        d_data.mean_x1,
-        d_data.mean_x12,
-        d_data.rms_x12,
-        d_data.mean_x6,
-        d_data.gain6Over1,
-        d_data.gain12Over6,
-        d_data.hasSwitchToGain6,
-        d_data.hasSwitchToGain1,
-        d_data.isSaturated,
-        d_data.energies,
-        d_data.chi2,
-        d_data.pedestal,
-        d_data.flags,
-        d_data.acState,
-        offsetForHashesPlaceholder,
+                                    shared_bytes, cudaStream.id()>>>(
+        conditions.pulseShapes.values, 
+        scratch.epulses,
+        eventInputGPU.digis, 
+        eventInputGPU.ids,
+        scratch.samples,
+        (SampleVector*)eventOutputGPU.amplitudesAll,
+        scratch.gainsNoise,
+        conditions.pedestals.mean_x1,
+        conditions.pedestals.mean_x12,
+        conditions.pedestals.rms_x12,
+        conditions.pedestals.mean_x6,
+        conditions.gainRatios.gain6Over1,
+        conditions.gainRatios.gain12Over6,
+        scratch.hasSwitchToGain6,
+        scratch.hasSwitchToGain1,
+        scratch.isSaturated,
+        eventOutputGPU.amplitude,
+        eventOutputGPU.chi2,
+        eventOutputGPU.pedestal,
+        eventOutputGPU.flags,
+        scratch.acState,
+        offsetForHashes,
         gainSwitchUseMaxSampleEB,
         gainSwitchUseMaxSampleEE,
         totalChannels);
     AssertIfError
+    /*
 
     //
     // 2d preparation kernel
@@ -400,6 +296,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
         totalChannels
     );
     AssertIfError
+        */
 
     //
     //
@@ -421,6 +318,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
     );
     AssertIfError
     */
+        /*
 
     //
     //
@@ -584,6 +482,7 @@ void scatter(host_data& h_data, device_data& d_data, conf_data const& conf) {
                cudaMemcpyDeviceToHost,
                conf.cuStream);
     AssertIfError
+        */
 
     cudaEventRecord(end_event, 0);
     cudaEventSynchronize(end_event);
