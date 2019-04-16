@@ -62,7 +62,7 @@ void entryPoint(
     //
     cudaCheck( cudaMemcpyAsync(eventInputGPU.digis, 
                eventInputCPU.ebDigis.data().data(),
-               eventInputCPU.eeDigis.data().size() * sizeof(digis_type::value_type),
+               eventInputCPU.ebDigis.data().size() * sizeof(digis_type::value_type),
                cudaMemcpyHostToDevice,
                cudaStream.id()) );
     cudaCheck( cudaMemcpyAsync(eventInputGPU.digis + eventInputCPU.ebDigis.data().size(), 
