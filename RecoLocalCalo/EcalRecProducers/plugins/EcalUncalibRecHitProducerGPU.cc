@@ -372,14 +372,28 @@ void EcalUncalibRecHitProducerGPU::produce(
     DurationMeasurer<std::chrono::milliseconds> timer{std::string{"produce duration"}};
     CUDAScopedContext ctx{std::move(ctxToken_)};
 
-    // rec hits
+    //
+    // retrieve 
+    //
+    edm::Handle<EBDigiCollection> ebDigis;
+    edm::Handle<EEDigiCollection> eeDigis;
+    event.getByToken(digisTokenEB_, ebDigis);
+    event.getByToken(digisTokenEE_, eeDigis);
+    auto const& ebIds = ebDigis->ids();
+    auto const& eeIds = eeDigis->ids();
+
+    // rec hit collections
     auto ebRecHits = std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>();
     auto eeRecHits = std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>();
     ebRecHits->resize(nHitsEB_);
     eeRecHits->resize(nHitsEE_);
-   
-    if (shouldTransferToHost_)
+
+    if (shouldTransferToHost_) {
+        // no need to transfer ids, just copy
+        ebRecHits->did = ebIds;
+        eeRecHits->did = eeIds;
         transferToHost(*ebRecHits, *eeRecHits, ctx.stream());
+    }
 
     event.put(std::move(ebRecHits), recHitsLabelEB_);
     event.put(std::move(eeRecHits), recHitsLabelEE_);
