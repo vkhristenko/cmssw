@@ -93,7 +93,6 @@ void entryPoint(
         sizeof(bool) + sizeof(bool) + sizeof(bool) + sizeof(bool) + sizeof(char)
         + sizeof(bool)
     );
-    std::cout << "nchannels = " << totalChannels << std::endl;
     kernel_prep_1d_and_initialize<<<blocks_1d, threads_1d, 
                                     shared_bytes, cudaStream.id()>>>(
         conditions.pulseShapes.values, 

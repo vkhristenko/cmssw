@@ -33,8 +33,6 @@ EcalGainRatiosGPU::Product const& EcalGainRatiosGPU::getProduct(
 {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
         [this](EcalGainRatiosGPU::Product& product, cuda::stream_t<>& cudaStream) {
-            std::cout << __PRETTY_FUNCTION__ << std::endl;
-
             // malloc
             cudaCheck( cudaMalloc((void**)&product.gain12Over6,
                                   this->gain12Over6_.size() * sizeof(float)) );
