@@ -12,11 +12,10 @@
 <use   name="rootminuit"/>
 <use   name="eigen"/>
 <use   name="cuda"/>
-<use   name="DataFormats/EcaRecHitSoA"/>
+<use   name="DataFormats/EcalRecHitSoA"/>
 <use   name="HeterogeneousCore/CUDAUtilities"/>
 <use   name="cuda-api-wrappers"/>
 <use   name="HeterogeneousCore/CUDACore"/>
-<flags CUDA_FLAGS="-Xptxas -v"/>
 
 <export>
   <lib   name="1"/>

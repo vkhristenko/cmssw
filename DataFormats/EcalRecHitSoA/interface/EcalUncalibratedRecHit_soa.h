@@ -7,6 +7,8 @@
 #include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
 #include "DataFormats/EcalRecHitSoA/interface/RecoTypes.h"
 
+#include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
+
 namespace ecal {
 
 namespace Tag {
@@ -19,7 +21,11 @@ struct ptr {};
 
 template<typename T, typename L = Tag::soa>
 struct type_wrapper {
+#ifndef ECAL_MULTIFIT_DONOT_USE_PINNED_MEM
+    using type = std::vector<T, CUDAHostAllocator<T>>;
+#else
     using type = std::vector<T>;
+#endif
 };
 
 template<typename T>

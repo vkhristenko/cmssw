@@ -82,10 +82,12 @@ private:
     ecal::multifit::EventInputDataGPU eventInputDataGPU_;
     ecal::multifit::EventOutputDataGPU eventOutputDataGPU_;
     ecal::multifit::EventDataForScratchGPU eventDataForScratchGPU_;
-    uint32_t nHitsEB_, nHitsEE_;
     bool shouldTransferToHost_{true};
 
     CUDAContextToken ctxToken_;
+
+    std::unique_ptr<ecal::UncalibratedRecHit<ecal::Tag::soa>> ebRecHits_{nullptr}, 
+                                                              eeRecHits_{nullptr};
 
     uint32_t maxNumberHits_;
 };
@@ -358,8 +360,19 @@ void EcalUncalibRecHitProducerGPU::acquire(
         ctx.stream()
     );
 
-    nHitsEB_ = ebDigis->size();
-    nHitsEE_ = eeDigis->size();
+    // allocate for the result while kernels are running
+    ebRecHits_ = std::move(
+        std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>());
+    ebRecHits_->resize(ebDigis->size());
+    eeRecHits_ = std::move(
+        std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>());
+    eeRecHits_->resize(eeDigis->size());
+
+    // det ids are host copy only - no need to run device -> host
+    std::memcpy(ebRecHits_->did.data(), ebDigis->ids().data(), 
+        ebDigis->ids().size() * sizeof(uint32_t));
+    std::memcpy(eeRecHits_->did.data(), eeDigis->ids().data(),
+        eeDigis->ids().size() * sizeof(uint32_t));
 
     // preserve token
     ctxToken_ = ctx.toToken();
@@ -372,38 +385,22 @@ void EcalUncalibRecHitProducerGPU::produce(
     DurationMeasurer<std::chrono::milliseconds> timer{std::string{"produce duration"}};
     CUDAScopedContext ctx{std::move(ctxToken_)};
 
-    //
-    // retrieve 
-    //
-    edm::Handle<EBDigiCollection> ebDigis;
-    edm::Handle<EEDigiCollection> eeDigis;
-    event.getByToken(digisTokenEB_, ebDigis);
-    event.getByToken(digisTokenEE_, eeDigis);
-    auto const& ebIds = ebDigis->ids();
-    auto const& eeIds = eeDigis->ids();
-
-    // rec hit collections
-    auto ebRecHits = std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>();
-    auto eeRecHits = std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>();
-    ebRecHits->resize(nHitsEB_);
-    eeRecHits->resize(nHitsEE_);
-
     if (shouldTransferToHost_) {
-        // no need to transfer ids, just copy
-        ebRecHits->did = ebIds;
-        eeRecHits->did = eeIds;
-        transferToHost(*ebRecHits, *eeRecHits, ctx.stream());
+        // rec hits objects were not originally member variables
+        transferToHost(*ebRecHits_, *eeRecHits_, ctx.stream());
+        
+        // TODO
+        // for now just sync on the host when transferring back products
+        cudaStreamSynchronize(ctx.stream().id());
     }
 
-    event.put(std::move(ebRecHits), recHitsLabelEB_);
-    event.put(std::move(eeRecHits), recHitsLabelEE_);
+    event.put(std::move(ebRecHits_), recHitsLabelEB_);
+    event.put(std::move(eeRecHits_), recHitsLabelEE_);
 }
 
 void EcalUncalibRecHitProducerGPU::transferToHost(
         RecHitType& ebRecHits, RecHitType& eeRecHits,
         cuda::stream_t<>& cudaStream) {
-    // these copies are not async - default vector allocator
-    // TODO
     cudaCheck( cudaMemcpyAsync(ebRecHits.amplitude.data(),
         eventOutputDataGPU_.amplitude,
         ebRecHits.amplitude.size() * sizeof(ecal::reco::StorageScalarType),
@@ -480,8 +477,6 @@ void EcalUncalibRecHitProducerGPU::transferToHost(
         eeRecHits.amplitudesAll.size() * sizeof(ecal::reco::ComputationScalarType),
         cudaMemcpyDeviceToHost,
         cudaStream.id()) );
-
-    cudaStreamSynchronize(cudaStream.id());
 }
 
 DEFINE_FWK_MODULE(EcalUncalibRecHitProducerGPU);
