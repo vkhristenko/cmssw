@@ -12,8 +12,6 @@ EcalPedestalsGPU::EcalPedestalsGPU(EcalPedestals const& pedestals)
     , rms_x1_(pedestals.size())
 {   
 
-    std::cout << __PRETTY_FUNCTION__ << std::endl;
-    
     // fill in eb
     auto const& barrelValues = pedestals.barrelItems();
     for (unsigned int i=0; i<barrelValues.size(); i++) {
@@ -53,8 +51,6 @@ EcalPedestalsGPU::Product const& EcalPedestalsGPU::getProduct(
 {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
         [this](EcalPedestalsGPU::Product& product, cuda::stream_t<>& cudaStream) {
-            std::cout << __PRETTY_FUNCTION__ << std::endl;
-
             // malloc
             cudaCheck( cudaMalloc((void**)&product.mean_x12,
                                   this->mean_x12_.size() * sizeof(float)) );

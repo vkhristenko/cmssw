@@ -24,8 +24,6 @@ EcalTimeBiasCorrectionsGPU::Product const& EcalTimeBiasCorrectionsGPU::getProduc
 {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
         [this](EcalTimeBiasCorrectionsGPU::Product& product, cuda::stream_t<>& cudaStream) {
-            std::cout << __PRETTY_FUNCTION__ << std::endl;
-
             // to get the size of vectors later on
             // should be removed and host conditions' objects used directly
             product.EBTimeCorrAmplitudeBinsSize = 

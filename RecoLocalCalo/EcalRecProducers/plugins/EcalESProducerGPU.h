@@ -17,14 +17,11 @@ public:
     explicit EcalESProducerGPU(edm::ParameterSet const& ps) 
         : label_{ps.getParameter<std::string>("label")}
     {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
         std::string name = ps.getParameter<std::string>("ComponentName");
         setWhatProduced(this, name);
     }
    
     std::unique_ptr<Target> produce(Record const& record) {
-        std::cout << __PRETTY_FUNCTION__ << std::endl;
-        
         // retrieve conditions in old format 
         edm::ESTransientHandle<Source> product;
         record.get(label_, product);
