@@ -16,11 +16,13 @@ public:
         ~Product();
         float *EBTimeCorrAmplitudeBins, *EBTimeCorrShiftBins;
         float *EETimeCorrAmplitudeBins, *EETimeCorrShiftBins;
+        int EBTimeCorrAmplitudeBinsSize, EETimeCorrAmplitudeBinsSize;
     };
 
-#ifndef __CUDACC__
     // rearrange pedestals
     EcalTimeBiasCorrectionsGPU(EcalTimeBiasCorrections const&);
+
+#ifndef __CUDACC__
 
     // will call dealloation for Product thru ~Product
     ~EcalTimeBiasCorrectionsGPU() = default;
@@ -30,6 +32,12 @@ public:
 
     // 
     static std::string name() { return std::string{"ecalTimeBiasCorrectionsGPU"}; }
+#endif
+
+    std::vector<float> const& EBTimeCorrAmplitudeBins() const
+    { return EBTimeCorrAmplitudeBins_; }
+    std::vector<float> const& EETimeCorrAmplitudeBins() const 
+    { return EETimeCorrAmplitudeBins_; }
 
 private:
     std::vector<float> const& EBTimeCorrAmplitudeBins_;
@@ -37,6 +45,7 @@ private:
     std::vector<float> const& EETimeCorrAmplitudeBins_;
     std::vector<float> const& EETimeCorrShiftBins_;
 
+#ifndef __CUDACC__
     CUDAESProduct<Product> product_;
 #endif
 };
