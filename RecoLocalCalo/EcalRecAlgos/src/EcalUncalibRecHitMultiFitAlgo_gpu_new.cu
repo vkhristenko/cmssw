@@ -44,12 +44,13 @@ void entryPoint(
         + eventInputCPU.eeDigis.size();
     
     // temporary for recording
-    cudaEvent_t start_event;
+    /*cudaEvent_t start_event;
     cudaEvent_t end_event;
     cudaCheck( cudaEventCreate(&start_event) );
     cudaCheck( cudaEventCreate(&end_event) );
 
     cudaCheck (cudaEventRecord(start_event, 0) );
+    */
 
     //
     // in what follows we copy eb then ee.
@@ -369,132 +370,13 @@ void entryPoint(
     );
     AssertIfError
 
-    /*
-    //
-    // transfer eb then ee
-    //
-
-    // amplitude
-    cudaMemcpyAsync(h_data.rechits_soa_eb.amplitude.data(),
-               d_data.energies,
-               h_data.rechits_soa_eb.amplitude.size() * sizeof(float),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-    cudaMemcpyAsync(h_data.rechits_soa_ee.amplitude.data(),
-               d_data.energies + h_data.rechits_soa_eb.amplitude.size(),
-               h_data.rechits_soa_ee.amplitude.size() * sizeof(float),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-
-    // pedestal
-    cudaMemcpyAsync(h_data.rechits_soa_eb.pedestal.data(),
-               d_data.pedestal,
-               h_data.rechits_soa_eb.pedestal.size() * sizeof(float),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-    cudaMemcpyAsync(h_data.rechits_soa_ee.pedestal.data(),
-               d_data.pedestal + h_data.rechits_soa_eb.pedestal.size(),
-               h_data.rechits_soa_ee.pedestal.size() * sizeof(float),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-
-    // chi2
-    cudaMemcpyAsync(h_data.rechits_soa_eb.chi2.data(),
-               d_data.chi2,
-               h_data.rechits_soa_eb.chi2.size() * sizeof(float),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-    cudaMemcpyAsync(h_data.rechits_soa_ee.chi2.data(),
-               d_data.chi2 + h_data.rechits_soa_eb.chi2.size(),
-               h_data.rechits_soa_ee.chi2.size() * sizeof(float),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-
-    // detector ids
-    cudaMemcpyAsync(h_data.rechits_soa_eb.did.data(),
-               d_data.ids,
-               h_data.rechits_soa_eb.did.size() * sizeof(uint32_t),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-    cudaMemcpyAsync(h_data.rechits_soa_ee.did.data(),
-               d_data.ids + h_data.rechits_soa_eb.did.size(),
-               h_data.rechits_soa_ee.did.size() * sizeof(uint32_t),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-
-    // flags
-    cudaMemcpyAsync(h_data.rechits_soa_eb.flags.data(),
-               d_data.flags,
-               h_data.rechits_soa_eb.flags.size() * sizeof(uint32_t),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-    cudaMemcpyAsync(h_data.rechits_soa_ee.flags.data(),
-               d_data.flags + h_data.rechits_soa_eb.flags.size(),
-               h_data.rechits_soa_ee.flags.size() * sizeof(uint32_t),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-
-    // jitter
-    cudaMemcpyAsync(h_data.rechits_soa_eb.jitter.data(),
-               d_data.jitter,
-               h_data.rechits_soa_eb.jitter.size() * sizeof(float),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-    cudaMemcpyAsync(h_data.rechits_soa_ee.jitter.data(),
-               d_data.jitter + h_data.rechits_soa_eb.jitter.size(),
-               h_data.rechits_soa_ee.jitter.size() * sizeof(float),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-
-    // jitter error
-    cudaMemcpyAsync(h_data.rechits_soa_eb.jitterError.data(),
-               d_data.jitterError,
-               h_data.rechits_soa_eb.jitterError.size() * sizeof(float),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-    cudaMemcpyAsync(h_data.rechits_soa_ee.jitterError.data(),
-               d_data.jitterError + h_data.rechits_soa_eb.jitterError.size(),
-               h_data.rechits_soa_ee.jitterError.size() * sizeof(float),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-
-    // amplitudes per sample
-    cudaMemcpyAsync(h_data.rechits_soa_eb.amplitudesAll.data(),
-               d_data.amplitudes,
-               h_data.rechits_soa_eb.amplitudesAll.size() * 
-               sizeof(::ecal::reco::ComputationScalarType),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-    cudaMemcpyAsync(h_data.rechits_soa_ee.amplitudesAll.data(),
-               d_data.amplitudes + 
-               h_data.rechits_soa_eb.amplitudesAll.size() / EcalDataFrame::MAXSAMPLES,
-               h_data.rechits_soa_ee.amplitudesAll.size() * 
-               sizeof(::ecal::reco::ComputationScalarType),
-               cudaMemcpyDeviceToHost,
-               conf.cuStream);
-    AssertIfError
-        */
-
+        /*
     cudaEventRecord(end_event, 0);
     cudaEventSynchronize(end_event);
     float ms;
     cudaEventElapsedTime(&ms, start_event, end_event);
     std::cout << "elapsed time = " << ms << std::endl;
+    */
 }
 
 }}
