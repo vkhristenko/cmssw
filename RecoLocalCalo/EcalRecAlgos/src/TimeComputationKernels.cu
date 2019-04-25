@@ -1075,7 +1075,8 @@ void kernel_time_correction_and_finalize(
         int const amplitudeBinsSizeEE,
         SampleVector::Scalar const timeConstantTermEB,
         SampleVector::Scalar const timeConstantTermEE,
-        float const offsetTimeValue,
+        float const offsetTimeValueEB,
+        float const offsetTimeValueEE,
         float const timeNconstEB,
         float const timeNconstEE,
         float const amplitudeThresholdEB,
@@ -1121,6 +1122,9 @@ void kernel_time_correction_and_finalize(
     auto const timeNconst = isBarrel 
         ? timeNconstEB
         : timeNconstEE;
+    auto const offsetTimeValue = isBarrel
+        ? offsetTimeValueEB
+        : offsetTimeValueEE;
     auto const amplitudeThreshold = isBarrel
         ? amplitudeThresholdEB
         : amplitudeThresholdEE;

@@ -406,14 +406,81 @@ void EcalUncalibRecHitProducerGPU::transferToHost(
     // TODO
     cudaCheck( cudaMemcpyAsync(ebRecHits.amplitude.data(),
         eventOutputDataGPU_.amplitude,
-        ebRecHits.amplitude.size() * sizeof(float),
+        ebRecHits.amplitude.size() * sizeof(ecal::reco::StorageScalarType),
         cudaMemcpyDeviceToHost,
         cudaStream.id()) );
     cudaCheck( cudaMemcpyAsync(eeRecHits.amplitude.data(),
         eventOutputDataGPU_.amplitude + ebRecHits.amplitude.size(),
-        eeRecHits.amplitude.size() * sizeof(float),
+        eeRecHits.amplitude.size() * sizeof(ecal::reco::StorageScalarType),
         cudaMemcpyDeviceToHost,
         cudaStream.id()) );
+    
+    cudaCheck( cudaMemcpyAsync(ebRecHits.pedestal.data(),
+        eventOutputDataGPU_.pedestal,
+        ebRecHits.pedestal.size() * sizeof(ecal::reco::StorageScalarType),
+        cudaMemcpyDeviceToHost,
+        cudaStream.id()) );
+    cudaCheck( cudaMemcpyAsync(eeRecHits.pedestal.data(),
+        eventOutputDataGPU_.pedestal + ebRecHits.pedestal.size(),
+        eeRecHits.pedestal.size() * sizeof(ecal::reco::StorageScalarType),
+        cudaMemcpyDeviceToHost,
+        cudaStream.id()) );
+    
+    cudaCheck( cudaMemcpyAsync(ebRecHits.chi2.data(),
+        eventOutputDataGPU_.chi2,
+        ebRecHits.chi2.size() * sizeof(ecal::reco::StorageScalarType),
+        cudaMemcpyDeviceToHost,
+        cudaStream.id()) );
+    cudaCheck( cudaMemcpyAsync(eeRecHits.chi2.data(),
+        eventOutputDataGPU_.chi2 + ebRecHits.chi2.size(),
+        eeRecHits.chi2.size() * sizeof(ecal::reco::StorageScalarType),
+        cudaMemcpyDeviceToHost,
+        cudaStream.id()) );
+    
+    cudaCheck( cudaMemcpyAsync(ebRecHits.jitter.data(),
+        eventOutputDataGPU_.jitter,
+        ebRecHits.jitter.size() * sizeof(ecal::reco::StorageScalarType),
+        cudaMemcpyDeviceToHost,
+        cudaStream.id()) );
+    cudaCheck( cudaMemcpyAsync(eeRecHits.jitter.data(),
+        eventOutputDataGPU_.jitter + ebRecHits.jitter.size(),
+        eeRecHits.jitter.size() * sizeof(ecal::reco::StorageScalarType),
+        cudaMemcpyDeviceToHost,
+        cudaStream.id()) );
+    
+    cudaCheck( cudaMemcpyAsync(ebRecHits.jitterError.data(),
+        eventOutputDataGPU_.jitterError,
+        ebRecHits.jitterError.size() * sizeof(ecal::reco::StorageScalarType),
+        cudaMemcpyDeviceToHost,
+        cudaStream.id()) );
+    cudaCheck( cudaMemcpyAsync(eeRecHits.jitterError.data(),
+        eventOutputDataGPU_.jitterError + ebRecHits.jitterError.size(),
+        eeRecHits.jitterError.size() * sizeof(ecal::reco::StorageScalarType),
+        cudaMemcpyDeviceToHost,
+        cudaStream.id()) );
+    
+    cudaCheck( cudaMemcpyAsync(ebRecHits.flags.data(),
+        eventOutputDataGPU_.flags,
+        ebRecHits.flags.size() * sizeof(uint32_t),
+        cudaMemcpyDeviceToHost,
+        cudaStream.id()) );
+    cudaCheck( cudaMemcpyAsync(eeRecHits.flags.data(),
+        eventOutputDataGPU_.flags + ebRecHits.flags.size(),
+        eeRecHits.flags.size() * sizeof(uint32_t),
+        cudaMemcpyDeviceToHost,
+        cudaStream.id()) );
+    
+    cudaCheck( cudaMemcpyAsync(ebRecHits.amplitudesAll.data(),
+        eventOutputDataGPU_.amplitudesAll,
+        ebRecHits.amplitudesAll.size() * sizeof(ecal::reco::ComputationScalarType),
+        cudaMemcpyDeviceToHost,
+        cudaStream.id()) );
+    cudaCheck( cudaMemcpyAsync(eeRecHits.amplitudesAll.data(),
+        eventOutputDataGPU_.amplitudesAll + ebRecHits.amplitudesAll.size(),
+        eeRecHits.amplitudesAll.size() * sizeof(ecal::reco::ComputationScalarType),
+        cudaMemcpyDeviceToHost,
+        cudaStream.id()) );
+
     cudaStreamSynchronize(cudaStream.id());
 }
 

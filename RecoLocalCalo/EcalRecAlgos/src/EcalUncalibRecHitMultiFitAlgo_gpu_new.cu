@@ -218,7 +218,6 @@ void entryPoint(
         totalChannels
     );
     AssertIfError
-    /*
 
     //
     // 
@@ -228,13 +227,13 @@ void entryPoint(
     auto const threads_nullhypot = threads_1d;
     auto const blocks_nullhypot = blocks_1d;
     kernel_time_compute_nullhypot<<<blocks_nullhypot, threads_nullhypot, 
-                                    sharedBytes, conf.cuStream>>>(
-        d_data.sample_values,
-        d_data.sample_value_errors,
-        d_data.useless_sample_values,
-        d_data.chi2sNullHypot,
-        d_data.sum0sNullHypot,
-        d_data.sumAAsNullHypot,
+                                    sharedBytes, cudaStream.id()>>>(
+        scratch.sample_values,
+        scratch.sample_value_errors,
+        scratch.useless_sample_values,
+        scratch.chi2sNullHypot,
+        scratch.sum0sNullHypot,
+        scratch.sumAAsNullHypot,
         totalChannels
     );
     AssertIfError
@@ -246,29 +245,29 @@ void entryPoint(
         : (totalChannels * 45 + threads_makeratio - 1) / threads_makeratio;
     int sharedBytesMakeRatio = 5 * threads_makeratio * sizeof(SampleVector::Scalar);
     kernel_time_compute_makeratio<<<blocks_makeratio, threads_makeratio,
-                                    sharedBytesMakeRatio, conf.cuStream>>>(
-        d_data.sample_values,
-        d_data.sample_value_errors,
-        d_data.ids,
-        d_data.useless_sample_values,
-        d_data.pedestal_nums,
-        d_data.amplitudeFitParametersEB,
-        d_data.amplitudeFitParametersEE,
-        d_data.timeFitParametersEB,
-        d_data.timeFitParametersEE,
-        d_data.sumAAsNullHypot,
-        d_data.sum0sNullHypot,
-        d_data.tMaxAlphaBetas,
-        d_data.tMaxErrorAlphaBetas,
-        d_data.accTimeMax,
-        d_data.accTimeWgt,
-        d_data.tcState,
-        d_data.timeFitParametersSizeEB, 
-        d_data.timeFitParametersSizeEE,
-        d_data.timeFitLimitsFirstEB,
-        d_data.timeFitLimitsFirstEE,
-        d_data.timeFitLimitsSecondEB,
-        d_data.timeFitLimitsSecondEE,
+                                    sharedBytesMakeRatio, cudaStream.id()>>>(
+        scratch.sample_values,
+        scratch.sample_value_errors,
+        eventInputGPU.ids,
+        scratch.useless_sample_values,
+        scratch.pedestal_nums,
+        configParameters.amplitudeFitParametersEB,
+        configParameters.amplitudeFitParametersEE,
+        configParameters.timeFitParametersEB,
+        configParameters.timeFitParametersEE,
+        scratch.sumAAsNullHypot,
+        scratch.sum0sNullHypot,
+        scratch.tMaxAlphaBetas,
+        scratch.tMaxErrorAlphaBetas,
+        scratch.accTimeMax,
+        scratch.accTimeWgt,
+        scratch.tcState,
+        configParameters.timeFitParametersSizeEB, 
+        configParameters.timeFitParametersSizeEE,
+        configParameters.timeFitLimitsFirstEB,
+        configParameters.timeFitLimitsFirstEE,
+        configParameters.timeFitLimitsSecondEB,
+        configParameters.timeFitLimitsSecondEE,
         totalChannels
     );
     AssertIfError
@@ -282,30 +281,29 @@ void entryPoint(
         sizeof(SampleVector::Scalar);
     kernel_time_compute_findamplchi2_and_finish<<<blocks_findamplchi2,
                                        threads_findamplchi2,
-                                       sharedBytesFindAmplChi2, conf.cuStream>>>(
-        d_data.sample_values,
-        d_data.sample_value_errors,
-        d_data.ids,
-        d_data.useless_sample_values,
-        d_data.tMaxAlphaBetas,
-        d_data.tMaxErrorAlphaBetas,
-        d_data.accTimeMax,
-        d_data.accTimeWgt,
-        d_data.amplitudeFitParametersEB,
-        d_data.amplitudeFitParametersEE,
-        d_data.sumAAsNullHypot,
-        d_data.sum0sNullHypot,
-        d_data.chi2sNullHypot,
-        d_data.tcState,
-        d_data.ampMaxAlphaBeta,
-        d_data.ampMaxError,
-        d_data.timeMax,
-        d_data.timeError,
+                                       sharedBytesFindAmplChi2, cudaStream.id()>>>(
+        scratch.sample_values,
+        scratch.sample_value_errors,
+        eventInputGPU.ids,
+        scratch.useless_sample_values,
+        scratch.tMaxAlphaBetas,
+        scratch.tMaxErrorAlphaBetas,
+        scratch.accTimeMax,
+        scratch.accTimeWgt,
+        configParameters.amplitudeFitParametersEB,
+        configParameters.amplitudeFitParametersEE,
+        scratch.sumAAsNullHypot,
+        scratch.sum0sNullHypot,
+        scratch.chi2sNullHypot,
+        scratch.tcState,
+        scratch.ampMaxAlphaBeta,
+        scratch.ampMaxError,
+        scratch.timeMax,
+        scratch.timeError,
         totalChannels
     );
     AssertIfError
-        */
-
+    
     //
     //
     /*
@@ -326,8 +324,7 @@ void entryPoint(
     );
     AssertIfError
     */
-        /*
-
+    
     //
     //
     //
@@ -335,43 +332,45 @@ void entryPoint(
     auto const blocks_timecorr = threads_timecorr > totalChannels
         ? 1 : (totalChannels + threads_timecorr-1) / threads_timecorr;
     kernel_time_correction_and_finalize<<<blocks_timecorr, threads_timecorr,
-                                          0, conf.cuStream>>>(
-        d_data.energies,
-        d_data.digis_data,
-        d_data.ids,
-        d_data.EBTimeCorrAmplitudeBins,
-        d_data.EETimeCorrAmplitudeBins,
-        d_data.EBTimeCorrShiftBins,
-        d_data.EETimeCorrShiftBins,
-        d_data.timeMax,
-        d_data.timeError,
-        d_data.rms_x12,
-        d_data.timeCalibConstants,
-        d_data.jitter,
-        d_data.jitterError,
-        d_data.flags,
-        h_data.time_bias_corrections->EBTimeCorrAmplitudeBins.size(),
-        h_data.time_bias_corrections->EETimeCorrAmplitudeBins.size(),
-        d_data.timeConstantTermEB,
-        d_data.timeConstantTermEE,
-        d_data.offsetTimeValue,
-        d_data.timeNconstEB,
-        d_data.timeNconstEE,
-        d_data.amplitudeThreshEB,
-        d_data.amplitudeThreshEE,
-        d_data.outOfTimeThreshG12pEB,
-        d_data.outOfTimeThreshG12pEE,
-        d_data.outOfTimeThreshG12mEB,
-        d_data.outOfTimeThreshG12mEE,
-        d_data.outOfTimeThreshG61pEB,
-        d_data.outOfTimeThreshG61pEE,
-        d_data.outOfTimeThreshG61mEB,
-        d_data.outOfTimeThreshG61mEE,
-        offsetForHashesPlaceholder,
+                                          0, cudaStream.id()>>>(
+        eventOutputGPU.amplitude,
+        eventInputGPU.digis,
+        eventInputGPU.ids,
+        conditions.timeBiasCorrections.EBTimeCorrAmplitudeBins,
+        conditions.timeBiasCorrections.EETimeCorrAmplitudeBins,
+        conditions.timeBiasCorrections.EBTimeCorrShiftBins,
+        conditions.timeBiasCorrections.EETimeCorrShiftBins,
+        scratch.timeMax,
+        scratch.timeError,
+        conditions.pedestals.rms_x12,
+        conditions.timeCalibConstants.values,
+        eventOutputGPU.jitter,
+        eventOutputGPU.jitterError,
+        eventOutputGPU.flags,
+        conditions.timeBiasCorrections.EBTimeCorrAmplitudeBinsSize,
+        conditions.timeBiasCorrections.EETimeCorrAmplitudeBinsSize,
+        configParameters.timeConstantTermEB,
+        configParameters.timeConstantTermEE,
+        conditions.timeOffsetConstant.getEBValue(),
+        conditions.timeOffsetConstant.getEEValue(),
+        configParameters.timeNconstEB,
+        configParameters.timeNconstEE,
+        configParameters.amplitudeThreshEB,
+        configParameters.amplitudeThreshEE,
+        configParameters.outOfTimeThreshG12pEB,
+        configParameters.outOfTimeThreshG12pEE,
+        configParameters.outOfTimeThreshG12mEB,
+        configParameters.outOfTimeThreshG12mEE,
+        configParameters.outOfTimeThreshG61pEB,
+        configParameters.outOfTimeThreshG61pEE,
+        configParameters.outOfTimeThreshG61mEB,
+        configParameters.outOfTimeThreshG61mEE,
+        offsetForHashes,
         totalChannels
     );
     AssertIfError
 
+    /*
     //
     // transfer eb then ee
     //
