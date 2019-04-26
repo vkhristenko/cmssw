@@ -180,15 +180,24 @@ void kernel_minimize(SampleMatrix const* noisecov,
         int iter = 0;
         int npassive = 0;
         amplitudes[idx] = SampleVector::Zero();
+        
+        // initialize bx vector
+        bxs[idx] << -5, -4, -3, -2, -1, 0, 1, 2, 3, 4;
+
+        // FIXME: 
+        // need to identify this earrlier and set the state properly
+        if (noisecov[idx].isZero(0))
+            return;
 
         // inits
         SampleDecompLLT covariance_decomposition;
         SampleMatrix inverse_cov;
         SampleVector::Scalar chi2 = 0, chi2_now = 0;
 
-        // initialize bx vector
-        bxs[idx] << -5, -4, -3, -2, -1, 0, 1, 2, 3, 4;
-    
+#ifdef ECAL_MULTIFIT_KERNEL_MINIMIZE_V1
+//    PRINT_MATRIX_10x10(noisecov[idx]);
+#endif
+
         // loop until ocnverge
         while (true) {
             if (iter >= max_iterations)
@@ -222,6 +231,39 @@ void kernel_minimize(SampleMatrix const* noisecov,
                 amplitudes[idx],
                 samples[idx]);
             auto deltachi2 = chi2_now - chi2;
+
+
+#ifdef ECAL_MULTIFIT_KERNEL_MINIMIZE_V1
+            if (iter > 10) {
+                printf("idx = %d iter = %d chi2 = %f chi2old = %f\n",
+                    idx, iter, chi2_now, chi2);
+                
+                printf("noisecov(0, i): %f %f %f %f %f %f %f %f %f %f\n",
+                    noisecov[idx](0, 0),
+                    noisecov[idx](0, 1),
+                    noisecov[idx](0, 2),
+                    noisecov[idx](0, 3),
+                    noisecov[idx](0, 4),
+                    noisecov[idx](0, 5),
+                    noisecov[idx](0, 6),
+                    noisecov[idx](0, 7),
+                    noisecov[idx](0, 8),
+                    noisecov[idx](0, 9));
+
+                printf("ampls: %f %f %f %f %f %f %f %f %f %f\n",
+                    amplitudes[idx](0),
+                    amplitudes[idx](1),
+                    amplitudes[idx](2),
+                    amplitudes[idx](3),
+                    amplitudes[idx](4),
+                    amplitudes[idx](5),
+                    amplitudes[idx](6),
+                    amplitudes[idx](7),
+                    amplitudes[idx](8),
+                    amplitudes[idx](9));
+            }
+#endif
+
             chi2 = chi2_now;
             ++iter;
 
