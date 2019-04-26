@@ -161,9 +161,9 @@ void kernel_prep_1d_and_initialize(
                 shr_hasSwitchToGain0_tmp[threadIdx.x+3];
 
             // sample < 2 -> first 2 threads of each channel will be used here
-            // => 0 -> will compare 3 and 4
-            // => 1 -> will compare 4 and 5
-            shr_isSaturated[threadIdx.x+3] = 
+            // => 0 -> will compare 3 and 4 and put into 0
+            // => 1 -> will compare 4 and 5 and put into 1
+            shr_isSaturated[threadIdx.x] = 
                 shr_isSaturated[threadIdx.x+3] || shr_isSaturated[threadIdx.x+4];
         }
         __syncthreads();
@@ -188,10 +188,15 @@ void kernel_prep_1d_and_initialize(
             check_hasSwitchToGain0 = shr_hasSwitchToGain0_tmp[threadIdx.x];
 
             shr_isSaturated[threadIdx.x+3] = 
-                shr_isSaturated[threadIdx.x+3] || 
-                shr_isSaturated[threadIdx.x+4];
+                shr_isSaturated[threadIdx.x] || 
+                shr_isSaturated[threadIdx.x+1];
             isSaturated[ch] = shr_isSaturated[threadIdx.x+3];
         }
+
+        // TODO: w/o this sync, there is a race
+        // if (threadIdx == sample_max) below uses max sample thread, not for 0 sample
+        // check if we can remove it
+        __syncthreads();
 
         // TODO: divergent branch
         if (gainId==0 || gainId==3) {
