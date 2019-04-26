@@ -44,13 +44,12 @@ void entryPoint(
         + eventInputCPU.eeDigis.size();
     
     // temporary for recording
-    /*cudaEvent_t start_event;
+    cudaEvent_t start_event;
     cudaEvent_t end_event;
     cudaCheck( cudaEventCreate(&start_event) );
     cudaCheck( cudaEventCreate(&end_event) );
 
     cudaCheck (cudaEventRecord(start_event, 0) );
-    */
 
     //
     // in what follows we copy eb then ee.
@@ -63,23 +62,23 @@ void entryPoint(
     //
     cudaCheck( cudaMemcpyAsync(eventInputGPU.digis, 
                eventInputCPU.ebDigis.data().data(),
-               eventInputCPU.ebDigis.data().size() * sizeof(digis_type::value_type),
+               eventInputCPU.ebDigis.data().size() * sizeof(uint16_t),
                cudaMemcpyHostToDevice,
                cudaStream.id()) );
     cudaCheck( cudaMemcpyAsync(eventInputGPU.digis + eventInputCPU.ebDigis.data().size(), 
                eventInputCPU.eeDigis.data().data(),
-               eventInputCPU.eeDigis.data().size() * sizeof(digis_type::value_type),
+               eventInputCPU.eeDigis.data().size() * sizeof(uint16_t),
                cudaMemcpyHostToDevice,
                cudaStream.id()));
 
     cudaCheck( cudaMemcpyAsync(eventInputGPU.ids, 
                eventInputCPU.ebDigis.ids().data(),
-               eventInputCPU.ebDigis.ids().size() * sizeof(dids_type::value_type),
+               eventInputCPU.ebDigis.ids().size() * sizeof(uint32_t),
                cudaMemcpyHostToDevice,
                cudaStream.id()) );
     cudaCheck (cudaMemcpyAsync(eventInputGPU.ids + eventInputCPU.ebDigis.ids().size(), 
                eventInputCPU.eeDigis.ids().data(),
-               eventInputCPU.eeDigis.ids().size() * sizeof(dids_type::value_type),
+               eventInputCPU.eeDigis.ids().size() * sizeof(uint32_t),
                cudaMemcpyHostToDevice,
                cudaStream.id()) );
 
@@ -370,13 +369,11 @@ void entryPoint(
     );
     AssertIfError
 
-        /*
     cudaEventRecord(end_event, 0);
     cudaEventSynchronize(end_event);
     float ms;
     cudaEventElapsedTime(&ms, start_event, end_event);
     std::cout << "elapsed time = " << ms << std::endl;
-    */
 }
 
 }}

@@ -346,6 +346,10 @@ void EcalUncalibRecHitProducerGPU::acquire(
     event.getByToken(digisTokenEE_, eeDigis);
 
     ecal::multifit::EventInputDataCPU eventInputDataCPU{*ebDigis, *eeDigis};
+    
+    std::cout << "total channels: " << ebDigis->size() + eeDigis->size() << std::endl;
+    std::cout << "eb channels: " << ebDigis->size() << std::endl;
+    std::cout << "ee channels: " << eeDigis->size() << std::endl;
 
     //
     // schedule algorithms
@@ -363,16 +367,19 @@ void EcalUncalibRecHitProducerGPU::acquire(
     // allocate for the result while kernels are running
     ebRecHits_ = std::move(
         std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>());
-    ebRecHits_->resize(ebDigis->size());
     eeRecHits_ = std::move(
         std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>());
-    eeRecHits_->resize(eeDigis->size());
 
-    // det ids are host copy only - no need to run device -> host
-    std::memcpy(ebRecHits_->did.data(), ebDigis->ids().data(), 
-        ebDigis->ids().size() * sizeof(uint32_t));
-    std::memcpy(eeRecHits_->did.data(), eeDigis->ids().data(),
-        eeDigis->ids().size() * sizeof(uint32_t));
+    if (shouldTransferToHost_) {
+        ebRecHits_->resize(ebDigis->size());
+        eeRecHits_->resize(eeDigis->size());
+
+        // det ids are host copy only - no need to run device -> host
+        std::memcpy(ebRecHits_->did.data(), ebDigis->ids().data(), 
+            ebDigis->ids().size() * sizeof(uint32_t));
+        std::memcpy(eeRecHits_->did.data(), eeDigis->ids().data(),
+            eeDigis->ids().size() * sizeof(uint32_t));
+    }
 
     // preserve token
     ctxToken_ = ctx.toToken();

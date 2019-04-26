@@ -221,11 +221,15 @@ void kernel_minimize(SampleMatrix const* noisecov,
                 pulse_matrix[idx],
                 amplitudes[idx],
                 samples[idx]);
-            auto deltachi2 = chi2_now - chi2;
+            auto const deltachi2 = ecal::abs(chi2_now - chi2);
+            auto const abs_delta = deltachi2 / chi2;
+            if (iter>10) 
+                printf("idx =%d iter = %d chi2 = %f chi2old = %f\n", 
+                    idx, iter, chi2, chi2_now);
             chi2 = chi2_now;
             ++iter;
-
-            if (ecal::abs(deltachi2) < 1e-3)
+            
+            if (abs_delta < 1e-3)
                 break;
         }
 

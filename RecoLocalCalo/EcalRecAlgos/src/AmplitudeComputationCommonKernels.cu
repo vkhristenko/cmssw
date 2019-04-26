@@ -59,7 +59,8 @@ void kernel_prep_1d_and_initialize(
     int total_threads = nchannels * nsamples;
     int ch = tx / nsamples;
 
-    if (ch < nchannels) {
+    if (ch < 5) {
+//    if (ch < nchannels) {
         // array of 10 x channels per block
         // TODO: any other way of doing simple reduction
         // assume bool is 1 byte, should be quite safe
@@ -80,6 +81,8 @@ void kernel_prep_1d_and_initialize(
         //
         // indices
         //
+        printf("tx = %d ch = %d\n", tx, ch);
+        assert(ch == tx / 10);
         auto const did = DetId{dids[ch]};
         auto const isBarrel = did.subdetId() == EcalBarrel;
         // TODO offset for ee, 0 for eb
