@@ -359,20 +359,23 @@ void EcalUncalibRecHitProducerGPU::acquire(
         configParameters,
         ctx.stream()
     );
-
-    // allocate for the result while kernels are running
+        
     ebRecHits_ = std::move(
         std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>());
-    ebRecHits_->resize(ebDigis->size());
     eeRecHits_ = std::move(
         std::make_unique<ecal::UncalibratedRecHit<ecal::Tag::soa>>());
-    eeRecHits_->resize(eeDigis->size());
 
-    // det ids are host copy only - no need to run device -> host
-    std::memcpy(ebRecHits_->did.data(), ebDigis->ids().data(), 
-        ebDigis->ids().size() * sizeof(uint32_t));
-    std::memcpy(eeRecHits_->did.data(), eeDigis->ids().data(),
-        eeDigis->ids().size() * sizeof(uint32_t));
+    if (shouldTransferToHost_) {
+        // allocate for the result while kernels are running
+        ebRecHits_->resize(ebDigis->size());
+        eeRecHits_->resize(eeDigis->size());
+
+        // det ids are host copy only - no need to run device -> host
+        std::memcpy(ebRecHits_->did.data(), ebDigis->ids().data(), 
+            ebDigis->ids().size() * sizeof(uint32_t));
+        std::memcpy(eeRecHits_->did.data(), eeDigis->ids().data(),
+            eeDigis->ids().size() * sizeof(uint32_t));
+    }
 
     // preserve token
     ctxToken_ = ctx.toToken();
