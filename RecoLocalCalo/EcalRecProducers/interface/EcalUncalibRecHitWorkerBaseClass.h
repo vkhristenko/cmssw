@@ -4,6 +4,7 @@
 #include "DataFormats/EcalRecHit/interface/EcalRecHitCollections.h"
 #include "DataFormats/EcalDigi/interface/EcalDigiCollections.h"
 #include "FWCore/Framework/interface/ConsumesCollector.h"
+#include "DataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
 
 namespace edm {
         class Event;
@@ -24,6 +25,11 @@ class EcalUncalibRecHitWorkerBaseClass {
   virtual void set(const edm::Event& evt) {}
 
   virtual void run(const edm::Event& evt, const EcalDigiCollection & digis, EcalUncalibratedRecHitCollection & result) = 0;
+  virtual void run(const edm::Event& evt,
+                   const EBDigiCollection& digisEB,
+                   const EEDigiCollection& digisEE,
+                   ecal::SoAUncalibratedRecHitCollection& resultEB,
+                   ecal::SoAUncalibratedRecHitCollection& resultEE) {}
 
   virtual edm::ParameterSetDescription getAlgoDescription() = 0;
 };
