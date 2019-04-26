@@ -495,6 +495,12 @@ void kernel_permute_results(
     int const iii = tx % nsamples; // this is to address activeBXs
 
     if (ch >= nchannels) return;
+    
+    // channels that have amplitude precomputed do not need results to be permuted
+    auto const state = static_cast<MinimizationState>(acState[ch]);
+    if (static_cast<MinimizationState>(acState[ch]) ==
+        MinimizationState::Precomputed)
+        return;
 
     // configure shared memory and cp into it
     extern __shared__ char smem[];
@@ -505,7 +511,6 @@ void kernel_permute_results(
 
     // get the sample for this bx
     auto const sample = static_cast<int>(activeBXs[ch](iii)) + 5;
-    auto const state = static_cast<MinimizationState>(acState[ch]);
 
     // store back to global
     amplitudes[ch](sample) = values[threadIdx.x];
@@ -513,7 +518,7 @@ void kernel_permute_results(
     // store sample 5 separately
     // only for the case when minimization was performed
     // not for cases with precomputed amplitudes
-    if (sample == 5 && state != MinimizationState::Precomputed)
+    if (sample == 5)
         energies[ch] = values[threadIdx.x];
 }
 
