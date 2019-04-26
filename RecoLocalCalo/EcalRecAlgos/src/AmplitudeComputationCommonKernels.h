@@ -19,7 +19,6 @@ namespace ecal { namespace multifit {
 /// 
 __global__
 void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
-                    FullSampleVector* shapes_out, 
                     uint16_t const* digis_in,
                     uint32_t const* dids,
                     SampleVector* amplitudes,
@@ -66,7 +65,7 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                     double const* G1SamplesCorrelationEE,
                     SampleMatrix* noisecov,
                     PulseMatrixType* pulse_matrix,
-                    FullSampleVector const* pulse_shape,
+                    EcalPulseShape const* pulse_shape,
                     bool const* hasSwitchToGain6,
                     bool const* hasSwitchToGain1,
                     bool const* isSaturated,

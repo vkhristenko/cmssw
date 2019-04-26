@@ -269,9 +269,9 @@ void minimization_procedure(
     // and assign the final uncalibared energy value
     //
     unsigned int threadsPermute = 32 * EcalDataFrame::MAXSAMPLES; // 32 * 10
-    unsigned int blocksPermute = threadsPermute > 32 * totalChannels
+    unsigned int blocksPermute = threadsPermute > 10 * totalChannels
         ? 1
-        : (32 * totalChannels + threadsPermute - 1) / threadsPermute;
+        : (10 * totalChannels + threadsPermute - 1) / threadsPermute;
     int bytesPermute = threadsPermute * sizeof(SampleVector::Scalar);
     kernel_permute_results<<<blocksPermute, threadsPermute, 
                              bytesPermute, cudaStream.id()>>>(

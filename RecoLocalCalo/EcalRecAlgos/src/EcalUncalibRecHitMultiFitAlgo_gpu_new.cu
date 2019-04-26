@@ -97,7 +97,6 @@ void entryPoint(
     kernel_prep_1d_and_initialize<<<blocks_1d, threads_1d, 
                                     shared_bytes, cudaStream.id()>>>(
         conditions.pulseShapes.values, 
-        scratch.epulses,
         eventInputGPU.digis, 
         eventInputGPU.ids,
         scratch.samples,
@@ -146,7 +145,7 @@ void entryPoint(
         conditions.samplesCorrelation.EEG1SamplesCorrelation,
         scratch.noisecov,
         scratch.pulse_matrix,
-        scratch.epulses,
+        conditions.pulseShapes.values,
         scratch.hasSwitchToGain6,
         scratch.hasSwitchToGain1,
         scratch.isSaturated,

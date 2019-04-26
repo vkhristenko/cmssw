@@ -26,7 +26,6 @@ namespace ecal { namespace multifit {
 __global__
 void kernel_prep_1d_and_initialize(
                     EcalPulseShape const* shapes_in,
-                    FullSampleVector* shapes_out, 
                     uint16_t const* digis_in,
                     uint32_t const* dids,
                     SampleVector* amplitudes,
@@ -54,10 +53,11 @@ void kernel_prep_1d_and_initialize(
     constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
     constexpr int sample_max = 5;
     constexpr int full_pulse_max = 9;
-    int tx = threadIdx.x + blockIdx.x*blockDim.x;
-    int nchannels_per_block = blockDim.x / nsamples;
-    int total_threads = nchannels * nsamples;
-    int ch = tx / nsamples;
+    int const tx = threadIdx.x + blockIdx.x*blockDim.x;
+    int const nchannels_per_block = blockDim.x / nsamples;
+    int const total_threads = nchannels * nsamples;
+    int const ch = tx / nsamples;
+    int const sample = threadIdx.x % nsamples;
 
     if (ch < nchannels) {
         // array of 10 x channels per block
@@ -89,11 +89,11 @@ void kernel_prep_1d_and_initialize(
         
         //
         // pulse shape template
-        //
-        int sample = threadIdx.x % nsamples;
+        /*
         for (int isample=sample; isample<EcalPulseShape::TEMPLATESAMPLES; 
             isample+=nsamples)
             shapes_out[ch](isample + 7) = shapes_in[hashedId].pdfval[isample];
+            */
         
         // will be used in the future for setting state
         auto const rmsForChecking = rms_x12[hashedId];
@@ -287,7 +287,7 @@ void kernel_prep_1d_and_initialize(
 //            auto max_amplitude = amplitudes[ch][sample_max]; 
             auto const max_amplitude = amplitude;
             // according to cpu version
-            auto shape_value = shapes_out[ch](full_pulse_max); 
+            auto shape_value = shapes_in[hashedId].pdfval[full_pulse_max-7]; 
             // note, no syncing as the same thread will be accessing here
             bool hasGainSwitch = shr_hasSwitchToGain6[chStart]
                 || shr_hasSwitchToGain1[chStart]
@@ -339,7 +339,7 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                     double const* G1SamplesCorrelationEE,
                     SampleMatrix* noisecov,
                     PulseMatrixType* pulse_matrix,
-                    FullSampleVector const* pulse_shape,
+                    EcalPulseShape const* pulse_shape,
                     bool const* hasSwitchToGain6,
                     bool const* hasSwitchToGain1,
                     bool const* isSaturated,
@@ -469,10 +469,13 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
     }
 
     // pulse matrix
-    int const bx = tx - 5; // -5 -4 -3 ... 3 4
+//    int const bx = tx - 5; // -5 -4 -3 ... 3 4
 //    int bx = (*bxs)(tx);
-    int const offset = 7 - 3 - bx;
-    float const value = pulse_shape[ch](offset + ty);
+//    int const offset = 7 - 3 - bx;
+    int const posToAccess = 9 - tx + ty; // see cpu for reference
+    float const value = posToAccess>=7 
+        ? pulse_shape[hashedId].pdfval[posToAccess-7]
+        : 0;
     pulse_matrix[ch](ty, tx) = value;
 }
 
