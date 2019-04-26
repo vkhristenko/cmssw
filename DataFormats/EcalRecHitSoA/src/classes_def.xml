@@ -4,6 +4,12 @@
     <class name="std::vector<double, CUDAHostAllocator<double> >"/>
     <class name="std::vector<float, CUDAHostAllocator<float> >"/>
     <class name="std::vector<unsigned int, CUDAHostAllocator<unsigned int> >" />
+        
+    <!--        
+    <class name="std::vector<double>"/>
+    <class name="std::vector<float>"/>
+    <class name="std::vector<unsigned int>" />
+    -->
     <!--  <class name="std::array<double, 10>" />
     <class name="std::array<float, 10>" /> -->
     <class name="ecal::UncalibratedRecHit<ecal::Tag::soa>"/>
