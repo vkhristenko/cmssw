@@ -160,7 +160,11 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
     int const ltx = threadIdx.x % nthreads_per_channel;
     int const ch_start = ch*nsamples;
     int const lch_start = lch*nthreads_per_channel;
-    int nchannels_per_block = blockDim.x / nthreads_per_channel;
+    int const nchannels_per_block = blockDim.x / nthreads_per_channel;
+    
+    // rmeove inactive threads
+    // TODO: need to understand if this is 100% safe in presence of syncthreads
+    if (ch >= nchannels) return;
 
     auto const did = DetId{dids[ch]};
     auto const isBarrel = did.subdetId() == EcalBarrel;
@@ -186,10 +190,6 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
     ScalarType* shr_time_max = shr_time_wgt + blockDim.x;
     ScalarType* shrTimeMax = shr_time_max + blockDim.x;
     ScalarType* shrTimeWgt = shrTimeMax + blockDim.x;
-
-    // rmeove inactive threads
-    // TODO: need to understand if this is 100% safe in presence of syncthreads
-    if (ch >= nchannels) return;
 
     // map tx -> (sample_i, sample_j)
     int sample_i, sample_j = 0;
