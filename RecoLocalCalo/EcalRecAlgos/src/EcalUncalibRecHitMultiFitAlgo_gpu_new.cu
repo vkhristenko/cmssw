@@ -306,27 +306,6 @@ void entryPoint(
     
     //
     //
-    /*
-    auto const threads_ampl = threads_1d;
-    auto const blocks_ampl = blocks_1d;
-    int const sharedBytesAmpl = 5 * threads_ampl * sizeof(SampleVector::Scalar);
-    kernel_time_compute_ampl<<<blocks_ampl, threads_ampl,
-                               sharedBytesAmpl, conf.cuStream>>>(
-        d_data.sample_values,
-        d_data.sample_value_errors,
-        d_data.ids,
-        d_data.useless_sample_values,
-        d_data.timeMax,
-        d_data.amplitudeFitParametersEB,
-        d_data.amplitudeFitParametersEE,
-        d_data.amplitudeMax,
-        totalChannels
-    );
-    AssertIfError
-    */
-    
-    //
-    //
     //
     auto const threads_timecorr = 32;
     auto const blocks_timecorr = threads_timecorr > totalChannels
