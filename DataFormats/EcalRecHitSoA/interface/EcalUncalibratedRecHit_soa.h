@@ -21,11 +21,11 @@ struct ptr {};
 
 template<typename T, typename L = Tag::soa>
 struct type_wrapper {
-#ifndef ECAL_MULTIFIT_DONOT_USE_PINNED_MEM
-    using type = std::vector<T, CUDAHostAllocator<T>>;
-#else
+//#ifndef ECAL_MULTIFIT_DONOT_USE_PINNED_MEM
+//    using type = std::vector<T, CUDAHostAllocator<T>>;
+//#else
     using type = std::vector<T>;
-#endif
+//#endif
 };
 
 template<typename T>
