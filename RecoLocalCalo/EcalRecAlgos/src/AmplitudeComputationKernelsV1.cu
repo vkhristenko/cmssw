@@ -102,6 +102,7 @@ void eigen_solve_submatrix(SampleMatrix& mat,
             )
 
 __device__
+__forceinline__
 bool update_covariance(SampleMatrix const& noisecov,
                        FullSampleMatrix const& full_pulse_cov,
                        SampleMatrix& inverse_cov,
@@ -189,6 +190,8 @@ void kernel_minimize(SampleMatrix const* noisecov,
         SampleDecompLLT covariance_decomposition;
         SampleMatrix inverse_cov;
         SampleVector::Scalar chi2 = 0, chi2_now = 0;
+//        SampleMatrix AtA;
+//        SampleVector Atb;
 
 #ifdef ECAL_MULTIFIT_KERNEL_MINIMIZE_V1
 //    PRINT_MATRIX_10x10(noisecov[idx]);
@@ -215,6 +218,8 @@ void kernel_minimize(SampleMatrix const* noisecov,
                 .solve(pulse_matrix[idx]);
             SampleVector b = covariance_decomposition.matrixL()
                 .solve(samples[idx]);
+ //           AtA = A.transpose() * A;
+ //           Atb = A.transpose() * b;
             
             status = inplace_fnnls(
                 A, b, amplitudes[idx],
