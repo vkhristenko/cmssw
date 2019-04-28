@@ -133,11 +133,11 @@ bool update_covariance(SampleMatrix const& noisecov,
                                                nsample_pulse);
     }
 
-    covariance_decomposition.compute(inverse_cov);
     return true;
 }
 
 __device__
+__forceinline__
 SampleVector::Scalar compute_chi2(SampleDecompLLT& covariance_decomposition,
                    PulseMatrixType const& pulse_matrix,
                    SampleVector const& amplitudes,
@@ -179,11 +179,7 @@ void kernel_minimize(SampleMatrix const* noisecov,
         bool status = false;
         int iter = 0;
         int npassive = 0;
-        amplitudes[idx] = SampleVector::Zero();
         
-        // initialize bx vector
-        bxs[idx] << -5, -4, -3, -2, -1, 0, 1, 2, 3, 4;
-
         // FIXME: 
         // need to identify this earrlier and set the state properly
         if (noisecov[idx].isZero(0))
@@ -210,9 +206,11 @@ void kernel_minimize(SampleMatrix const* noisecov,
                 bxs[idx],
                 covariance_decomposition,
                 amplitudes[idx]);
-            if (!status) 
-                break;
 
+            // compute actual covariance decomposition
+            covariance_decomposition.compute(inverse_cov);
+
+            // prepare input matrices for fnnls
             SampleMatrix A = covariance_decomposition.matrixL()
                 .solve(pulse_matrix[idx]);
             SampleVector b = covariance_decomposition.matrixL()
@@ -222,9 +220,6 @@ void kernel_minimize(SampleMatrix const* noisecov,
                 A, b, amplitudes[idx],
                 npassive, bxs[idx], pulse_matrix[idx]);
                 
-            if (!status)
-                break;
-
             chi2_now = compute_chi2(
                 covariance_decomposition,
                 pulse_matrix[idx],
