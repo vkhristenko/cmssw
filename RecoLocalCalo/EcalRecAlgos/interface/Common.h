@@ -45,13 +45,4 @@ struct DurationMeasurer {
         std::chrono::high_resolution_clock::time_point start_;
 };
 
-#define AssertIfError \
-    { \
-        auto code = cudaGetLastError(); \
-        if (code != cudaSuccess) { \
-            std::cout << cudaGetErrorString(code) << std::endl; \
-            assert(false); \
-        } \
-    }
-
 #endif

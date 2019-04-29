@@ -14,7 +14,6 @@ namespace ecal {
 namespace Tag {
 
 struct soa {};
-struct aos {};
 struct ptr {};
 
 }
@@ -26,11 +25,6 @@ struct type_wrapper {
 //#else
     using type = std::vector<T>;
 //#endif
-};
-
-template<typename T>
-struct type_wrapper<T, Tag::aos> {
-    using type = T;
 };
 
 template<typename T>

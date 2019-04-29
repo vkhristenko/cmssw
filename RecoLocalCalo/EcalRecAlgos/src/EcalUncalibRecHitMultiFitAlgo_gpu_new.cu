@@ -121,7 +121,7 @@ void entryPoint(
         gainSwitchUseMaxSampleEB,
         gainSwitchUseMaxSampleEE,
         totalChannels);
-    AssertIfError
+    cudaCheck(cudaGetLastError());
 
     //
     // 2d preparation kernel
@@ -151,7 +151,7 @@ void entryPoint(
         scratch.hasSwitchToGain1,
         scratch.isSaturated,
         offsetForHashes);
-    AssertIfError
+    cudaCheck(cudaGetLastError());
     
     // run minimization kernels
     v1::minimization_procedure(
@@ -194,7 +194,7 @@ void entryPoint(
         conditions.sampleMask.getEcalSampleMaskRecordEE(),
         totalChannels
     );
-    AssertIfError
+    cudaCheck(cudaGetLastError());
 
     // 
     // TODO: small kernel only for EB. It needs to be checked if 
@@ -217,7 +217,7 @@ void entryPoint(
         conditions.sampleMask.getEcalSampleMaskRecordEB(),
         totalChannels
     );
-    AssertIfError
+    cudaCheck(cudaGetLastError());
 
     //
     // 
@@ -236,7 +236,7 @@ void entryPoint(
         scratch.sumAAsNullHypot,
         totalChannels
     );
-    AssertIfError
+    cudaCheck(cudaGetLastError());
 
     unsigned int nchannels_per_block_makeratio = 10;
     unsigned int threads_makeratio = 45 * nchannels_per_block_makeratio;
@@ -270,7 +270,7 @@ void entryPoint(
         configParameters.timeFitLimitsSecondEE,
         totalChannels
     );
-    AssertIfError
+    cudaCheck(cudaGetLastError());
 
     //
     //
@@ -302,7 +302,7 @@ void entryPoint(
         scratch.timeError,
         totalChannels
     );
-    AssertIfError
+    cudaCheck(cudaGetLastError());
     
     //
     //
@@ -347,7 +347,7 @@ void entryPoint(
         offsetForHashes,
         totalChannels
     );
-    AssertIfError
+    cudaCheck(cudaGetLastError());
 
         /*
     cudaEventRecord(end_event, 0);
