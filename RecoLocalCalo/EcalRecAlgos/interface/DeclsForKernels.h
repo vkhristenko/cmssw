@@ -76,9 +76,37 @@ struct EventInputDataGPU {
     }
 };
 
+// parameters have a fixed type
+// Can we go by with single precision
+struct ConfigurationParameters {
+    using type = double;
+    // device ptrs
+    type *amplitudeFitParametersEB=nullptr, *amplitudeFitParametersEE=nullptr;
+
+    uint32_t timeFitParametersSizeEB, timeFitParametersSizeEE;
+    // device ptrs
+    type *timeFitParametersEB=nullptr, *timeFitParametersEE=nullptr;
+
+    type timeFitLimitsFirstEB, timeFitLimitsFirstEE;
+    type timeFitLimitsSecondEB, timeFitLimitsSecondEE;
+
+    type timeConstantTermEB, timeConstantTermEE;
+
+    type timeNconstEB, timeNconstEE;
+
+    type amplitudeThreshEE, amplitudeThreshEB;
+
+    type outOfTimeThreshG12pEB, outOfTimeThreshG12mEB;
+    type outOfTimeThreshG12pEE, outOfTimeThreshG12mEE;
+    type outOfTimeThreshG61pEE, outOfTimeThreshG61mEE;
+    type outOfTimeThreshG61pEB, outOfTimeThreshG61mEB;
+
+    bool shouldRunTimingComputation;
+};
+
 struct EventOutputDataGPU final : public ::ecal::UncalibratedRecHit<::ecal::Tag::ptr> 
 {
-    void allocate(uint32_t size) {
+    void allocate(ConfigurationParameters const& configParameters, uint32_t size) {
         cudaCheck( cudaMalloc((void**)&amplitudesAll,
             size * sizeof(SampleVector)) );
         cudaCheck( cudaMalloc((void**)&amplitude,
@@ -87,10 +115,13 @@ struct EventOutputDataGPU final : public ::ecal::UncalibratedRecHit<::ecal::Tag:
             size * sizeof(::ecal::reco::StorageScalarType)) );
         cudaCheck( cudaMalloc((void**)&pedestal,
             size * sizeof(::ecal::reco::StorageScalarType)) );
-        cudaCheck( cudaMalloc((void**)&jitter,
-            size * sizeof(::ecal::reco::StorageScalarType)) );
-        cudaCheck( cudaMalloc((void**)&jitterError,
-            size * sizeof(::ecal::reco::StorageScalarType)) );
+
+        if (configParameters.shouldRunTimingComputation) {
+            cudaCheck( cudaMalloc((void**)&jitter,
+                size * sizeof(::ecal::reco::StorageScalarType)) );
+            cudaCheck( cudaMalloc((void**)&jitterError,
+                size * sizeof(::ecal::reco::StorageScalarType)) );
+        }
 
         cudaCheck( cudaMalloc((void**)&did,
             size * sizeof(uint32_t)) );
@@ -98,13 +129,15 @@ struct EventOutputDataGPU final : public ::ecal::UncalibratedRecHit<::ecal::Tag:
             size * sizeof(uint32_t)) );
     }
 
-    void deallocate() {
+    void deallocate(ConfigurationParameters const& configParameters) {
         cudaCheck( cudaFree(amplitudesAll) );
         cudaCheck( cudaFree(amplitude) );
         cudaCheck( cudaFree(chi2) );
         cudaCheck( cudaFree(pedestal) );
-        cudaCheck( cudaFree(jitter) );
-        cudaCheck( cudaFree(jitterError) );
+        if (configParameters.shouldRunTimingComputation) {
+            cudaCheck( cudaFree(jitter) );
+            cudaCheck( cudaFree(jitterError) );
+        }
         cudaCheck( cudaFree(did) );
         cudaCheck( cudaFree(flags) );
     }
@@ -136,7 +169,7 @@ struct EventDataForScratchGPU {
     SampleVector::Scalar *timeMax, *timeError;
     TimeComputationState *tcState;
 
-    void allocate(uint32_t size) {
+    void allocate(ConfigurationParameters const& configParameters, uint32_t size) {
         cudaCheck( cudaMalloc((void**)&samples,
             size * sizeof(SampleVector)) );
         cudaCheck( cudaMalloc((void**)&gainsNoise,
@@ -160,42 +193,44 @@ struct EventDataForScratchGPU {
         cudaCheck( cudaMalloc((void**)&isSaturated,
             size * sizeof(bool)) );
 
-        cudaCheck( cudaMalloc((void**)&sample_values,
-            size * sizeof(SampleVector)) );
-        cudaCheck( cudaMalloc((void**)&sample_value_errors,
-            size * sizeof(SampleVector)) );
-        cudaCheck( cudaMalloc((void**)&useless_sample_values,
-            size * sizeof(bool) * EcalDataFrame::MAXSAMPLES) );
-        cudaCheck( cudaMalloc((void**)&chi2sNullHypot,
-            size * sizeof(SampleVector::Scalar)) );
-        cudaCheck( cudaMalloc((void**)&sum0sNullHypot,
-            size * sizeof(SampleVector::Scalar)) );
-        cudaCheck( cudaMalloc((void**)&sumAAsNullHypot,
-            size * sizeof(SampleVector::Scalar)) );
-        cudaCheck( cudaMalloc((void**)&pedestal_nums,
-            size * sizeof(char)) );
+        if (configParameters.shouldRunTimingComputation) {
+            cudaCheck( cudaMalloc((void**)&sample_values,
+                size * sizeof(SampleVector)) );
+            cudaCheck( cudaMalloc((void**)&sample_value_errors,
+                size * sizeof(SampleVector)) );
+            cudaCheck( cudaMalloc((void**)&useless_sample_values,
+                size * sizeof(bool) * EcalDataFrame::MAXSAMPLES) );
+            cudaCheck( cudaMalloc((void**)&chi2sNullHypot,
+                size * sizeof(SampleVector::Scalar)) );
+            cudaCheck( cudaMalloc((void**)&sum0sNullHypot,
+                size * sizeof(SampleVector::Scalar)) );
+            cudaCheck( cudaMalloc((void**)&sumAAsNullHypot,
+                size * sizeof(SampleVector::Scalar)) );
+            cudaCheck( cudaMalloc((void**)&pedestal_nums,
+                size * sizeof(char)) );
 
-        cudaCheck( cudaMalloc((void**)&tMaxAlphaBetas,
-            size * sizeof(SampleVector::Scalar)) );
-        cudaCheck( cudaMalloc((void**)&tMaxErrorAlphaBetas,
-            size * sizeof(SampleVector::Scalar)) );
-        cudaCheck( cudaMalloc((void**)&accTimeMax,
-            size * sizeof(SampleVector::Scalar)) );
-        cudaCheck( cudaMalloc((void**)&accTimeWgt,
-            size * sizeof(SampleVector::Scalar)) );
-        cudaCheck( cudaMalloc((void**)&ampMaxAlphaBeta,
-            size * sizeof(SampleVector::Scalar)) );
-        cudaCheck( cudaMalloc((void**)&ampMaxError,
-            size * sizeof(SampleVector::Scalar)) );
-        cudaCheck( cudaMalloc((void**)&timeMax,
-            size * sizeof(SampleVector::Scalar)) );
-        cudaCheck( cudaMalloc((void**)&timeError,
-            size * sizeof(SampleVector::Scalar)) );
-        cudaCheck( cudaMalloc((void**)&tcState,
-            size * sizeof(TimeComputationState)) );
+            cudaCheck( cudaMalloc((void**)&tMaxAlphaBetas,
+                size * sizeof(SampleVector::Scalar)) );
+            cudaCheck( cudaMalloc((void**)&tMaxErrorAlphaBetas,
+                size * sizeof(SampleVector::Scalar)) );
+            cudaCheck( cudaMalloc((void**)&accTimeMax,
+                size * sizeof(SampleVector::Scalar)) );
+            cudaCheck( cudaMalloc((void**)&accTimeWgt,
+                size * sizeof(SampleVector::Scalar)) );
+            cudaCheck( cudaMalloc((void**)&ampMaxAlphaBeta,
+                size * sizeof(SampleVector::Scalar)) );
+            cudaCheck( cudaMalloc((void**)&ampMaxError,
+                size * sizeof(SampleVector::Scalar)) );
+            cudaCheck( cudaMalloc((void**)&timeMax,
+                size * sizeof(SampleVector::Scalar)) );
+            cudaCheck( cudaMalloc((void**)&timeError,
+                size * sizeof(SampleVector::Scalar)) );
+            cudaCheck( cudaMalloc((void**)&tcState,
+                size * sizeof(TimeComputationState)) );
+        }
     }
 
-    void deallocate() {
+    void deallocate(ConfigurationParameters const& configParameters) {
         cudaCheck( cudaFree(samples) );
         cudaCheck( cudaFree(gainsNoise) );
 
@@ -209,23 +244,25 @@ struct EventDataForScratchGPU {
         cudaCheck( cudaFree(hasSwitchToGain1) );
         cudaCheck( cudaFree(isSaturated) );
 
-        cudaCheck( cudaFree(sample_values) );
-        cudaCheck( cudaFree(sample_value_errors) );
-        cudaCheck( cudaFree(useless_sample_values) );
-        cudaCheck( cudaFree(chi2sNullHypot) );
-        cudaCheck( cudaFree(sum0sNullHypot) );
-        cudaCheck( cudaFree(sumAAsNullHypot) );
-        cudaCheck( cudaFree(pedestal_nums) );
+        if (configParameters.shouldRunTimingComputation) {
+            cudaCheck( cudaFree(sample_values) );
+            cudaCheck( cudaFree(sample_value_errors) );
+            cudaCheck( cudaFree(useless_sample_values) );
+            cudaCheck( cudaFree(chi2sNullHypot) );
+            cudaCheck( cudaFree(sum0sNullHypot) );
+            cudaCheck( cudaFree(sumAAsNullHypot) );
+            cudaCheck( cudaFree(pedestal_nums) );
 
-        cudaCheck( cudaFree(tMaxAlphaBetas) );
-        cudaCheck( cudaFree(tMaxErrorAlphaBetas) );
-        cudaCheck( cudaFree(accTimeMax) );
-        cudaCheck( cudaFree(accTimeWgt) );
-        cudaCheck( cudaFree(ampMaxAlphaBeta) );
-        cudaCheck( cudaFree(ampMaxError) );
-        cudaCheck( cudaFree(timeMax) );
-        cudaCheck( cudaFree(timeError) );
-        cudaCheck( cudaFree(tcState) );
+            cudaCheck( cudaFree(tMaxAlphaBetas) );
+            cudaCheck( cudaFree(tMaxErrorAlphaBetas) );
+            cudaCheck( cudaFree(accTimeMax) );
+            cudaCheck( cudaFree(accTimeWgt) );
+            cudaCheck( cudaFree(ampMaxAlphaBeta) );
+            cudaCheck( cudaFree(ampMaxError) );
+            cudaCheck( cudaFree(timeMax) );
+            cudaCheck( cudaFree(timeError) );
+            cudaCheck( cudaFree(tcState) );
+        }
     }
 };
 
@@ -244,32 +281,6 @@ struct ConditionsProducts {
 };
 
 //*/
-
-// parameters have a fixed type
-// Can we go by with single precision
-struct ConfigurationParameters {
-    using type = double;
-    // device ptrs
-    type *amplitudeFitParametersEB=nullptr, *amplitudeFitParametersEE=nullptr;
-
-    uint32_t timeFitParametersSizeEB, timeFitParametersSizeEE;
-    // device ptrs
-    type *timeFitParametersEB=nullptr, *timeFitParametersEE=nullptr;
-
-    type timeFitLimitsFirstEB, timeFitLimitsFirstEE;
-    type timeFitLimitsSecondEB, timeFitLimitsSecondEE;
-
-    type timeConstantTermEB, timeConstantTermEE;
-
-    type timeNconstEB, timeNconstEE;
-
-    type amplitudeThreshEE, amplitudeThreshEB;
-
-    type outOfTimeThreshG12pEB, outOfTimeThreshG12mEB;
-    type outOfTimeThreshG12pEE, outOfTimeThreshG12mEE;
-    type outOfTimeThreshG61pEE, outOfTimeThreshG61mEE;
-    type outOfTimeThreshG61pEB, outOfTimeThreshG61mEB;
-};
 
 struct xyz {
     int x,y,z;
