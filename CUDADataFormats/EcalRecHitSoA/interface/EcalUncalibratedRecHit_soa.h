@@ -1,12 +1,12 @@
-#ifndef DataFormats_EcalRecHitSoA_interface_EcalUncalibratedRecHit_soa_h
-#define DataFormats_EcalRecHitSoA_interface_EcalUncalibratedRecHit_soa_h
+#ifndef CUDADataFormats_EcalRecHitSoA_interface_EcalUncalibratedRecHit_soa_h
+#define CUDADataFormats_EcalRecHitSoA_interface_EcalUncalibratedRecHit_soa_h
 
 #include <vector>
 #include <array>
 
 #include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
-#include "DataFormats/EcalRecHitSoA/interface/RecoTypes.h"
 
+#include "CUDADataFormats/EcalRecHitSoA/interface/RecoTypes.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
 
 namespace ecal {
