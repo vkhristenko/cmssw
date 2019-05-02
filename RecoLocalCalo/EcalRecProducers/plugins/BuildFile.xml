@@ -13,7 +13,7 @@
 <use   name="RecoLocalCalo/EcalRecAlgos"/>
 <use   name="FWCore/MessageLogger"/>
 <use   name="FWCore/MessageService"/>
-<use   name="DataFormats/EcalRecHitSoA"/>
+<use   name="CUDADataFormats/EcalRecHitSoA"/>
 <use   name="HeterogeneousCore/CUDACore"/>
 <use   name="HeterogeneousCore/CUDAUtilities"/>
 <use   name="cuda-api-wrappers"/>

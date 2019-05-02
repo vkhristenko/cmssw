@@ -1,5 +1,5 @@
-#ifndef DataFormats_EcalRecHitSoA_interface_RecoTypes
-#define DataFormats_EcalRecHitSoA_interface_RecoTypes
+#ifndef CUDADataFormats_EcalRecHitSoA_interface_RecoTypes
+#define CUDADataFormats_EcalRecHitSoA_interface_RecoTypes
 
 namespace ecal { namespace reco {
 

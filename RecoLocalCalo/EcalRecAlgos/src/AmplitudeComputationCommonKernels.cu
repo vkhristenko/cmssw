@@ -45,6 +45,7 @@ void kernel_prep_1d_and_initialize(
                     ::ecal::reco::StorageScalarType* g_pedestal,
                     uint32_t *flags,
                     char* acState,
+                    BXVectorType *bxs,
                     uint32_t const offsetForHashes,
                     bool const gainSwitchUseMaxSampleEB,
                     bool const gainSwitchUseMaxSampleEE,
@@ -232,6 +233,7 @@ void kernel_prep_1d_and_initialize(
         // initialization
         //
         amplitudesForMinimization[ch](sample) = 0;
+        bxs[ch](sample) = sample - 5;
 
         if (sample == sample_max) { // select the thread for the max sample
             //

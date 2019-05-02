@@ -12,7 +12,7 @@
 
 // algorithm specific
 #include "DataFormats/EcalDigi/interface/EcalDigiCollections.h"
-#include "DataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
+#include "CUDADataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 
 #include <iostream>
@@ -76,7 +76,7 @@ private:
     edm::ESHandle<EcalTimeOffsetConstant> timeOffsetConstantHandle_;
 
     // configuration parameters
-    ecal::multifit::ConfigurationParameters configParameters;
+    ecal::multifit::ConfigurationParameters configParameters_;
 
     // event data
     ecal::multifit::EventInputDataGPU eventInputDataGPU_;
@@ -130,6 +130,7 @@ void EcalUncalibRecHitProducerGPU::fillDescriptions(
     desc.add<double>("amplitudeThresholdEE", 10);
     desc.add<uint32_t>("maxNumberHits", 20000);
     desc.add<bool>("shouldTransferToHost", true);
+    desc.add<bool>("shouldRunTimingComputation", true);
 
     std::string label = "ecalUncalibRecHitProducerGPU";
     confDesc.add(label, desc);
@@ -190,6 +191,10 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(
     // transfer to host switch
     shouldTransferToHost_ = ps.getParameter<bool>("shouldTransferToHost");
 
+    // switch to run timing computation kernels
+    configParameters_.shouldRunTimingComputation = 
+        ps.getParameter<bool>("shouldRunTimingComputation");
+
     produces<ecal::SoAUncalibratedRecHitCollection>(recHitsLabelEB_);
     produces<ecal::SoAUncalibratedRecHitCollection>(recHitsLabelEE_);
 
@@ -200,77 +205,77 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(
     //
 
     // amplitude fit parameters copying
-    cudaCheck( cudaMalloc((void**)&configParameters.amplitudeFitParametersEB,
+    cudaCheck( cudaMalloc((void**)&configParameters_.amplitudeFitParametersEB,
         sizeof(ecal::multifit::ConfigurationParameters::type) 
         * EBamplitudeFitParameters.size()) );
-    cudaCheck( cudaMemcpy(configParameters.amplitudeFitParametersEB,
+    cudaCheck( cudaMemcpy(configParameters_.amplitudeFitParametersEB,
         EBamplitudeFitParameters.data(),
         EBamplitudeFitParameters.size() * 
         sizeof(ecal::multifit::ConfigurationParameters::type),
         cudaMemcpyHostToDevice) );
-    cudaCheck( cudaMalloc((void**)&configParameters.amplitudeFitParametersEE,
+    cudaCheck( cudaMalloc((void**)&configParameters_.amplitudeFitParametersEE,
         sizeof(ecal::multifit::ConfigurationParameters::type) * 
         EEamplitudeFitParameters.size()) );
-    cudaCheck( cudaMemcpy(configParameters.amplitudeFitParametersEE,
+    cudaCheck( cudaMemcpy(configParameters_.amplitudeFitParametersEE,
         EEamplitudeFitParameters.data(),
         EEamplitudeFitParameters.size() * 
         sizeof(ecal::multifit::ConfigurationParameters::type),
         cudaMemcpyHostToDevice) );
 
     // time fit parameters and limits
-    configParameters.timeFitParametersSizeEB = EBtimeFitParameters.size();
-    configParameters.timeFitParametersSizeEE = EEtimeFitParameters.size();
-    configParameters.timeFitLimitsFirstEB = EBtimeFitLimits.first;
-    configParameters.timeFitLimitsSecondEB = EBtimeFitLimits.second;
-    configParameters.timeFitLimitsFirstEE = EEtimeFitLimits.first;
-    configParameters.timeFitLimitsSecondEE = EEtimeFitLimits.second;
-    cudaCheck( cudaMalloc((void**)&configParameters.timeFitParametersEB,
+    configParameters_.timeFitParametersSizeEB = EBtimeFitParameters.size();
+    configParameters_.timeFitParametersSizeEE = EEtimeFitParameters.size();
+    configParameters_.timeFitLimitsFirstEB = EBtimeFitLimits.first;
+    configParameters_.timeFitLimitsSecondEB = EBtimeFitLimits.second;
+    configParameters_.timeFitLimitsFirstEE = EEtimeFitLimits.first;
+    configParameters_.timeFitLimitsSecondEE = EEtimeFitLimits.second;
+    cudaCheck( cudaMalloc((void**)&configParameters_.timeFitParametersEB,
         sizeof(ecal::multifit::ConfigurationParameters::type) 
         * EBtimeFitParameters.size()) );
-    cudaCheck( cudaMemcpy(configParameters.timeFitParametersEB,
+    cudaCheck( cudaMemcpy(configParameters_.timeFitParametersEB,
         EBtimeFitParameters.data(),
         EBtimeFitParameters.size() * 
         sizeof(ecal::multifit::ConfigurationParameters::type),
         cudaMemcpyHostToDevice) );
-    cudaCheck( cudaMalloc((void**)&configParameters.timeFitParametersEE,
+    cudaCheck( cudaMalloc((void**)&configParameters_.timeFitParametersEE,
         sizeof(ecal::multifit::ConfigurationParameters::type) 
         * EEtimeFitParameters.size()) );
-    cudaCheck( cudaMemcpy(configParameters.timeFitParametersEE,
+    cudaCheck( cudaMemcpy(configParameters_.timeFitParametersEE,
         EEtimeFitParameters.data(),
         EEtimeFitParameters.size() 
         * sizeof(ecal::multifit::ConfigurationParameters::type),
         cudaMemcpyHostToDevice) );
 
     // time constant terms
-    configParameters.timeConstantTermEB = EBtimeConstantTerm;
-    configParameters.timeConstantTermEE = EEtimeConstantTerm;
+    configParameters_.timeConstantTermEB = EBtimeConstantTerm;
+    configParameters_.timeConstantTermEE = EEtimeConstantTerm;
 
     // time N const 
-    configParameters.timeNconstEB = EBtimeNconst;
-    configParameters.timeNconstEE = EEtimeNconst;
+    configParameters_.timeNconstEB = EBtimeNconst;
+    configParameters_.timeNconstEE = EEtimeNconst;
 
     // amplitude threshold
-    configParameters.amplitudeThreshEE = amplitudeThreshEE;
-    configParameters.amplitudeThreshEB = amplitudeThreshEB;
+    configParameters_.amplitudeThreshEE = amplitudeThreshEE;
+    configParameters_.amplitudeThreshEB = amplitudeThreshEB;
 
     // out of time thresholds gain-dependent
-    configParameters.outOfTimeThreshG12pEB = outOfTimeThreshG12pEB;
-    configParameters.outOfTimeThreshG12pEE = outOfTimeThreshG12pEE;
-    configParameters.outOfTimeThreshG61pEB = outOfTimeThreshG61pEB;
-    configParameters.outOfTimeThreshG61pEE = outOfTimeThreshG61pEE;
-    configParameters.outOfTimeThreshG12mEB = outOfTimeThreshG12mEB;
-    configParameters.outOfTimeThreshG12mEE = outOfTimeThreshG12mEE;
-    configParameters.outOfTimeThreshG61mEB = outOfTimeThreshG61mEB;
-    configParameters.outOfTimeThreshG61mEE = outOfTimeThreshG61mEE;
+    configParameters_.outOfTimeThreshG12pEB = outOfTimeThreshG12pEB;
+    configParameters_.outOfTimeThreshG12pEE = outOfTimeThreshG12pEE;
+    configParameters_.outOfTimeThreshG61pEB = outOfTimeThreshG61pEB;
+    configParameters_.outOfTimeThreshG61pEE = outOfTimeThreshG61pEE;
+    configParameters_.outOfTimeThreshG12mEB = outOfTimeThreshG12mEB;
+    configParameters_.outOfTimeThreshG12mEE = outOfTimeThreshG12mEE;
+    configParameters_.outOfTimeThreshG61mEB = outOfTimeThreshG61mEB;
+    configParameters_.outOfTimeThreshG61mEE = outOfTimeThreshG61mEE;
 
     // allocate event input data
     eventInputDataGPU_.allocate(maxNumberHits_);
 
     // allocate event output data
-    eventOutputDataGPU_.allocate(maxNumberHits_);
+    eventOutputDataGPU_.allocate(configParameters_, maxNumberHits_);
 
     // allocate scratch data for gpu
-    eventDataForScratchGPU_.allocate(maxNumberHits_);
+    eventDataForScratchGPU_.allocate(configParameters_, maxNumberHits_);
 }
 
 EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
@@ -278,21 +283,21 @@ EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
     // assume single device for now
     //
 
-    if (configParameters.amplitudeFitParametersEB) {
+    if (configParameters_.amplitudeFitParametersEB) {
         // configuration parameters
-        cudaCheck( cudaFree(configParameters.amplitudeFitParametersEB) );
-        cudaCheck( cudaFree(configParameters.amplitudeFitParametersEE) );
-        cudaCheck( cudaFree(configParameters.timeFitParametersEB) );
-        cudaCheck( cudaFree(configParameters.timeFitParametersEE) );
+        cudaCheck( cudaFree(configParameters_.amplitudeFitParametersEB) );
+        cudaCheck( cudaFree(configParameters_.amplitudeFitParametersEE) );
+        cudaCheck( cudaFree(configParameters_.timeFitParametersEB) );
+        cudaCheck( cudaFree(configParameters_.timeFitParametersEE) );
 
         // free event input data
         eventInputDataGPU_.deallocate();
 
         // free event ouput data 
-        eventOutputDataGPU_.deallocate();
+        eventOutputDataGPU_.deallocate(configParameters_);
 
         // free event scratch data
-        eventDataForScratchGPU_.deallocate();
+        eventDataForScratchGPU_.deallocate(configParameters_);
     }
 }
 
@@ -356,7 +361,7 @@ void EcalUncalibRecHitProducerGPU::acquire(
         eventOutputDataGPU_,
         eventDataForScratchGPU_,
         conditions,
-        configParameters,
+        configParameters_,
         ctx.stream()
     );
         
@@ -436,28 +441,30 @@ void EcalUncalibRecHitProducerGPU::transferToHost(
         eeRecHits.chi2.size() * sizeof(ecal::reco::StorageScalarType),
         cudaMemcpyDeviceToHost,
         cudaStream.id()) );
-    
-    cudaCheck( cudaMemcpyAsync(ebRecHits.jitter.data(),
-        eventOutputDataGPU_.jitter,
-        ebRecHits.jitter.size() * sizeof(ecal::reco::StorageScalarType),
-        cudaMemcpyDeviceToHost,
-        cudaStream.id()) );
-    cudaCheck( cudaMemcpyAsync(eeRecHits.jitter.data(),
-        eventOutputDataGPU_.jitter + ebRecHits.jitter.size(),
-        eeRecHits.jitter.size() * sizeof(ecal::reco::StorageScalarType),
-        cudaMemcpyDeviceToHost,
-        cudaStream.id()) );
-    
-    cudaCheck( cudaMemcpyAsync(ebRecHits.jitterError.data(),
-        eventOutputDataGPU_.jitterError,
-        ebRecHits.jitterError.size() * sizeof(ecal::reco::StorageScalarType),
-        cudaMemcpyDeviceToHost,
-        cudaStream.id()) );
-    cudaCheck( cudaMemcpyAsync(eeRecHits.jitterError.data(),
-        eventOutputDataGPU_.jitterError + ebRecHits.jitterError.size(),
-        eeRecHits.jitterError.size() * sizeof(ecal::reco::StorageScalarType),
-        cudaMemcpyDeviceToHost,
-        cudaStream.id()) );
+   
+    if (configParameters_.shouldRunTimingComputation) {
+        cudaCheck( cudaMemcpyAsync(ebRecHits.jitter.data(),
+            eventOutputDataGPU_.jitter,
+            ebRecHits.jitter.size() * sizeof(ecal::reco::StorageScalarType),
+            cudaMemcpyDeviceToHost,
+            cudaStream.id()) );
+        cudaCheck( cudaMemcpyAsync(eeRecHits.jitter.data(),
+            eventOutputDataGPU_.jitter + ebRecHits.jitter.size(),
+            eeRecHits.jitter.size() * sizeof(ecal::reco::StorageScalarType),
+            cudaMemcpyDeviceToHost,
+            cudaStream.id()) );
+        
+        cudaCheck( cudaMemcpyAsync(ebRecHits.jitterError.data(),
+            eventOutputDataGPU_.jitterError,
+            ebRecHits.jitterError.size() * sizeof(ecal::reco::StorageScalarType),
+            cudaMemcpyDeviceToHost,
+            cudaStream.id()) );
+        cudaCheck( cudaMemcpyAsync(eeRecHits.jitterError.data(),
+            eventOutputDataGPU_.jitterError + ebRecHits.jitterError.size(),
+            eeRecHits.jitterError.size() * sizeof(ecal::reco::StorageScalarType),
+            cudaMemcpyDeviceToHost,
+            cudaStream.id()) );
+    }
     
     cudaCheck( cudaMemcpyAsync(ebRecHits.flags.data(),
         eventOutputDataGPU_.flags,

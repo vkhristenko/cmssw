@@ -19,7 +19,6 @@
 
 #include "AmplitudeComputationCommonKernels.h"
 #include "AmplitudeComputationKernelsV1.h"
-#include "AmplitudeComputationKernelsV2.h"
 #include "TimeComputationKernels.h"
 
 //#define DEBUG
@@ -116,11 +115,12 @@ void entryPoint(
         eventOutputGPU.pedestal,
         eventOutputGPU.flags,
         scratch.acState,
+        scratch.activeBXs,
         offsetForHashes,
         gainSwitchUseMaxSampleEB,
         gainSwitchUseMaxSampleEE,
         totalChannels);
-    AssertIfError
+    cudaCheck(cudaGetLastError());
 
     //
     // 2d preparation kernel
@@ -150,203 +150,199 @@ void entryPoint(
         scratch.hasSwitchToGain1,
         scratch.isSaturated,
         offsetForHashes);
-    AssertIfError
+    cudaCheck(cudaGetLastError());
     
     // run minimization kernels
     v1::minimization_procedure(
         eventInputCPU, eventInputGPU, eventOutputGPU,
         scratch, conditions, configParameters, cudaStream);
 
-        /*
-    if (conf.runV1)
-        v1::minimization_procedure(d_data, h_data, conf);
-    else
-        v2::minimization_procedure(d_data, h_data, conf);
-        */
+    if (configParameters.shouldRunTimingComputation) {
+        
+        //
+        // TODO: this guy can run concurrently with other kernels,
+        // there is no dependence on the order of execution
+        //
+        unsigned int threads_time_init = threads_1d;
+        unsigned int blocks_time_init = blocks_1d;
+        int sharedBytesInit = 2 * threads_time_init * sizeof(SampleVector::Scalar);
+        kernel_time_computation_init<<<blocks_time_init, threads_time_init,
+                                       sharedBytesInit, cudaStream.id()>>>(
+            eventInputGPU.digis, 
+            eventInputGPU.ids,
+            conditions.pedestals.rms_x12,
+            conditions.pedestals.rms_x6,
+            conditions.pedestals.rms_x1,
+            conditions.pedestals.mean_x12,
+            conditions.pedestals.mean_x6,
+            conditions.pedestals.mean_x1,
+            conditions.gainRatios.gain12Over6,
+            conditions.gainRatios.gain6Over1,
+            scratch.sample_values,
+            scratch.sample_value_errors,
+            scratch.ampMaxError,
+            scratch.useless_sample_values,
+            scratch.pedestal_nums,
+            offsetForHashes,
+            conditions.sampleMask.getEcalSampleMaskRecordEB(),
+            conditions.sampleMask.getEcalSampleMaskRecordEE(),
+            totalChannels
+        );
+        cudaCheck(cudaGetLastError());
 
-    //
-    // TODO: this guy can run concurrently with other kernels,
-    // there is no dependence on the order of execution
-    //
-    unsigned int threads_time_init = threads_1d;
-    unsigned int blocks_time_init = blocks_1d;
-    int sharedBytesInit = 2 * threads_time_init * sizeof(SampleVector::Scalar);
-    kernel_time_computation_init<<<blocks_time_init, threads_time_init,
-                                   sharedBytesInit, cudaStream.id()>>>(
-        eventInputGPU.digis, 
-        eventInputGPU.ids,
-        conditions.pedestals.rms_x12,
-        conditions.pedestals.rms_x6,
-        conditions.pedestals.rms_x1,
-        conditions.pedestals.mean_x12,
-        conditions.pedestals.mean_x6,
-        conditions.pedestals.mean_x1,
-        conditions.gainRatios.gain12Over6,
-        conditions.gainRatios.gain6Over1,
-        scratch.sample_values,
-        scratch.sample_value_errors,
-        scratch.ampMaxError,
-        scratch.useless_sample_values,
-        scratch.pedestal_nums,
-        offsetForHashes,
-        conditions.sampleMask.getEcalSampleMaskRecordEB(),
-        conditions.sampleMask.getEcalSampleMaskRecordEE(),
-        totalChannels
-    );
-    AssertIfError
-
-    // 
-    // TODO: small kernel only for EB. It needs to be checked if 
-    /// fusing such small kernels is beneficial in here
-    //
-    // we are running only over EB digis
-    // therefore we need to create threads/blocks only for that
-    unsigned int const threadsFixMGPA = threads_1d;
-    unsigned int const blocksFixMGPA = 
-        threadsFixMGPA > 10 * eventInputCPU.ebDigis.size()
-            ? 1
-            : (10 * eventInputCPU.ebDigis.size() + threadsFixMGPA - 1) 
-                / threadsFixMGPA;
-    kernel_time_compute_fixMGPAslew<<<blocksFixMGPA, threadsFixMGPA, 
-                                      0, cudaStream.id()>>>(
-        eventInputGPU.digis,
-        scratch.sample_values,
-        scratch.sample_value_errors,
-        scratch.useless_sample_values,
-        conditions.sampleMask.getEcalSampleMaskRecordEB(),
-        totalChannels
-    );
-    AssertIfError
-
-    //
-    // 
-    //
-    int sharedBytes = EcalDataFrame::MAXSAMPLES * nchannels_per_block *
-        4 * sizeof(SampleVector::Scalar);
-    auto const threads_nullhypot = threads_1d;
-    auto const blocks_nullhypot = blocks_1d;
-    kernel_time_compute_nullhypot<<<blocks_nullhypot, threads_nullhypot, 
-                                    sharedBytes, cudaStream.id()>>>(
-        scratch.sample_values,
-        scratch.sample_value_errors,
-        scratch.useless_sample_values,
-        scratch.chi2sNullHypot,
-        scratch.sum0sNullHypot,
-        scratch.sumAAsNullHypot,
-        totalChannels
-    );
-    AssertIfError
-
-    unsigned int nchannels_per_block_makeratio = 10;
-    unsigned int threads_makeratio = 45 * nchannels_per_block_makeratio;
-    unsigned int blocks_makeratio = threads_makeratio > 45 * totalChannels
-        ? 1
-        : (totalChannels * 45 + threads_makeratio - 1) / threads_makeratio;
-    int sharedBytesMakeRatio = 5 * threads_makeratio * sizeof(SampleVector::Scalar);
-    kernel_time_compute_makeratio<<<blocks_makeratio, threads_makeratio,
-                                    sharedBytesMakeRatio, cudaStream.id()>>>(
-        scratch.sample_values,
-        scratch.sample_value_errors,
-        eventInputGPU.ids,
-        scratch.useless_sample_values,
-        scratch.pedestal_nums,
-        configParameters.amplitudeFitParametersEB,
-        configParameters.amplitudeFitParametersEE,
-        configParameters.timeFitParametersEB,
-        configParameters.timeFitParametersEE,
-        scratch.sumAAsNullHypot,
-        scratch.sum0sNullHypot,
-        scratch.tMaxAlphaBetas,
-        scratch.tMaxErrorAlphaBetas,
-        scratch.accTimeMax,
-        scratch.accTimeWgt,
-        scratch.tcState,
-        configParameters.timeFitParametersSizeEB, 
-        configParameters.timeFitParametersSizeEE,
-        configParameters.timeFitLimitsFirstEB,
-        configParameters.timeFitLimitsFirstEE,
-        configParameters.timeFitLimitsSecondEB,
-        configParameters.timeFitLimitsSecondEE,
-        totalChannels
-    );
-    AssertIfError
-
-    //
-    //
-    //
-    auto const threads_findamplchi2 = threads_1d;
-    auto const blocks_findamplchi2 = blocks_1d;
-    int const sharedBytesFindAmplChi2 = 2 * threads_findamplchi2 * 
-        sizeof(SampleVector::Scalar);
-    kernel_time_compute_findamplchi2_and_finish<<<blocks_findamplchi2,
-                                       threads_findamplchi2,
-                                       sharedBytesFindAmplChi2, cudaStream.id()>>>(
-        scratch.sample_values,
-        scratch.sample_value_errors,
-        eventInputGPU.ids,
-        scratch.useless_sample_values,
-        scratch.tMaxAlphaBetas,
-        scratch.tMaxErrorAlphaBetas,
-        scratch.accTimeMax,
-        scratch.accTimeWgt,
-        configParameters.amplitudeFitParametersEB,
-        configParameters.amplitudeFitParametersEE,
-        scratch.sumAAsNullHypot,
-        scratch.sum0sNullHypot,
-        scratch.chi2sNullHypot,
-        scratch.tcState,
-        scratch.ampMaxAlphaBeta,
-        scratch.ampMaxError,
-        scratch.timeMax,
-        scratch.timeError,
-        totalChannels
-    );
-    AssertIfError
-    
-    //
-    //
-    //
-    auto const threads_timecorr = 32;
-    auto const blocks_timecorr = threads_timecorr > totalChannels
-        ? 1 : (totalChannels + threads_timecorr-1) / threads_timecorr;
-    kernel_time_correction_and_finalize<<<blocks_timecorr, threads_timecorr,
+        // 
+        // TODO: small kernel only for EB. It needs to be checked if 
+        /// fusing such small kernels is beneficial in here
+        //
+        // we are running only over EB digis
+        // therefore we need to create threads/blocks only for that
+        unsigned int const threadsFixMGPA = threads_1d;
+        unsigned int const blocksFixMGPA = 
+            threadsFixMGPA > 10 * eventInputCPU.ebDigis.size()
+                ? 1
+                : (10 * eventInputCPU.ebDigis.size() + threadsFixMGPA - 1) 
+                    / threadsFixMGPA;
+        kernel_time_compute_fixMGPAslew<<<blocksFixMGPA, threadsFixMGPA, 
                                           0, cudaStream.id()>>>(
-        eventOutputGPU.amplitude,
-        eventInputGPU.digis,
-        eventInputGPU.ids,
-        conditions.timeBiasCorrections.EBTimeCorrAmplitudeBins,
-        conditions.timeBiasCorrections.EETimeCorrAmplitudeBins,
-        conditions.timeBiasCorrections.EBTimeCorrShiftBins,
-        conditions.timeBiasCorrections.EETimeCorrShiftBins,
-        scratch.timeMax,
-        scratch.timeError,
-        conditions.pedestals.rms_x12,
-        conditions.timeCalibConstants.values,
-        eventOutputGPU.jitter,
-        eventOutputGPU.jitterError,
-        eventOutputGPU.flags,
-        conditions.timeBiasCorrections.EBTimeCorrAmplitudeBinsSize,
-        conditions.timeBiasCorrections.EETimeCorrAmplitudeBinsSize,
-        configParameters.timeConstantTermEB,
-        configParameters.timeConstantTermEE,
-        conditions.timeOffsetConstant.getEBValue(),
-        conditions.timeOffsetConstant.getEEValue(),
-        configParameters.timeNconstEB,
-        configParameters.timeNconstEE,
-        configParameters.amplitudeThreshEB,
-        configParameters.amplitudeThreshEE,
-        configParameters.outOfTimeThreshG12pEB,
-        configParameters.outOfTimeThreshG12pEE,
-        configParameters.outOfTimeThreshG12mEB,
-        configParameters.outOfTimeThreshG12mEE,
-        configParameters.outOfTimeThreshG61pEB,
-        configParameters.outOfTimeThreshG61pEE,
-        configParameters.outOfTimeThreshG61mEB,
-        configParameters.outOfTimeThreshG61mEE,
-        offsetForHashes,
-        totalChannels
-    );
-    AssertIfError
+            eventInputGPU.digis,
+            scratch.sample_values,
+            scratch.sample_value_errors,
+            scratch.useless_sample_values,
+            conditions.sampleMask.getEcalSampleMaskRecordEB(),
+            totalChannels
+        );
+        cudaCheck(cudaGetLastError());
+
+        //
+        // 
+        //
+        int sharedBytes = EcalDataFrame::MAXSAMPLES * nchannels_per_block *
+            4 * sizeof(SampleVector::Scalar);
+        auto const threads_nullhypot = threads_1d;
+        auto const blocks_nullhypot = blocks_1d;
+        kernel_time_compute_nullhypot<<<blocks_nullhypot, threads_nullhypot, 
+                                        sharedBytes, cudaStream.id()>>>(
+            scratch.sample_values,
+            scratch.sample_value_errors,
+            scratch.useless_sample_values,
+            scratch.chi2sNullHypot,
+            scratch.sum0sNullHypot,
+            scratch.sumAAsNullHypot,
+            totalChannels
+        );
+        cudaCheck(cudaGetLastError());
+
+        unsigned int nchannels_per_block_makeratio = 10;
+        unsigned int threads_makeratio = 45 * nchannels_per_block_makeratio;
+        unsigned int blocks_makeratio = threads_makeratio > 45 * totalChannels
+            ? 1
+            : (totalChannels * 45 + threads_makeratio - 1) / threads_makeratio;
+        int sharedBytesMakeRatio = 5 * threads_makeratio * sizeof(SampleVector::Scalar);
+        kernel_time_compute_makeratio<<<blocks_makeratio, threads_makeratio,
+                                        sharedBytesMakeRatio, cudaStream.id()>>>(
+            scratch.sample_values,
+            scratch.sample_value_errors,
+            eventInputGPU.ids,
+            scratch.useless_sample_values,
+            scratch.pedestal_nums,
+            configParameters.amplitudeFitParametersEB,
+            configParameters.amplitudeFitParametersEE,
+            configParameters.timeFitParametersEB,
+            configParameters.timeFitParametersEE,
+            scratch.sumAAsNullHypot,
+            scratch.sum0sNullHypot,
+            scratch.tMaxAlphaBetas,
+            scratch.tMaxErrorAlphaBetas,
+            scratch.accTimeMax,
+            scratch.accTimeWgt,
+            scratch.tcState,
+            configParameters.timeFitParametersSizeEB, 
+            configParameters.timeFitParametersSizeEE,
+            configParameters.timeFitLimitsFirstEB,
+            configParameters.timeFitLimitsFirstEE,
+            configParameters.timeFitLimitsSecondEB,
+            configParameters.timeFitLimitsSecondEE,
+            totalChannels
+        );
+        cudaCheck(cudaGetLastError());
+
+        //
+        //
+        //
+        auto const threads_findamplchi2 = threads_1d;
+        auto const blocks_findamplchi2 = blocks_1d;
+        int const sharedBytesFindAmplChi2 = 2 * threads_findamplchi2 * 
+            sizeof(SampleVector::Scalar);
+        kernel_time_compute_findamplchi2_and_finish<<<blocks_findamplchi2,
+                                           threads_findamplchi2,
+                                           sharedBytesFindAmplChi2, cudaStream.id()>>>(
+            scratch.sample_values,
+            scratch.sample_value_errors,
+            eventInputGPU.ids,
+            scratch.useless_sample_values,
+            scratch.tMaxAlphaBetas,
+            scratch.tMaxErrorAlphaBetas,
+            scratch.accTimeMax,
+            scratch.accTimeWgt,
+            configParameters.amplitudeFitParametersEB,
+            configParameters.amplitudeFitParametersEE,
+            scratch.sumAAsNullHypot,
+            scratch.sum0sNullHypot,
+            scratch.chi2sNullHypot,
+            scratch.tcState,
+            scratch.ampMaxAlphaBeta,
+            scratch.ampMaxError,
+            scratch.timeMax,
+            scratch.timeError,
+            totalChannels
+        );
+        cudaCheck(cudaGetLastError());
+        
+        //
+        //
+        //
+        auto const threads_timecorr = 32;
+        auto const blocks_timecorr = threads_timecorr > totalChannels
+            ? 1 : (totalChannels + threads_timecorr-1) / threads_timecorr;
+        kernel_time_correction_and_finalize<<<blocks_timecorr, threads_timecorr,
+                                              0, cudaStream.id()>>>(
+            eventOutputGPU.amplitude,
+            eventInputGPU.digis,
+            eventInputGPU.ids,
+            conditions.timeBiasCorrections.EBTimeCorrAmplitudeBins,
+            conditions.timeBiasCorrections.EETimeCorrAmplitudeBins,
+            conditions.timeBiasCorrections.EBTimeCorrShiftBins,
+            conditions.timeBiasCorrections.EETimeCorrShiftBins,
+            scratch.timeMax,
+            scratch.timeError,
+            conditions.pedestals.rms_x12,
+            conditions.timeCalibConstants.values,
+            eventOutputGPU.jitter,
+            eventOutputGPU.jitterError,
+            eventOutputGPU.flags,
+            conditions.timeBiasCorrections.EBTimeCorrAmplitudeBinsSize,
+            conditions.timeBiasCorrections.EETimeCorrAmplitudeBinsSize,
+            configParameters.timeConstantTermEB,
+            configParameters.timeConstantTermEE,
+            conditions.timeOffsetConstant.getEBValue(),
+            conditions.timeOffsetConstant.getEEValue(),
+            configParameters.timeNconstEB,
+            configParameters.timeNconstEE,
+            configParameters.amplitudeThreshEB,
+            configParameters.amplitudeThreshEE,
+            configParameters.outOfTimeThreshG12pEB,
+            configParameters.outOfTimeThreshG12pEE,
+            configParameters.outOfTimeThreshG12mEB,
+            configParameters.outOfTimeThreshG12mEE,
+            configParameters.outOfTimeThreshG61pEB,
+            configParameters.outOfTimeThreshG61pEE,
+            configParameters.outOfTimeThreshG61mEB,
+            configParameters.outOfTimeThreshG61mEE,
+            offsetForHashes,
+            totalChannels
+        );
+        cudaCheck(cudaGetLastError());
+    }
 
         /*
     cudaEventRecord(end_event, 0);

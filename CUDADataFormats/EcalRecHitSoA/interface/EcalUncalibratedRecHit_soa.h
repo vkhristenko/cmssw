@@ -1,12 +1,12 @@
-#ifndef DataFormats_EcalRecHitSoA_interface_EcalUncalibratedRecHit_soa_h
-#define DataFormats_EcalRecHitSoA_interface_EcalUncalibratedRecHit_soa_h
+#ifndef CUDADataFormats_EcalRecHitSoA_interface_EcalUncalibratedRecHit_soa_h
+#define CUDADataFormats_EcalRecHitSoA_interface_EcalUncalibratedRecHit_soa_h
 
 #include <vector>
 #include <array>
 
 #include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
-#include "DataFormats/EcalRecHitSoA/interface/RecoTypes.h"
 
+#include "CUDADataFormats/EcalRecHitSoA/interface/RecoTypes.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
 
 namespace ecal {
@@ -14,7 +14,6 @@ namespace ecal {
 namespace Tag {
 
 struct soa {};
-struct aos {};
 struct ptr {};
 
 }
@@ -26,11 +25,6 @@ struct type_wrapper {
 //#else
     using type = std::vector<T>;
 //#endif
-};
-
-template<typename T>
-struct type_wrapper<T, Tag::aos> {
-    using type = T;
 };
 
 template<typename T>
