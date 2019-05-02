@@ -19,7 +19,6 @@
 
 #include "AmplitudeComputationCommonKernels.h"
 #include "AmplitudeComputationKernelsV1.h"
-#include "AmplitudeComputationKernelsV2.h"
 #include "TimeComputationKernels.h"
 
 //#define DEBUG
@@ -157,13 +156,6 @@ void entryPoint(
     v1::minimization_procedure(
         eventInputCPU, eventInputGPU, eventOutputGPU,
         scratch, conditions, configParameters, cudaStream);
-
-        /*
-    if (conf.runV1)
-        v1::minimization_procedure(d_data, h_data, conf);
-    else
-        v2::minimization_procedure(d_data, h_data, conf);
-        */
 
     if (configParameters.shouldRunTimingComputation) {
         
