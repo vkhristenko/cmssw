@@ -4,7 +4,7 @@
 #include <Eigen/Dense>
 #include <array>
 
-#include "DataFormats/EcalRecHitSoA/interface/RecoTypes.h"
+#include "CUDADataFormats/EcalRecHitSoA/interface/RecoTypes.h"
 
 namespace ecal { namespace multifit {
 

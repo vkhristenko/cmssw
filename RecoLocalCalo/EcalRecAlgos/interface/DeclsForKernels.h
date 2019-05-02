@@ -8,8 +8,8 @@
 
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes_gpu.h"
-#include "DataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
-#include "DataFormats/EcalRecHitSoA/interface/RecoTypes.h"
+#include "CUDADataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
+#include "CUDADataFormats/EcalRecHitSoA/interface/RecoTypes.h"
 
 #include "CondFormats/EcalObjects/interface/EcalWeightSet.h"
 #include "CondFormats/EcalObjects/interface/EcalPedestals.h"
