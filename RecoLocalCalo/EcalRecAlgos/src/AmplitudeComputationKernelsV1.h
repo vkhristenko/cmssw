@@ -1,17 +1,24 @@
 #ifndef RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernelsV1
 #define RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernelsV1
 
-#include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes_gpu.h"
-#include "RecoLocalCalo/EcalRecAlgos/interface/DeclsForKernels.h"
+#include <iostream>
+#include <limits>
+
+#include "DataFormats/EcalDigi/interface/EcalDataFrame.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
 
-class EcalPulseShape;
-class EcalPulseCovariance;
-class EcalUncalibratedRecHit;
+#include "DataFormats/Math/interface/approx_exp.h"
+#include "DataFormats/Math/interface/approx_log.h"
+
+#include "RecoLocalCalo/EcalRecAlgos/interface/DeclsForKernels.h"
+
+#include "cuda.h"
+
+//#define DEBUG
+
+//#define ECAL_RECO_CUDA_DEBUG
 
 namespace ecal { namespace multifit {
-
-namespace v1 {
 
 void minimization_procedure(
         EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
@@ -20,29 +27,6 @@ void minimization_procedure(
         ConfigurationParameters const& configParameters,
         cuda::stream_t<>& cudaStream);
 
-}
-
-///
-/// TODO: trivial impl for now, there must be a way to improve
-///
-/// Conventions:
-///   - amplitudes -> solution vector, what we are fitting for
-///   - samples -> raw detector responses
-///   - passive constraint - satisfied constraint
-///   - active constraint - unsatisfied (yet) constraint
-///
-__global__
-void kernel_minimize(SampleMatrix const* noisecov,
-                     FullSampleMatrix const* full_pulse_cov,
-                     BXVectorType *bxs,
-                     SampleVector const* samples,
-                     SampleVector* amplitudes,
-                     PulseMatrixType* pulse_matrix, 
-                     ::ecal::reco::StorageScalarType* chi2s,
-                     char *acState,
-                     int nchannels,
-                     int max_iterations);
-
 }}
 
-#endif // RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernelsV1
+#endif // RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernelsV2

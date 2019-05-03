@@ -151,6 +151,9 @@ struct EventDataForScratchGPU {
     BXVectorType *activeBXs = nullptr;
     char *acState = nullptr;
 
+    int *npassive = nullptr;
+    char *minimizationStatePerBlock=nullptr;
+
     bool *hasSwitchToGain6=nullptr,
          *hasSwitchToGain1=nullptr,
          *isSaturated=nullptr;
@@ -183,6 +186,12 @@ struct EventDataForScratchGPU {
             size * sizeof(BXVectorType)) );
         cudaCheck( cudaMalloc((void**)&acState,
             size * sizeof(char)) );
+
+        // FIXME: needs to be treated properly
+        cudaCheck( cudaMalloc((void**)&minimizationStatePerBlock,
+            1000 * sizeof(char)) );
+        cudaCheck( cudaMalloc((void**)npassive,
+            size * sizeof(int)) );
 
         cudaCheck( cudaMalloc((void**)&hasSwitchToGain6,
             size * sizeof(bool)) );
@@ -237,6 +246,9 @@ struct EventDataForScratchGPU {
         cudaCheck( cudaFree(pulse_matrix) );
         cudaCheck( cudaFree(activeBXs) );
         cudaCheck( cudaFree(acState) );
+
+        cudaCheck( cudaFree(minimizationStatePerBlock) );
+        cudaCheck( cudaFree(npassive) );
 
         cudaCheck( cudaFree(hasSwitchToGain6) );
         cudaCheck( cudaFree(hasSwitchToGain1) );

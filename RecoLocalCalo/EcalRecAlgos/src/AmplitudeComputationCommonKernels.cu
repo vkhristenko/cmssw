@@ -78,6 +78,21 @@ void kernel_prep_1d_and_initialize(
         char* shr_counts = reinterpret_cast<char*>(
             shr_hasSwitchToGain0_tmp) + nchannels_per_block*nsamples;
 
+        // FIXME: propogate the constant as a parameter
+        if (tx < 1000)
+            minimizationStatePerBlock[tx] = 0;
+
+        //
+        // initialization
+        //
+        if (tx < nchannels) {
+            acState[tx] = static_cast<char>(MinimizationState::NotFinished);
+            energies[tx] = 0;
+            chi2[tx] = 0;
+            g_pedestal[tx] = 0;
+            npassive[tx] = 0;
+        }
+
         //
         // indices
         //
@@ -239,10 +254,6 @@ void kernel_prep_1d_and_initialize(
             //
             // initialization
             //
-            acState[ch] = static_cast<char>(MinimizationState::NotFinished);
-            energies[ch] = 0;
-            chi2[ch] = 0;
-            g_pedestal[ch] = 0;
             uint32_t flag = 0;
 
             // start of this channel in shared mem

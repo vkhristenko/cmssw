@@ -153,7 +153,7 @@ void entryPoint(
     cudaCheck(cudaGetLastError());
     
     // run minimization kernels
-    v1::minimization_procedure(
+    minimization_procedure(
         eventInputCPU, eventInputGPU, eventOutputGPU,
         scratch, conditions, configParameters, cudaStream);
 
