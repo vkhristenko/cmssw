@@ -283,7 +283,7 @@ void minimization_procedure(
         + eventInputCPU.eeDigis.size();
 //    unsigned int threads_min = conf.threads.x;
     // TODO: configure from python
-    unsigned int threads_min = 32;
+    unsigned int threads_min = configParameters.kernelMinimizeThreads[0];
     unsigned int blocks_min = threads_min > totalChannels
         ? 1
         : (totalChannels + threads_min - 1) / threads_min;
