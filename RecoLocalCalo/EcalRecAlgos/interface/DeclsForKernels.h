@@ -48,10 +48,6 @@ enum class MinimizationState : char {
     Precomputed = 2,
 };
 
-using EMatrix = Eigen::Matrix<double,
-    EcalWeightSet::EcalWeightMatrix::rep_type::kRows,
-    EcalWeightSet::EcalWeightMatrix::rep_type::kCols>;
-
 // event input data on cpu, just const refs
 struct EventInputDataCPU {
     EBDigiCollection const& ebDigis;

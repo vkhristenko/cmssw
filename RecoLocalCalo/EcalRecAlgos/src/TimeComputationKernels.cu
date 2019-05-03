@@ -144,8 +144,8 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
                                    unsigned int const timeFitParameters_sizeEE,
                                    ConfigurationParameters::type const timeFitLimits_firstEB,
                                    ConfigurationParameters::type const timeFitLimits_firstEE,
-                                   SampleVector::Scalar const timeFitLimits_secondEB,
-                                   SampleVector::Scalar const timeFitLimits_secondEE,
+                                   ConfigurationParameters::type const timeFitLimits_secondEB,
+                                   ConfigurationParameters::type const timeFitLimits_secondEE,
                                    int const nchannels) {
     using ScalarType = SampleVector::Scalar;
 
