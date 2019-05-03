@@ -485,7 +485,7 @@ __global__
 void kernel_permute_results(
         SampleVector *amplitudes,
         BXVectorType const*activeBXs,
-        float *energies,
+        ::ecal::reco::StorageScalarType *energies,
         char const* acState,
         int const nchannels) {
     // constants

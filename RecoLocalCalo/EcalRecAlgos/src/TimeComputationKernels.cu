@@ -1057,7 +1057,7 @@ void kernel_time_computation_init(uint16_t const* digis,
 __global__
 void kernel_time_correction_and_finalize(
 //        SampleVector::Scalar const* g_amplitude,
-        float const* g_amplitude,
+        ::ecal::reco::StorageScalarType const* g_amplitude,
         uint16_t const* digis,
         uint32_t const* dids,
         float const* amplitudeBinsEB,
