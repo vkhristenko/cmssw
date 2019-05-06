@@ -114,6 +114,8 @@ void entryPoint(
         eventOutputGPU.chi2,
         eventOutputGPU.pedestal,
         eventOutputGPU.flags,
+        scratch.minimizationStatesPerBlock,
+        scratch.npassive,
         scratch.acState,
         scratch.activeBXs,
         offsetForHashes,

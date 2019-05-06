@@ -152,7 +152,8 @@ struct EventDataForScratchGPU {
     char *acState = nullptr;
 
     int *npassive = nullptr;
-    char *minimizationStatePerBlock=nullptr;
+    char *minimizationStatesPerBlock=nullptr;
+    SampleMatrix *updatedNoiseCovariance = nullptr;
 
     bool *hasSwitchToGain6=nullptr,
          *hasSwitchToGain1=nullptr,
@@ -188,10 +189,12 @@ struct EventDataForScratchGPU {
             size * sizeof(char)) );
 
         // FIXME: needs to be treated properly
-        cudaCheck( cudaMalloc((void**)&minimizationStatePerBlock,
+        cudaCheck( cudaMalloc((void**)&minimizationStatesPerBlock,
             1000 * sizeof(char)) );
-        cudaCheck( cudaMalloc((void**)npassive,
+        cudaCheck( cudaMalloc((void**)&npassive,
             size * sizeof(int)) );
+        cudaCheck( cudaMalloc((void**)&updatedNoiseCovariance,
+            size * sizeof(SampleMatrix)) );
 
         cudaCheck( cudaMalloc((void**)&hasSwitchToGain6,
             size * sizeof(bool)) );
@@ -247,8 +250,9 @@ struct EventDataForScratchGPU {
         cudaCheck( cudaFree(activeBXs) );
         cudaCheck( cudaFree(acState) );
 
-        cudaCheck( cudaFree(minimizationStatePerBlock) );
+        cudaCheck( cudaFree(minimizationStatesPerBlock) );
         cudaCheck( cudaFree(npassive) );
+        cudaCheck( cudaFree(updatedNoiseCovariance) );
 
         cudaCheck( cudaFree(hasSwitchToGain6) );
         cudaCheck( cudaFree(hasSwitchToGain1) );
@@ -288,18 +292,6 @@ struct ConditionsProducts {
     EcalSampleMask const& sampleMask;
     EcalTimeOffsetConstant const& timeOffsetConstant;
     uint32_t offsetForHashes;
-};
-
-//*/
-
-struct xyz {
-    int x,y,z;
-};
-
-struct conf_data {
-    xyz threads;
-    bool runV1;
-    cudaStream_t cuStream;
 };
 
 }}

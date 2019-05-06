@@ -21,62 +21,13 @@
 #include "inplace_fnnls.h"
 
 #include "AmplitudeComputationCommonKernels.h"
-#include "AmplitudeComputationKernelsV2.h"
+#include "AmplitudeComputationKernelsV1.h"
 
 //#define DEBUG
 
 //#define ECAL_RECO_CUDA_DEBUG
 
 namespace ecal { namespace multifit {
-
-namespace debug {
-
-__global__
-void kernelUpdateCovarianceMatrix(
-        SampleMatrix const* noiseCovariance,
-        FullSampleMatrix const* fullPulseCovariance,
-        SampleVector const* amplitudes,
-        BXVectorType const* bxs,
-        char const* acState,
-        SampleMatrix *updatedNoiseCovariance,
-        int const nchannels) {
-    // constants
-    constexpr int nsamples = SampleVector::RowsAtCompileTime;
-    constexpr int npulses = SampleVector::RowsAtCompileTime;
-
-    // indices
-    int ch = threadIdx.x + blockIdx.x*blockDim.x;
-
-    if (ch < nchannels) {
-        auto const state = static_cast<MinimizationState>(acState[ch]);
-        if (state != MinimizationState::NotFinished)
-            return;
-
-        // start with the default values
-        updatedNoiseCovariance[ch] = noiseCovariance[ch];
-
-        for (unsigned int ipulse=0; ipulse<npulses; ipulse++) {
-            if (amplitudes[ch].coeff(ipulse) == 0) 
-                continue;
-
-            int const bx = bxs[ch].coeff(ipulse);
-            int first_sample_t = std::max(0, bx+3);
-            int offset = 7 - 3 - bx;
-
-            auto const value = amplitudes[ch].coeff(ipulse);
-            auto const value_sq = value * value;
-
-            unsigned int nsample_pulse = nsamples - first_sample_t;
-            updatedNoiseCovariance[ch].block(first_sample_t, first_sample_t,
-                                         nsample_pulse, nsample_pulse)
-                += value_sq * fullPulseCovariance[ch].block(
-                    first_sample_t + offset, first_sample_t + offset,
-                    nsample_pulse, nsample_pulse);
-        }
-    }
-}
-
-}
 
 __global__
 void kernel_update_covariance_matrix(
@@ -101,9 +52,28 @@ void kernel_update_covariance_matrix(
         return;
 
     // configure shared mem
-    __shared__ FullSampleMatrix::Scalar smem[
+    __shared__ FullSampleMatrix::Scalar __shrFullPulseCovariance[
         FullSampleMatrix::RowsAtCompileTime * FullSampleMatrix::ColsAtCompileTime];
-    Eigen::Map<FullSampleMatrix> shrFullPulseCovariance{smem};
+    __shared__ SampleMatrix::Scalar __shrL[nsamples * nsamples];
+    __shared__ SampleMatrix::Scalar __shrLSums[nsamples * nsamples];
+    __shared__ SampleMatrix::Scalar shrSamples[nsamples],
+                                    shrbPrime[nsamples];
+    __shared__ SampleMatrix::Scalar __shrPulseMatrix[nsamples*nsamples],
+                                    __shrAPrime[nsmaples * nsamples];
+    Eigen::Map<SampleMatrix> shrAPrime{__shrAPrime};
+    Eigen::Map<SampleMatrix> shrPulseMatrix{__shrPulseMatirx};
+    Eigen::Map<FullSampleMatrix> shrFullPulseCovariance{
+        __shrFullPulseCovariance};
+    Eigen::Map<SampleMatrix> shrL{__shrL};
+    Eigen::Map<SampleMatrix> shrLSums{__shrLSums};
+
+    // copy from global mem 'samples' to shared mem
+    if (ty==0)
+        shrSamples[tx] = samples[ch](tx);
+
+    // shared mem store from global
+//    shrPulseMatrix(ty, tx) = pulseMatrix[ch](ty, tx);
+    auto pm_i_j = pulseMatrix[ch](ty, tx);
 
     for (unsigned int ity=ty; ity<FullSampleMatrix::RowsAtCompileTime; 
          ity+=nsamples)
@@ -114,7 +84,7 @@ void kernel_update_covariance_matrix(
     // load the initial matrix value
     auto matrixValue = noiseCovariance[ch](ty, tx);
 
-#pragma unroll
+    #pragma unroll
     for (int ipulse=0; ipulse<npulses; ipulse++) {
         auto const amplitude = amplitudes[ch].coeff(ipulse);
         if (amplitude == 0)
@@ -137,24 +107,181 @@ void kernel_update_covariance_matrix(
         matrixValue += value_sq * shrFullPulseCovariance(ty + offset, tx+offset);
     }
 
-    // store into global
-    updatedNoiseCovariance[ch](ty, tx) = matrixValue;
+    //
+    // cholesky decomposition of 10 by 10 matrix 
+    // fused with forward substitution in order to use solvers
+    //
 
-}
+    // init L sums
+    shrLSums(ty, tx) = 0;
 
-__global__
-void kernel_matrix_ludecomp(
-        SampleMatrix const* covarianceMatrix,
-        char const* acState,
-        SampleMatrix *Ls,
-        int nchannels) {
-    int const ch = threadIdx.x + blockIdx.x * blockDim.x;
-    if (ch < nchannels) {
-        auto const state = static_cast<MinimizationState>(acState[ch]);
-        if (state != MinimizationState::NotFinished)
-            return;
+    // store only diagonal elements 
+    __shared__ SampleMatrix::Scalar shrDiagElements[nsamples];
+    if (ty == tx)
+        shrDiag[tx] = matrixValue;
+    __syncthreads();
 
-        Ls[ch] = covarianceMatrix[ch].llt().matrixL();
+    // column 0
+    // compute L(ty, 0) for ty >=1
+    auto const m_j_j = shrDiag[tx];
+    if (tx == 0 && ty >= 1)
+        shrL(ty, 0) = matrixValue / std::sqrt(m_j_j);
+    else if (tx == 0 && ty == 0)
+        shrL(0, 0) = std::sqrt(m_j_j);
+    __syncthreads();
+    
+    // compute the first row for forward substitution
+    // compute subs for all elements after the first row
+    if (ty == 0) {
+        shrAPrime(0, tx) = shrPulseMatrix(0, tx) / shrL(0, 0);
+    } else { // ty >= 1
+        shrPulseMatrix(ty, tx) -= shrL(ty, 0) * shrPulseMatrix(0, tx) / shrL(0, 0);
+    }
+
+    // use the opposite column (threads for that col)
+    // to compute values for forward substitution
+    if (tx==9 && ty == 0) {
+        shrbPrime[0] = shrSamples[0] / shrL(0, 0);
+    } else if (tx==9 && ty >= 1) {
+        shrSamples[ty] -= shrL(ty, 0) * shrSamples[0] / shrL(0, 0);
+    }
+
+    // TODO: verify that the loop is unrolled
+    #pragma unroll
+    for (int column=1; column<nsamples-1; column++) {
+        if (tx==column && ty>=column) {
+            // compute L(j, j) = sqrt(M(j, j) - Sum[k](L(j, k) * L(j, k)))
+            auto const sumsq = shrLSums(column, column) + 
+                shrL(column, column-1) * shrL(column, column-1);
+            auto const l_j_j = std::sqrt(m_j_j - sumsq);
+            if (ty == column)
+                shrL(column, column) = l_j_j;
+            else {
+                // compute L(i, column) = 
+                //   (M(i, column) - Sum[k](L(i, k) * L(column, k))) / L(col, col)
+                auto const sumsq_i_j = shrLSums(ty, column) + 
+                    shrL(ty, column-1) * shrL(column, column-1);
+                auto const tmp = m_i_j - sumsq_i_j;
+                auto const l_i_column = tmp / l_j_j;
+                shrL(ty, column) = l_i_column;
+            }
+        }
+        if (tx>=column && ty>=column)
+            shrLSums(ty, tx) += shrL(ty, column-1) * shrL(tx, column-1);
+        __syncthreads();
+
+        // forward substitution computation
+        if (ty >= column) {
+            if (ty == column) {
+                shrAPrime(column, tx) = shrPulseMatrix(column, tx) 
+                    / shrL(column, column);
+            } else {
+                shrPulseMatrix(ty, tx) -= shrL(ty, column) * 
+                    shrPulseMatrix(column, tx) / shrL(column, column);
+            }
+        }
+
+        // use a different group of threads
+        // to compute values for forward substitution
+        if (tx==column-1 && ty>=column) {
+            if (ty == column)
+                shrbPrime[column] = shrSamples[column] / shrL(column, column);
+            else 
+                shrSamples[ty] -= shrL(ty, column) * shrSamples[column] 
+                    / shrL(column, column);
+        }
+    }
+
+    // last iteration for column = 9
+    constexpr auto column = nsamples - 1;
+    if (tx==column && ty>=column) {
+        // compute L(j, j) = sqrt(M(j, j) - Sum[k](L(j, k) * L(j, k)))
+        auto const sumsq = shrLSums(column, column) + 
+            shrL(column, column-1) * shrL(column, column-1);
+        auto const l_j_j = std::sqrt(m_j_j - sumsq);
+        if (ty == column)
+            shrL(column, column) = l_j_j;
+        else {
+            // compute L(i, column) = 
+            //   (M(i, column) - Sum[k](L(i, k) * L(column, k))) / L(col, col)
+            auto const sumsq_i_j = shrLSums(ty, column) + 
+                shrL(ty, column-1) * shrL(column, column-1);
+            auto const tmp = m_i_j - sumsq_i_j;
+            auto const l_i_column = tmp / l_j_j;
+            shrL(ty, column) = l_i_column;
+        }
+    }
+    __syncthreads();
+    if (ty == 0 )
+        shrAPrime(column, tx) = shrPulseMatrix(column, tx) / shrL(column, column);
+    // note, we are using different threads
+    if (tx == 0 && ty==1)
+        shrbPrime[column] = shrSamples[column] / shrL(column, column);
+
+    // store to global memory
+    g_L[ch](ty, tx) = shrL(ty, tx);
+    __syncthreads();
+
+    // 
+    // compute backward substitution
+    // reuse memory:
+    //   shrPulseMatrix -> A
+    //   shrSamples -> b
+    //
+    auto& shrA = shrPulseMatrix;
+    auto& shrb = shrSamples;
+    
+    // compute row 9
+    if (ty==9) {
+        shrA(9, tx) = shrAPrime(9, tx) / shrL(9, 9);
+        if (tx == 9)
+            shrb[9] = shrbPrime[9] / shrL(9, 9);
+        else // tx <= 8
+            shrbPrime[tx] -= shrL(9, tx) * shrbPrime[9] / shrL(9, 9);
+    } else {
+        // ty<=8
+        shrAPrime(ty, tx) -= shrL(9, ty) * shrAPrime(9, tx) / shrL(9, 9);
+    }
+
+    // compute rows 8 - 1
+    #pragma unroll
+    for (int row=nsamples-2; row>=1; row--) {
+        // we need only threads above or equal `row`
+        if (ty == row) {
+            shrA(row, tx) = shrAPrime(row, tx) / shrL(row, row);
+        } else if (ty < row) {
+            shrAPrime(ty, tx) -= shrL(row, tx)
+                * shrAPrime(row, tx) / shrL(row, row);
+        }
+
+        // use different 10 threads than the ones above
+        if (ty == nsamples - 1 && tx==row) {
+            shrb[row] = shrbPrime[row] / shrL(row, row);
+        } else if (ty==nsamples-1 && tx<row) {
+            shrbPrime[tx] -= shrL(row, tx) * shrbPrime[row] / shrL(row, row);
+        }
+        __syncthreads();
+    }
+
+    // last iteration
+    if (ty == 0)
+        shrA(0, tx) = shrAPrime(0, tx) / shr(0, 0);
+    if (ty == nsamples-1 && tx==0)
+        shrb[0] = shrbPrime[0] / shrL(0, 0);
+    __syncthreads();
+
+    //
+    // compute AtA and Atb
+    //
+    auto ata_i_j = 0f;
+    for (unsigned int k=0; k<nsamples; k++)
+        ata_i_j += shrA(k, ty) * shrA(k, tx);
+    g_AtA[ch](ty, tx) = ata_i_j;
+    if (ty==0) {
+        auto atb_i = 0f;
+        for (unsigned int k=0; k<nsamples; k++)
+            atb_i += shrA(k, tx) * shrb[k];
+        g_Atb[ch](tx) = atb_i;
     }
 }
 
@@ -169,28 +296,73 @@ void kernel_fast_nnls(
         BXVectorType *activeBXs,
         float *chi2s,
         int nchannels) {
-    int const ch = threadIdx.x + blockIdx.x * blockDim.x;
-    if (ch < nchannels) {
-        auto const state = static_cast<MinimizationState>(acState[ch]);
-        if (state != MinimizationState::NotFinished)
-            return;
+    using DataType = SampleVector::Scalar;
 
-        auto const L = Eigen::internal::LLT_Traits<SampleMatrix, Eigen::Lower>::getL(Ls[ch]); // this gives just a view - should not generate any memcp
-//        auto L = covarianceMatrix[ch].llt().matrixL();
-        SampleMatrix A = L.solve(pulseMatrix[ch]);
-        SampleVector b = L.solve(samples[ch]);
-        inplace_fnnls(A, b, amplitudes[ch], npassive[ch],
-                      activeBXs[ch],
-                      pulseMatrix[ch]);
+    // indices / constants
+    auto const ch = threadIdx.x + blockIdx.x * blockDim.x;
+    constexpr int nsamples = SampleVector::RowsAtCompileTime;
+    
+    // remove unneeded threads
+    if (ch >= nchannels)
+        return;
+    
+    auto const state = static_cast<MinimizationState>(acState[ch]);
+    if (state != MinimizationState::NotFinished)
+        return;
 
-        // ocmpute chi2
-        auto const oldChi2 = chi2s[ch];
-        auto const chi2 = L.solve(pulseMatrix[ch]*amplitudes[ch] - samples[ch])
-            .squaredNorm();
-        auto const delta = chi2 - oldChi2;
-        if (ecal::abs(delta) < 1e-3)
-            acState[ch] = static_cast<char>(MinimizationState::Finished);
-        chi2s[ch] = chi2;
+    // TODO: add noisecov check
+    
+    // shared mem conf
+    extern __shared__ char* smem;
+    DataType* __shrAtA = reinterpret_cast<DataType*>(smem);
+    Eigen::Map<SampleMatrix> shrAtA{shrAtARaw};
+    DataType* __shrL = reinterpret_cast<DataType*>(
+        __shrAtA + nsamples*nsamples*blockDim.x);
+    Eigen::Map<SampleMatrix> shrL{__shrL + threadIdx.x*nsamples*nsamples};
+    DataType* shrAtb = reinterpret_cast<DataType*>(
+        __shrL + nsamples*nsamples*blockDim.x);
+    DataType* shrx = reinterpret_cast<DataType*>(
+        shrAtb + nsamples*blockDim.x);
+    DataType* shrs = reinterpret_cast<DataType*>(
+        shrx + nsamples*blockDim.x);
+    DataType* shrw = reinterpret_cast<DataType*>(
+        shrs + nsamples*blockDim.x);
+    char* permutation = reinterpret_cast<char*>(shrw) + nsamples*blockDim.x;
+
+    // load/store to shared/regs
+    shrAtA = g_AtA[ch];
+    shrAtb = g_Atb[ch];
+    auto npassive = g_npassive[ch];
+
+    // 
+    Eigen::Index w_max_idx_prev = 0;
+    DataType w_max_prev = 0;
+    double eps_to_use = eps;
+    for (int iteration=0; iteration<maxIterations; iteration++) {
+        if (iteration>0 || npassive==0) {
+            // we are not infinite
+            if (iteration >= 500)
+                break;
+
+            auto const nactive = nsamples - npassive;
+            if (!nactive)
+                break;
+
+            shrw.tail(nactive) = shrAtb.tail(nactive) - (shrAtA*shrx).tail(nactive);
+
+            // get the index of w that gives the max gain
+            Eigen::Index w_max_idx;
+            auto const w_max = w.tail(nactive).maxCoeff(&w_max_idx);
+            if (w_max < eps_to_use || 
+                (w_max_idx==w_max_idx_prev && w_max==w_max_prev))
+                break;
+
+            w_max_prev = w_max;
+            w_max_idx_prev = w_max_idx;
+            w_max_idx += npassive;
+            Eigen::numext::swap(permutation[npassive], permutation[w_max_idx]);
+            ++npassive;
+        }
     }
 }
 
@@ -231,7 +403,7 @@ void minimization_procedure(
     int iterations = 0;
     int const maxIterations = 50;
     unsigned int const totalChannels = 
-        eventInputCPU.ebDigis->size() + eventInputCPU.eeDigis->size();
+        eventInputCPU.ebDigis.size() + eventInputCPU.eeDigis.size();
 
     // main loop
     while (true) {
@@ -242,7 +414,7 @@ void minimization_procedure(
             EcalDataFrame::MAXSAMPLES};
         unsigned int blocksUpdateCov = totalChannels;
         kernel_update_covariance_matrix<<<blocksUpdateCov, threadsUpdateCov,
-                                          0, conf.cuStream>>>(
+                                          0, cudaStream.id()>>>(
             scratch.noisecov, 
             scratch.pulse_covariances, // FIXME we can remove additional matrix
             (SampleVector*)eventOutputGPU.amplitudesAll,
@@ -345,10 +517,10 @@ void minimization_procedure(
         : (10 * totalChannels + threadsPermute - 1) / threadsPermute;
     int bytesPermute = threadsPermute * sizeof(SampleVector::Scalar);
     kernel_permute_results<<<blocksPermute, threadsPermute, bytesPermute,
-                             conf.cuStream>>>(
-        eventOutputGPU.amplitudesAll,
+                             cudaStream.id()>>>(
+        (SampleVector*)eventOutputGPU.amplitudesAll,
         scratch.activeBXs,
-        eventOutputGPU.energies,
+        eventOutputGPU.amplitude,
         scratch.acState,
         totalChannels);
     cudaCheck( cudaGetLastError() );

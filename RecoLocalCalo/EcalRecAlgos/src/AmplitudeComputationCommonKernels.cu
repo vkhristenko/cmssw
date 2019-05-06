@@ -44,6 +44,8 @@ void kernel_prep_1d_and_initialize(
                     ::ecal::reco::StorageScalarType* chi2,
                     ::ecal::reco::StorageScalarType* g_pedestal,
                     uint32_t *flags,
+                    char* minimizationStatesPerBlock,
+                    int* npassive,
                     char* acState,
                     BXVectorType *bxs,
                     uint32_t const offsetForHashes,
@@ -80,7 +82,7 @@ void kernel_prep_1d_and_initialize(
 
         // FIXME: propogate the constant as a parameter
         if (tx < 1000)
-            minimizationStatePerBlock[tx] = 0;
+            minimizationStatesPerBlock[tx] = 0;
 
         //
         // initialization

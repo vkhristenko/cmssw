@@ -91,12 +91,6 @@ bool inplace_fnnls(matrix_t const& A,
         }
       }
 
-      /*
-      if (std::numeric_limits<double>::max() == alpha) {
-        x.head(npassive) = s.head(npassive);
-        break;
-      }*/
-
       x.head(npassive) += alpha * (s.head(npassive) - x.head(npassive));
       x[alpha_idx] = 0;
       --npassive;
