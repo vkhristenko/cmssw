@@ -260,10 +260,13 @@ void kernel_minimize(SampleMatrix const* noisecov,
 #endif
 
             chi2 = chi2_now;
-            ++iter;
 
             if (ecal::abs(deltachi2) < 1e-3)
                 break;
+
+            //---- AM: TEST
+            //---- it was 3 lines above, now here as in the CPU version
+            ++iter;
         }
 
         // the rest will be set later

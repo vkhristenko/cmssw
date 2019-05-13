@@ -50,7 +50,7 @@ void kernel_prep_1d_and_initialize(
                     bool const gainSwitchUseMaxSampleEB,
                     bool const gainSwitchUseMaxSampleEE,
                     int const nchannels) {
-    constexpr bool dynamicPedestal = false;
+    constexpr bool dynamicPedestal = false;  //---- default to false, ok
     constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
     constexpr int sample_max = 5;
     constexpr int full_pulse_max = 9;
@@ -87,7 +87,7 @@ void kernel_prep_1d_and_initialize(
         auto const hashedId = isBarrel
             ? hashedIndexEB(did.rawId())
             : offsetForHashes + hashedIndexEE(did.rawId());
-        
+
         //
         // pulse shape template
         /*
@@ -198,7 +198,7 @@ void kernel_prep_1d_and_initialize(
         // if (threadIdx == sample_max) below uses max sample thread, not for 0 sample
         // check if we can remove it
         __syncthreads();
-
+        
         // TODO: divergent branch
         if (gainId==0 || gainId==3) {
             pedestal = mean_x1[hashedId];
@@ -213,13 +213,12 @@ void kernel_prep_1d_and_initialize(
             gainratio = gain12Over6[hashedId];
             gainsNoise[ch](sample)  = 1;
         }
-
+        
         // TODO: compile time constant -> branch should be non-divergent
         if (dynamicPedestal)
             amplitude = static_cast<SampleVector::Scalar>(adc) * gainratio;
         else
             amplitude = (static_cast<SampleVector::Scalar>(adc) - pedestal) * gainratio;
-
         amplitudes[ch][sample] = amplitude;
 
 #ifdef ECAL_RECO_CUDA_DEBUG
@@ -235,7 +234,9 @@ void kernel_prep_1d_and_initialize(
         amplitudesForMinimization[ch](sample) = 0;
         bxs[ch](sample) = sample - 5;
 
-        if (sample == sample_max) { // select the thread for the max sample
+        // select the thread for the max sample 
+        //---> hardcoded above to be 5th sample, ok
+        if (sample == sample_max) {
             //
             // initialization
             //
@@ -263,7 +264,7 @@ void kernel_prep_1d_and_initialize(
             // likely false
             if (check_hasSwitchToGain0) {
                 // assign for the case some sample having gainId == 0
-//                energies[ch] = amplitudes[ch][sample_max];
+                //energies[ch] = amplitudes[ch][sample_max];
                 energies[ch] = amplitude;
 
                 // check if samples before sample_max have true
@@ -277,6 +278,8 @@ void kernel_prep_1d_and_initialize(
                 if (!saturated_before_max && 
                     shr_hasSwitchToGain0[threadMax])
                     energies[ch] = 49140; // 4095 * 12
+                    //---- AM FIXME : no pedestal subtraction???  
+                    //It should be "(4095. - pedestal) * gainratio"
 
                 // set state flag to terminate further processing of this channel
                 acState[ch] = static_cast<char>(MinimizationState::Precomputed); 
@@ -294,6 +297,7 @@ void kernel_prep_1d_and_initialize(
             bool hasGainSwitch = shr_hasSwitchToGain6[chStart]
                 || shr_hasSwitchToGain1[chStart]
                 || shr_isSaturated[chStart+3];
+
             // pedestal is final unconditionally
             g_pedestal[ch] = pedestal;
             if (hasGainSwitch && gainSwitchUseMaxSample) {
@@ -352,7 +356,7 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
     constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
     constexpr float addPedestalUncertainty = 0.f;
     constexpr bool dynamicPedestal = false;
-    constexpr bool simplifiedNoiseModelForGainSwitch = true;
+    constexpr bool simplifiedNoiseModelForGainSwitch = true;  //---- default is true
     constexpr int template_samples = EcalPulseShape::TEMPLATESAMPLES;
 
     bool tmp0 = hasSwitchToGain6[ch];
@@ -415,7 +419,6 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
             if (!dynamicPedestal && addPedestalUncertainty>0.f)
                 noise_value += addPedestalUncertainty*addPedestalUncertainty;
         } else {
-            // 
             int gainidx=0;
             char mask = gainidx;
             int pedestal = gainNoise[ch][ty] == mask ? 1 : 0;
@@ -465,8 +468,10 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
     } else {
         auto rms = rms_x12[hashedId];
         float noise_value = rms*rms * G12SamplesCorrelation[vidx];
-        if (!dynamicPedestal && addPedestalUncertainty>0.f)
+        if (!dynamicPedestal && addPedestalUncertainty>0.f) {
+            //----  add fully correlated component to noise covariance to inflate pedestal uncertainty
             noise_value += addPedestalUncertainty*addPedestalUncertainty;
+        }
         noisecov[ch](ty, tx) = noise_value;
     }
 
