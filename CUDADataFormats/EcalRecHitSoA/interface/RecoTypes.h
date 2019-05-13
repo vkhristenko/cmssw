@@ -3,7 +3,7 @@
 
 namespace ecal { namespace reco {
 
-using ComputationScalarType = double;
+using ComputationScalarType = float;
 using StorageScalarType = float;
 
 }}

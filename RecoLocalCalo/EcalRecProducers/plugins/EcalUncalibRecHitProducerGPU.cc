@@ -131,6 +131,7 @@ void EcalUncalibRecHitProducerGPU::fillDescriptions(
     desc.add<uint32_t>("maxNumberHits", 20000);   //---- AM TEST
     desc.add<bool>("shouldTransferToHost", true);
     desc.add<bool>("shouldRunTimingComputation", false);  // ---- default false or true? It was set to true, but at HLT it is false
+    desc.add<std::vector<uint32_t>>("kernelMinimizeThreads", {32, 1, 1});
 
     std::string label = "ecalUncalibRecHitProducerGPU";
     confDesc.add(label, desc);
@@ -194,6 +195,12 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(
     // switch to run timing computation kernels
     configParameters_.shouldRunTimingComputation = 
         ps.getParameter<bool>("shouldRunTimingComputation");
+
+    // minimize kernel launch conf
+    auto threadsMinimize = ps.getParameter<std::vector<uint32_t>>("kernelMinimizeThreads");
+    configParameters_.kernelMinimizeThreads[0] = threadsMinimize[0];
+    configParameters_.kernelMinimizeThreads[1] = threadsMinimize[1];
+    configParameters_.kernelMinimizeThreads[2] = threadsMinimize[2];
 
     produces<ecal::SoAUncalibratedRecHitCollection>(recHitsLabelEB_);
     produces<ecal::SoAUncalibratedRecHitCollection>(recHitsLabelEE_);

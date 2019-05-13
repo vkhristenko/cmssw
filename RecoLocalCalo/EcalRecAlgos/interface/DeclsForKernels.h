@@ -48,10 +48,6 @@ enum class MinimizationState : char {
     Precomputed = 2,
 };
 
-using EMatrix = Eigen::Matrix<double,
-    EcalWeightSet::EcalWeightMatrix::rep_type::kRows,
-    EcalWeightSet::EcalWeightMatrix::rep_type::kCols>;
-
 // event input data on cpu, just const refs
 struct EventInputDataCPU {
     EBDigiCollection const& ebDigis;
@@ -100,6 +96,8 @@ struct ConfigurationParameters {
     type outOfTimeThreshG12pEE, outOfTimeThreshG12mEE;
     type outOfTimeThreshG61pEE, outOfTimeThreshG61mEE;
     type outOfTimeThreshG61pEB, outOfTimeThreshG61mEB;
+
+    std::array<uint32_t, 3> kernelMinimizeThreads;
 
     bool shouldRunTimingComputation;
 };

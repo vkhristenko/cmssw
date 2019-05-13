@@ -159,17 +159,16 @@ SampleVector::Scalar compute_chi2(SampleDecompLLT& covariance_decomposition,
 ///   - active constraint - unsatisfied (yet) constraint
 ///
 __global__
-void kernel_minimize(SampleMatrix const* noisecov,                               
-                     FullSampleMatrix const* full_pulse_cov,                     
-                     BXVectorType *bxs,                                          
-                     SampleVector const* samples,                                
-                     SampleVector* amplitudes,                                   
-                     float* energies,                                            
-                     PulseMatrixType* pulse_matrix,                              
-                     float* chi2s,                                               
-                     char *acState,                                              
-                     int nchannels,                                              
-                     int max_iterations) {                                       
+void kernel_minimize(SampleMatrix const* noisecov,
+                     FullSampleMatrix const* full_pulse_cov,
+                     BXVectorType *bxs,
+                     SampleVector const* samples,
+                     SampleVector* amplitudes,
+                     PulseMatrixType* pulse_matrix, 
+                     ::ecal::reco::StorageScalarType* chi2s,
+                     char *acState,
+                     int nchannels,
+                     int max_iterations) {
     int idx = threadIdx.x + blockDim.x*blockIdx.x;
     if (idx < nchannels) {
         if (static_cast<MinimizationState>(acState[idx]) == 
@@ -288,7 +287,7 @@ void minimization_procedure(
         + eventInputCPU.eeDigis.size();
 //    unsigned int threads_min = conf.threads.x;
     // TODO: configure from python
-    unsigned int threads_min = 32;
+    unsigned int threads_min = configParameters.kernelMinimizeThreads[0];
     unsigned int blocks_min = threads_min > totalChannels
         ? 1
         : (totalChannels + threads_min - 1) / threads_min;
@@ -298,7 +297,6 @@ void minimization_procedure(
         scratch.activeBXs,
         scratch.samples,
         (SampleVector*)eventOutputGPU.amplitudesAll,
-        eventOutputGPU.amplitude,
         scratch.pulse_matrix,
         eventOutputGPU.chi2,
         scratch.acState,
