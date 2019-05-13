@@ -159,17 +159,17 @@ SampleVector::Scalar compute_chi2(SampleDecompLLT& covariance_decomposition,
 ///   - active constraint - unsatisfied (yet) constraint
 ///
 __global__
-void kernel_minimize(SampleMatrix const* noisecov,
-                     FullSampleMatrix const* full_pulse_cov,
-                     BXVectorType *bxs,
-                     SampleVector const* samples,
-                     SampleVector* amplitudes,
-                     float* energies,
-                     PulseMatrixType* pulse_matrix, 
-                     float* chi2s,
-                     char *acState,
-                     int nchannels,
-                     int max_iterations) {
+void kernel_minimize(SampleMatrix const* noisecov,                               
+                     FullSampleMatrix const* full_pulse_cov,                     
+                     BXVectorType *bxs,                                          
+                     SampleVector const* samples,                                
+                     SampleVector* amplitudes,                                   
+                     float* energies,                                            
+                     PulseMatrixType* pulse_matrix,                              
+                     float* chi2s,                                               
+                     char *acState,                                              
+                     int nchannels,                                              
+                     int max_iterations) {                                       
     int idx = threadIdx.x + blockDim.x*blockIdx.x;
     if (idx < nchannels) {
         if (static_cast<MinimizationState>(acState[idx]) == 
@@ -261,10 +261,14 @@ void kernel_minimize(SampleMatrix const* noisecov,
 #endif
 
             chi2 = chi2_now;
-            ++iter;
 
             if (ecal::abs(deltachi2) < 1e-3)
                 break;
+
+            //---- AM: TEST
+            //---- it was 3 lines above, now here as in the CPU version
+            ++iter;
+            
         }
 
         // the rest will be set later

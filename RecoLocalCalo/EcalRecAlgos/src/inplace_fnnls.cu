@@ -28,7 +28,7 @@ bool inplace_fnnls(matrix_t const& A,
   while (true) {
     if (iter>0 || npassive==0) {
         const auto nActive = vector_t::RowsAtCompileTime - npassive;
-
+        
         if(!nActive)
           break;
 

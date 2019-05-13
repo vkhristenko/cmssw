@@ -35,8 +35,8 @@ void entryPoint(
         cuda::stream_t<>& cudaStream) {
     using digis_type = std::vector<uint16_t>;
     using dids_type = std::vector<uint32_t>;
-    bool const gainSwitchUseMaxSampleEB = true; // accodring to the cpu setup
-    bool const gainSwitchUseMaxSampleEE = false;
+    bool const gainSwitchUseMaxSampleEB = true; // accodring to the cpu setup  //----> hardcoded
+    bool const gainSwitchUseMaxSampleEE = false; // accodring to the cpu setup  //----> hardcoded
 
     uint32_t const offsetForHashes = conditions.offsetForHashes;
     unsigned int totalChannels = eventInputCPU.ebDigis.size() 
