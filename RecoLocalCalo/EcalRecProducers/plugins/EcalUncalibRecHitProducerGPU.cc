@@ -97,7 +97,7 @@ void EcalUncalibRecHitProducerGPU::fillDescriptions(
     edm::ParameterSetDescription desc;
 
     desc.add<edm::InputTag>("digisLabelEB", edm::InputTag("ecalDigis", "ebDigis"));
-    desc.add<edm::InputTag>("digisLabelEE", edm::InputTag("ecalDigis","eeDigis"));
+    desc.add<edm::InputTag>("digisLabelEE", edm::InputTag("ecalDigis", "eeDigis"));
 
     desc.add<std::string>("recHitsLabelEB", "EcalUncalibRecHitsEB");
     desc.add<std::string>("recHitsLabelEE", "EcalUncalibRecHitsEE");
@@ -128,9 +128,9 @@ void EcalUncalibRecHitProducerGPU::fillDescriptions(
     desc.add<double>("outOfTimeThresholdGain61mEE", 1000);
     desc.add<double>("amplitudeThresholdEB", 10);
     desc.add<double>("amplitudeThresholdEE", 10);
-    desc.add<uint32_t>("maxNumberHits", 20000);
+    desc.add<uint32_t>("maxNumberHits", 20000);   //---- AM TEST
     desc.add<bool>("shouldTransferToHost", true);
-    desc.add<bool>("shouldRunTimingComputation", true);
+    desc.add<bool>("shouldRunTimingComputation", false);  // ---- default false or true? It was set to true, but at HLT it is false
     desc.add<std::vector<uint32_t>>("kernelMinimizeThreads", {32, 1, 1});
 
     std::string label = "ecalUncalibRecHitProducerGPU";
@@ -261,9 +261,9 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(
     configParameters_.timeNconstEB = EBtimeNconst;
     configParameters_.timeNconstEE = EEtimeNconst;
 
-    // amplitude threshold
-    configParameters_.amplitudeThreshEE = amplitudeThreshEE;
+    // amplitude threshold for time flags
     configParameters_.amplitudeThreshEB = amplitudeThreshEB;
+    configParameters_.amplitudeThreshEE = amplitudeThreshEE;
 
     // out of time thresholds gain-dependent
     configParameters_.outOfTimeThreshG12pEB = outOfTimeThreshG12pEB;
@@ -362,6 +362,7 @@ void EcalUncalibRecHitProducerGPU::acquire(
     //
     // schedule algorithms
     //
+    
     ecal::multifit::entryPoint(
         eventInputDataCPU,
         eventInputDataGPU_,
