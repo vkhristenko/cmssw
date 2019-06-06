@@ -14,6 +14,7 @@
 #include "inplace_fnnls.h"
 #include "AmplitudeComputationKernelsV1.h"
 #include "AmplitudeComputationCommonKernels.h"
+#include "KernelHelpers.h"
 
 namespace ecal { namespace multifit {
 
@@ -44,7 +45,7 @@ namespace ecal { namespace multifit {
 __device__
 __forceinline__
 bool update_covariance(SampleMatrix const& noisecov,
-                       FullSampleMatrix const& full_pulse_cov,
+                       EcalPulseCovariance const& pulse_cov,
                        SampleMatrix& inverse_cov,
                        BXVectorType const& bxs,
                        SampleDecompLLT& covariance_decomposition,
@@ -60,22 +61,119 @@ bool update_covariance(SampleMatrix const& noisecov,
 
         int bx = bxs.coeff(ipulse);
         int first_sample_t = std::max(0, bx+3);
-        int offset = 7 - 3 - bx;
+        int offset = 3 - bx;
 
         auto const value = amplitudes.coeff(ipulse);
         auto const value_sq = value*value;
 
         unsigned int nsample_pulse = nsamples - first_sample_t;
+        for (int i=first_sample_t; i<first_sample_t+nsample_pulse; ++i)
+            for (int j=first_sample_t; j<first_sample_t+nsample_pulse; ++j)
+                inverse_cov(i, j) += value_sq * pulse_cov.covval[i+offset][j+offset];
+
+        /*
         inverse_cov.block(first_sample_t, first_sample_t, 
                           nsample_pulse, nsample_pulse)
             += value_sq * full_pulse_cov.block(first_sample_t + offset,
                                                first_sample_t + offset,
                                                nsample_pulse,
                                                nsample_pulse);
+                                               */
     }
 
     return true;
 }
+
+/*
+
+__global__
+void kernel_update_covariance_compute_cholesky() {
+    // constants
+    constexpr auto nsamples = SampleVector::RowsAtCompileTime;
+    constexpr auto npulses = nsamples;
+    using DataType = SampleVector::Scalar;
+
+    // indices
+    auto const tx = threadIdx.x;
+    auto const ty = threadIdx.y;
+    auto const ch_per_block = threadIdx.z;
+    auto const gch = ch_per_block + blockIdx.x*blockDim.z;
+
+    // shared mem configuration
+    extern __shared__ char smem[];
+    DataType* __shrPulseCovariance = reinterpret_cast<DataType*>(smem);
+
+    // preload some values
+    auto noiseValue = noiseCovariance(ty, tx);
+
+    // compute the updated total covariance matrix
+    #pragma unroll
+    for (int ipulse=0; ipulse<npulses; ipulse++) {
+        auto const amplitude = amplitudes(ipulse);
+        if (amplitude == 0) 
+            continue;
+
+        // note, we do not permute results anymore!
+        // therefore straightforward mapping
+        auto const bx = ipulse - 5;
+        auto const first_sample_t 
+    }
+}
+
+__global__
+void kernel_solve() {
+
+}
+
+__global__
+void kernel_mm_mv_mults() {
+
+}
+
+__global__
+void kernel_fnnls() {
+}
+
+__global__
+void kernel_compute_chi2() {
+
+}
+
+__global__
+void kernel_minimization_launcher() {
+    // we have a single guy in here
+    if (threadIdx.x >= 1) return;
+
+    int iter = 0;
+    auto channelsLeft = totalChannels;
+    while (true) {
+        if (iter >= max_iterations)
+            break;
+
+        // 
+        kernel_update_covariance_compute_cholesky();
+
+        // forward / backward substitution
+        kernel_solve();
+
+        // matrix matrix and matrix vector mults
+        kernel_mm_mv_mults();
+
+        // fnnls 
+        kernel_fnnls();
+
+        // compute chi2
+        kernel_compute_chi2();
+        cudaDeviceSynchronize();
+
+        // check exit
+        channelsLeft = *channelsCounter;
+        if (channelsLeft == 0)
+            return;
+    }
+}
+
+*/
 
 __device__
 __forceinline__
@@ -100,20 +198,29 @@ SampleVector::Scalar compute_chi2(SampleDecompLLT& covariance_decomposition,
 ///
 __global__
 void kernel_minimize(SampleMatrix const* noisecov,
-                     FullSampleMatrix const* full_pulse_cov,
+                     EcalPulseCovariance const* pulse_cov,
                      BXVectorType *bxs,
                      SampleVector const* samples,
                      SampleVector* amplitudes,
                      PulseMatrixType* pulse_matrix, 
                      ::ecal::reco::StorageScalarType* chi2s,
+                     uint32_t const* dids,
                      char *acState,
                      int nchannels,
-                     int max_iterations) {
+                     int max_iterations,
+                     unsigned int offsetForHashes) {
     int idx = threadIdx.x + blockDim.x*blockIdx.x;
     if (idx < nchannels) {
         if (static_cast<MinimizationState>(acState[idx]) == 
             MinimizationState::Precomputed)
             return;
+
+        auto const did = DetId{dids[idx]};
+        auto const isBarrel = did.subdetId() == EcalBarrel;
+        auto const hashedId = isBarrel
+            ? hashedIndexEB(did.rawId())
+            : offsetForHashes + hashedIndexEE(did.rawId());
+
 
         // inits
         bool status = false;
@@ -141,7 +248,7 @@ void kernel_minimize(SampleMatrix const* noisecov,
 
             status = update_covariance(
                 noisecov[idx], 
-                full_pulse_cov[idx],
+                pulse_cov[hashedId],
                 inverse_cov,
                 bxs[idx],
                 covariance_decomposition,
@@ -222,7 +329,8 @@ void minimization_procedure(
         EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
         ConditionsProducts const& conditions,
         ConfigurationParameters const& configParameters,
-        cuda::stream_t<>& cudaStream) {
+        cuda::stream_t<>& cudaStream,
+        unsigned int offsetForHashes) {
     unsigned int totalChannels = eventInputCPU.ebDigis.size() 
         + eventInputCPU.eeDigis.size();
 //    unsigned int threads_min = conf.threads.x;
@@ -233,15 +341,17 @@ void minimization_procedure(
         : (totalChannels + threads_min - 1) / threads_min;
     kernel_minimize<<<blocks_min, threads_min, 0, cudaStream.id()>>>(
         scratch.noisecov,
-        scratch.pulse_covariances,
+        conditions.pulseCovariances.values,
         scratch.activeBXs,
         scratch.samples,
         (SampleVector*)eventOutputGPU.amplitudesAll,
         scratch.pulse_matrix,
         eventOutputGPU.chi2,
+        eventInputGPU.ids,
         scratch.acState,
         totalChannels,
-        50);
+        50,
+        offsetForHashes);
     cudaCheck(cudaGetLastError());
 
     //

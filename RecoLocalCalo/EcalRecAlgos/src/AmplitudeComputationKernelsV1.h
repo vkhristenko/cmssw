@@ -18,7 +18,8 @@ void minimization_procedure(
         EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
         ConditionsProducts const& conditions,
         ConfigurationParameters const& configParameters,
-        cuda::stream_t<>& cudaStream);
+        cuda::stream_t<>& cudaStream,
+        unsigned int const offsetForHashes);
 
 }
 
@@ -33,15 +34,17 @@ void minimization_procedure(
 ///
 __global__
 void kernel_minimize(SampleMatrix const* noisecov,
-                     FullSampleMatrix const* full_pulse_cov,
+                     EcalPulseCovariance const* full_pulse_cov,
                      BXVectorType *bxs,
                      SampleVector const* samples,
                      SampleVector* amplitudes,
                      PulseMatrixType* pulse_matrix, 
                      ::ecal::reco::StorageScalarType* chi2s,
+                     uint32_t const* dids,
                      char *acState,
                      int nchannels,
-                     int max_iterations);
+                     int max_iterations,
+                     unsigned int offsetForHashes);
 
 }}
 

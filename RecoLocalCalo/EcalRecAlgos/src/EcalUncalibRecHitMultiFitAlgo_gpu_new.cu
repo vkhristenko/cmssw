@@ -128,8 +128,6 @@ void entryPoint(
     int blocks_2d = totalChannels;
     dim3 threads_2d{10, 10};
     kernel_prep_2d<<<blocks_2d, threads_2d, 0, cudaStream.id()>>>(
-        conditions.pulseCovariances.values, 
-        scratch.pulse_covariances,
         scratch.gainsNoise,
         eventInputGPU.ids,
         conditions.pedestals.rms_x12,
@@ -155,7 +153,7 @@ void entryPoint(
     // run minimization kernels
     v1::minimization_procedure(
         eventInputCPU, eventInputGPU, eventOutputGPU,
-        scratch, conditions, configParameters, cudaStream);
+        scratch, conditions, configParameters, cudaStream, offsetForHashes);
 
     if (configParameters.shouldRunTimingComputation) {
         
