@@ -89,6 +89,7 @@ void kernel_update_covariance_compute_cholesky() {
     // constants
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
     constexpr auto npulses = nsamples;
+    constexpr auto template_samples = EcalPulseShape::TEMPLATESAMPLES;
     using DataType = SampleVector::Scalar;
 
     // indices
@@ -99,10 +100,22 @@ void kernel_update_covariance_compute_cholesky() {
 
     // shared mem configuration
     extern __shared__ char smem[];
+    // nchannels per block * 12 * 12 (TEMPLATESAMPLES)
     DataType* __shrPulseCovariance = reinterpret_cast<DataType*>(smem);
+    // nchannels per block * 10
+    DataType* __shrCovarianceDiagValues = __shrPulseCovariance + 
+        blockDim.z * template_samples * template_samples;
+    // nchannels per block * 10 * 10
+    // TODO: make it not 10 by 10, but just 55 values
+    DataType* __shrL = __shrCovarianceDiagValues + 
+        blockDim.z * nsamples;
+    // nchannels per block * 10 * 10
+    DataType* __shrLSums = __shrL + 
+        blockDim.z * nsamples * nsamples;
 
     // preload some values
     auto noiseValue = noiseCovariance(ty, tx);
+    shrLSums(ty, tx) = 0;
 
     // compute the updated total covariance matrix
     #pragma unroll
@@ -114,8 +127,68 @@ void kernel_update_covariance_compute_cholesky() {
         // note, we do not permute results anymore!
         // therefore straightforward mapping
         auto const bx = ipulse - 5;
-        auto const first_sample_t 
+        auto const first_sample_t = std::max(0, bx + 3);
+        if (!(tx >= first_sample_t && ty >= first_sample_t))
+            continue;
+        
+        // note: we are no longer using 19 x 19 pulse covariance matrix,
+        // just what conditions provide directly
+        auto const offset = 3 - bx;
+        auto const amp_sq = amplitude * amplitude;
+        auto const nsample_pulse = nsamples - first_sample_t;
+
+        // update matrix eleement
+        noiseValue += amp_sq * shrPulseCovariance(ty + offset, tx + offset);
     }
+
+    // we need to store to shared mem diagonal values
+    if (ty == tx)
+        shrCovarianceDiagValues(tx) = noiseValue;
+    __syncthreads();
+
+    //
+    // cholesky decomposition of 10 x 10
+    // noiseValue is the (i, j) element of a matrix to decompose
+    //
+
+    // column 0
+    // compute L(ty, 0) for ty >= 1
+    // note, important we get m_j_j = m(tx) -> we need same value for 
+    // all values of a given column
+    auto const m_j_j = shrCovarianceDiagValues(tx);
+    auto const m_i_j = noiseValue;
+    if (tx == 0 && ty == 0)
+        shrL(0, 0) = std::sqrt(m_j_j);
+    else if (tx==0 && ty >=1)
+        shrL(ty, 0) = noiseValue / std::sqrt(m_j_j);
+    __synchtreads();
+
+    // TODO: verify that the loop is unrolled
+    #pragma unroll
+    for (int col=1; col<nsamples; ++col) {
+        if (tx==column && ty>=column) {
+            // compute L(j, j) = sqrt(M(j, j) - Sum[k](L(j, k) * L(j, k)))
+            auto const sumsq = shrLSums(column, column) + 
+                shrL(column, column-1) * shrL(column, column-1);
+            auto const l_j_j = std::sqrt(m_j_j - sumsq);
+            if (ty == column)
+                shrL(column, column) = l_j_j;
+            else {
+                auto const sumsq_i_j = shrLSums(ty, column) + 
+                    shrL(ty, column-1) * shrL(column, column-1);
+                auto const tmp = m_i_j - sumsq_i_j;
+                auto const l_i_column = tmp / l_j_j;
+                shrL(ty, column) = l_i_column;
+            }
+        }
+
+        if (tx>=column && ty>=column)
+            shrLSums(ty, tx) += shrL(ty, column-1) * shrL(tx, column-1);
+        __syncthreads();
+    }
+
+    // store back to global
+    Ls(ty, tx) = shrL(ty, tx);
 }
 
 __global__
