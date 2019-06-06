@@ -1,5 +1,5 @@
-#ifndef RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernelsV1
-#define RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernelsV1
+#ifndef RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernelsV2
+#define RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernelsV2
 
 #include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes_gpu.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/DeclsForKernels.h"
@@ -11,7 +11,7 @@ class EcalUncalibratedRecHit;
 
 namespace ecal { namespace multifit {
 
-namespace v1 {
+namespace v2 {
 
 void minimization_procedure(
         EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,

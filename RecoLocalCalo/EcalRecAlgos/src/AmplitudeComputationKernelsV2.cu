@@ -12,11 +12,11 @@
 #include "DataFormats/EcalDigi/interface/EcalDigiCollections.h"
 
 #include "inplace_fnnls.h"
-#include "AmplitudeComputationKernelsV1.h"
+#include "AmplitudeComputationKernelsV2.h"
 #include "AmplitudeComputationCommonKernels.h"
 #include "KernelHelpers.h"
 
-namespace ecal { namespace multifit { namespace v1 {
+namespace ecal { namespace multifit { namespace v2 {
 
 #define PRINT_MATRIX_10x10(M)\
             printf("%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n", \
@@ -83,8 +83,6 @@ bool update_covariance(SampleMatrix const& noisecov,
 
     return true;
 }
-
-/*
 
 __global__
 void kernel_update_covariance_compute_cholesky() {
@@ -172,8 +170,6 @@ void kernel_minimization_launcher() {
             return;
     }
 }
-
-*/
 
 __device__
 __forceinline__
