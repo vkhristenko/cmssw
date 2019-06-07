@@ -90,6 +90,7 @@ void kernel_update_covariance_compute_cholesky() {
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
     constexpr auto npulses = nsamples;
     constexpr auto template_samples = EcalPulseShape::TEMPLATESAMPLES;
+    constexpr auto nvaluesForL = nsamples * (nsamples+1) / 2;
     using DataType = SampleVector::Scalar;
 
     // indices
@@ -105,11 +106,11 @@ void kernel_update_covariance_compute_cholesky() {
     // nchannels per block * 10
     DataType* __shrCovarianceDiagValues = __shrPulseCovariance + 
         blockDim.z * template_samples * template_samples;
-    // nchannels per block * 10 * 10
-    // TODO: make it not 10 by 10, but just 55 values
+    // nchannels per block * 55
     DataType* __shrL = __shrCovarianceDiagValues + 
-        blockDim.z * nsamples;
+        blockDim.z * nvaluesForL;
     // nchannels per block * 10 * 10
+    // TODO: do we need 10 x 10 here??? oro 55 is enough???
     DataType* __shrLSums = __shrL + 
         blockDim.z * nsamples * nsamples;
 
@@ -192,17 +193,227 @@ void kernel_update_covariance_compute_cholesky() {
 }
 
 __global__
-void kernel_solve() {
+void kernel_solve_mm_mv_mults() {
+    // constants, typedefs
+    using DataType = SampleVector::Scalar;
+    constexpr auto nsamples = SampleVector::RowsAtCompileTime;
 
+    // indices
+    auto const tx = threadIdx.x;
+    auto const ty = threadIdx.y;
+    auto const lch = threadIdx.z;
+    auto const gch = lch + blockIdx.x * blockDim.z;
+
+    if (gch >= nchannelsTotal) return;
+
+    // configure shared mem
+    extern __shared__ char smem[];
+    DataType* __shrL;
+    DataType* __shrP;
+    DataType* __shrs;
+    DataType* __shrAtmp;
+    DataType* __shrbtmp;
+
+    // move into shared mem
+    shrP(ty, tx) = P(ty, tx);
+    if (ty>=tx)
+        shrL(ty, tx) = L(ty, tx);
+    if (ty == 0)
+        shrs(tx) = s(tx);
+    __syncthreads();
+
+    // run forward and backward substitution
+    // use 10 thraeds for matrix and 1 thread vector
+    // TODO: would it be better with more threads + synching???
+    if (ty==0) {
+        ForwardSubstitutionUnrolled<DataType, nsamples>::compute(
+            shrL, shrP, shrAtmp);
+        // note, we are reusing shrP as the result space
+        // for backward substitution, there are races!
+        BackwardSubstitutionUnrolled<DataType, nsamples>::compute(
+            shrL, shrAtmp, shrP);
+    } else if (ty==1 && tx == 1) {
+        ForwardSubstitutionUnrolled<DataType, nsamples>::compute(
+            shrL, shrs, shrbtmp);
+        BackwardSubstitutionUnrolled<DataType, nsamples>::compute(
+            shrL, shrbtmp, shrs);
+    }
+    __syncthreads();
+
+    // matrix matrix and matrix vector mult
+    // shrP is matrix A
+    // shrs is vector b
+    DataType ata_i_j = 0;
+    #pragma unroll
+    for (int i=0; i<nsamples; ++i) {
+        auto const A_i_ty = shrP(i, ty);
+        ata_i_j += shrP(i, ty) * shrP(i, tx);
+    }
+
+    // store back to global
+    AtA(ty, tx) = ata_i_j;
+    if (ty == 0) {
+        DataType sum = 0;
+        #pragma unroll
+        for (int i=0; i<nsamples; i++)
+            sum += shrP(i, tx) * shrs(i);
+
+        // store back to global
+        Atb(tx) = sum;
+    }
 }
 
-__global__
-void kernel_mm_mv_mults() {
-
-}
-
-__global__
 void kernel_fnnls() {
+    int const tid = threadIdx.x + blockIdx.x * blockDim.x;
+    int const offset = tid * VECTOR_SIZE;
+    char const* current_mapping = mapping + offset;
+
+    if (tid >= n) return;
+
+    constexpr double eps = 1e-11;
+    constexpr unsigned int max_iterations = 1000;
+    my_matrix_t<T> AtA{AtAs[tid].data()};
+    my_matrix_t<T> L{Ls[tid].data()};
+    my_vector_t<T> Atb{Atbs[tid].data()};
+    my_vector_t<T> x{xs[tid].data()};
+    using data_type = T;
+
+    auto nPassive = g_npassive[tid];
+
+    // main loop
+    for (auto iter = 0; iter < max_iterations; ++iter) {
+        const auto nActive = VECTOR_SIZE - nPassive;
+
+        if(!nActive)
+          break;
+
+        //  
+        unsigned int w_max_idx = -1;
+        auto max_w {static_cast<T>(-1)};
+        for (unsigned int i=VECTOR_SIZE-nActive; i<VECTOR_SIZE; i++) {
+            auto sum_per_row{static_cast<T>(0)};
+            auto const real_i = mapping[offset + i];
+            auto const atb = Atb(real_i);
+            #pragma unroll
+            for (unsigned int k=0; k<VECTOR_SIZE; ++k)
+                // note, we do not need to look up k in the mapping
+                // both AtA and x have swaps applied -> therefore dot product will 
+                // not change per row
+                sum_per_row += AtA(real_i, k) * x(k);
+
+            // compute gradient value and check if it is greater than max
+            auto const wvalue = atb - sum_per_row;
+            if (max_w < wvalue) {
+                max_w = wvalue;
+                w_max_idx = i;
+            }
+        }
+
+        // check for convergence
+        if (max_w < eps)
+          break;
+
+        Eigen::numext::swap(
+                mapping[offset + nPassive], 
+                mapping[offset + w_max_idx]);
+        ++nPassive;
+
+        // inner loop
+        data_type __s[matrix_t<T>::RowsAtCompileTime], __tmp[matrix_t<T>::RowsAtCompileTime];
+        my_vector_t<data_type> s{__s}, tmp{__tmp};
+        while (nPassive > 0) {
+          switch (nPassive) {
+          case 1:
+              FusedCholeskySolver<T, 1>::compute(AtA, Atb, s, current_mapping);
+              break;
+          case 2:
+              FusedCholeskySolver<T, 2>::compute(AtA, Atb, s, current_mapping);
+              break;
+          case 3:
+              FusedCholeskySolver<T, 3>::compute(AtA, Atb, s, current_mapping);
+              break;
+          case 4:
+              FusedCholeskyForwardSubstUnrolled<T, 4>::compute(AtA, Atb, L, tmp, 
+                current_mapping);
+              BackwardSubstUnrolled<T, 4>::compute(L, tmp, s);
+              break;
+          case 5:
+              FusedCholeskyForwardSubstUnrolled<T, 5>::compute(AtA, Atb, L, tmp,
+                current_mapping);
+              BackwardSubstUnrolled<T, 5>::compute(L, tmp, s);
+              break;
+          case 6:
+              FusedCholeskyForwardSubstUnrolled<T, 6>::compute(AtA, Atb, L, tmp,
+                current_mapping);
+              BackwardSubstUnrolled<T, 6>::compute(L, tmp, s);
+              break;
+          case 7:
+              FusedCholeskyForwardSubstUnrolled<T, 7>::compute(AtA, Atb, L, tmp,
+                current_mapping);
+              BackwardSubstUnrolled<T, 7>::compute(L, tmp, s);
+              break;
+          case 8:
+              FusedCholeskyForwardSubstUnrolled<T, 8>::compute(AtA, Atb, L, tmp,
+                current_mapping);
+              BackwardSubstUnrolled<T, 8>::compute(L, tmp, s);
+              break;
+          default:
+              FusedCholeskyForwardSubst<T>::compute(AtA, Atb, L, tmp,
+                current_mapping, nPassive);
+              BackwardSubst<T>::compute(L, tmp, s, nPassive);
+          }
+
+          bool hasNegative = false;
+          for (int ii=0; ii<nPassive; ++ii) {
+              hasNegative |= s(ii) <= 0;
+          }
+          if (!hasNegative) {
+              for (int i=0; i<nPassive; ++i) {
+                  // note, s contains passive/active set layout
+                  // and x contains unpermuted final values in their repective pos
+                  auto const real_i = mapping[offset + i];
+                  x(real_i) = s(i);
+              }
+              break;
+          }
+
+          auto alpha = std::numeric_limits<T>::max();
+          char alpha_idx=0, real_alpha_idx=0;
+
+          for (auto i = 0; i < nPassive; ++i) {
+            if (s(i) <= 0.) {
+              auto const real_i = mapping[offset + i];
+              auto const x_i = x(real_i);
+              auto const ratio = x_i / (x_i - s(i));
+              if (ratio < alpha) {
+                alpha = ratio;
+                alpha_idx = i;
+                real_alpha_idx = real_i;
+              }
+            }
+          }
+
+          if (std::numeric_limits<T>::max() == alpha) {
+            for (int i=0; i<nPassive; ++i) {
+                auto const real_i = mapping[offset + i];
+                x(real_i) = s(i);
+            }
+            break;
+          }
+
+          for (int ii=0; ii<nPassive; ++ii) {
+            auto const real_i = mapping[offset+ii];
+            auto const x_ii = x(real_i);
+            x(real_i) += alpha * (s(ii) - x_ii);
+          }
+          x(real_alpha_idx) = 0;
+          --nPassive;
+
+          Eigen::numext::swap(
+                mapping[offset + nPassive], 
+                mapping[offset + alpha_idx]);
+    }
+  }
 }
 
 __global__
@@ -210,6 +421,7 @@ void kernel_compute_chi2() {
 
 }
 
+/*
 __global__
 void kernel_minimization_launcher() {
     // we have a single guy in here
@@ -243,6 +455,7 @@ void kernel_minimization_launcher() {
             return;
     }
 }
+*/
 
 __device__
 __forceinline__
