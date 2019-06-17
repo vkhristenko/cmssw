@@ -61,7 +61,7 @@ bool update_covariance(SampleMatrix const& noisecov,
 
         int bx = bxs.coeff(ipulse);
         int first_sample_t = std::max(0, bx+3);
-        int offset = 3 - bx;
+        int offset = -3 - bx; // used to be 7 - 3 - bx
 
         auto const value = amplitudes.coeff(ipulse);
         auto const value_sq = value*value;

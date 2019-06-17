@@ -231,6 +231,8 @@ void kernel_update_covariance_compute_cholesky(
     L(ty, tx) = shrL(ty, tx);
 }
 
+/*
+
 __global__
 void kernel_solve_mm_mv_mults() {
     // constants, typedefs
@@ -302,7 +304,6 @@ void kernel_solve_mm_mv_mults() {
     }
 }
 
-/*
 
 void kernel_fnnls() {
     // 
