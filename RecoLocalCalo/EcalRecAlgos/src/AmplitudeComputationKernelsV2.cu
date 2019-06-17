@@ -84,35 +84,74 @@ bool update_covariance(SampleMatrix const& noisecov,
     return true;
 }
 
+///
+/// The following conventions apply to all of the kernels below
+///     - virtual channel id - channel id for the current iteration
+///     - real  channel id - channel id for the original array
+/// 
+
+/// launch ctx
 __global__
-void kernel_update_covariance_compute_cholesky() {
+void kernel_update_covariance_compute_cholesky(
+        EcalPulseCovariance const* g_PulseCovariance,
+        SampleMatrix const* g_noiseCovariance,
+        SampleVector const* g_amplitudes,
+        SampleVector::Scalar* g_L,
+        uint32_t *v2ridmapping,
+        uint32_t *dids,
+        uint32_t offsetForHashes) {
     // constants
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
     constexpr auto npulses = nsamples;
     constexpr auto template_samples = EcalPulseShape::TEMPLATESAMPLES;
-    constexpr auto nvaluesForL = nsamples * (nsamples+1) / 2;
     using DataType = SampleVector::Scalar;
+    using ConstDataType = DataType const;
+    constexpr auto nvaluesForL = MapSymM<DataType, nsamples>::total;
 
     // indices
     auto const tx = threadIdx.x;
     auto const ty = threadIdx.y;
-    auto const ch_per_block = threadIdx.z;
-    auto const gch = ch_per_block + blockIdx.x*blockDim.z;
+    auto const vch_per_block = threadIdx.z;
+    auto const gvch = vch_per_block + blockIdx.x*blockDim.z;
+    auto const grch = v2ridmapping[gvch];
+    auto const did = DetId{dids[grch]};
+    auto const isBarrel = did.subdetId() == EcalBarrel;
+    auto const hashedId = isBarrel
+        ? hashedIndexEB(did.rawId())
+        : offsetForHashes + hashedIndexEE(did.rawId());
 
     // shared mem configuration
     extern __shared__ char smem[];
     // nchannels per block * 12 * 12 (TEMPLATESAMPLES)
-    DataType* __shrPulseCovariance = reinterpret_cast<DataType*>(smem);
+    //DataType* __shrPulseCovariance = reinterpret_cast<DataType*>(smem);
     // nchannels per block * 10
-    DataType* __shrCovarianceDiagValues = __shrPulseCovariance + 
-        blockDim.z * template_samples * template_samples;
+    DataType* __shrCovarianceDiagValues = reinterpret_cast<DataType*>(smem);
+    //    __shrPulseCovariance + 
+    //    blockDim.z * template_samples * template_samples;
     // nchannels per block * 55
     DataType* __shrL = __shrCovarianceDiagValues + 
-        blockDim.z * nvaluesForL;
+        blockDim.z * nsamples;
     // nchannels per block * 10 * 10
     // TODO: do we need 10 x 10 here??? oro 55 is enough???
     DataType* __shrLSums = __shrL + 
-        blockDim.z * nsamples * nsamples;
+        blockDim.z * nvaluesForL;
+
+    // map global mem
+    MapM<ConstDataType, template_samples, Eigen::RowMajor> PulseCovariance
+    {reinterpret_cast<DataType const*>(g_PulseCovariance + hashedId)};
+    MapM<ConstDataType, nsamples> noiseCovariance
+    {g_noiseCovariance[grch].data()};
+    MapV<ConstDataType> amplitudes{g_amplitudes[grch].data()};
+    MapSymM<DataType, nsamples, Eigen::RowMajor> L
+    {g_L + nvaluesForL * grch};
+
+    // map allocated shared mem
+    MapV<DataType> shrCovarianceDiagValues
+    {__shrCovarianceDiagValues + vch_per_block*nsamples};
+    MapSymM<DataType, nsamples, Eigen::RowMajor> shrL
+    {__shrL + vch_per_block * nvaluesForL};
+    MapSymM<DataType, nsamples> shrLSums
+    {__shrLSums + vch_per_block * nvaluesForL};
 
     // preload some values
     auto noiseValue = noiseCovariance(ty, tx);
@@ -139,7 +178,7 @@ void kernel_update_covariance_compute_cholesky() {
         auto const nsample_pulse = nsamples - first_sample_t;
 
         // update matrix eleement
-        noiseValue += amp_sq * shrPulseCovariance(ty + offset, tx + offset);
+        noiseValue += amp_sq * PulseCovariance(ty + offset, tx + offset);
     }
 
     // we need to store to shared mem diagonal values
@@ -162,11 +201,11 @@ void kernel_update_covariance_compute_cholesky() {
         shrL(0, 0) = std::sqrt(m_j_j);
     else if (tx==0 && ty >=1)
         shrL(ty, 0) = noiseValue / std::sqrt(m_j_j);
-    __synchtreads();
+    __syncthreads();
 
     // TODO: verify that the loop is unrolled
     #pragma unroll
-    for (int col=1; col<nsamples; ++col) {
+    for (int column=1; column<nsamples; ++column) {
         if (tx==column && ty>=column) {
             // compute L(j, j) = sqrt(M(j, j) - Sum[k](L(j, k) * L(j, k)))
             auto const sumsq = shrLSums(column, column) + 
@@ -183,13 +222,13 @@ void kernel_update_covariance_compute_cholesky() {
             }
         }
 
-        if (tx>=column && ty>=column)
+        if (tx>=column && ty>=tx)
             shrLSums(ty, tx) += shrL(ty, column-1) * shrL(tx, column-1);
         __syncthreads();
     }
 
     // store back to global
-    Ls(ty, tx) = shrL(ty, tx);
+    L(ty, tx) = shrL(ty, tx);
 }
 
 __global__
@@ -263,20 +302,26 @@ void kernel_solve_mm_mv_mults() {
     }
 }
 
+/*
+
 void kernel_fnnls() {
+    // 
+    using DataType = SampleVector::Scalar;
+    constexpr double eps = 1e-11;
+    constexpr unsigned int max_iterations = 1000;
+    constexpr auto nsamples = SampleVector::RowsAtCompileTime;
+
+    // indices
     int const tid = threadIdx.x + blockIdx.x * blockDim.x;
-    int const offset = tid * VECTOR_SIZE;
+    int const offset = tid * nsamples;
     char const* current_mapping = mapping + offset;
 
     if (tid >= n) return;
 
-    constexpr double eps = 1e-11;
-    constexpr unsigned int max_iterations = 1000;
-    my_matrix_t<T> AtA{AtAs[tid].data()};
-    my_matrix_t<T> L{Ls[tid].data()};
-    my_vector_t<T> Atb{Atbs[tid].data()};
-    my_vector_t<T> x{xs[tid].data()};
-    using data_type = T;
+    MapM<DataType, ...> AtA{AtAs[tid].data()};
+    MapM<DataType, ...> L{Ls[tid].data()};
+    MapM<DataType> Atb{Atbs[tid].data()};
+    MapM<DataType> x{xs[tid].data()};
 
     auto nPassive = g_npassive[tid];
 
@@ -319,8 +364,8 @@ void kernel_fnnls() {
         ++nPassive;
 
         // inner loop
-        data_type __s[matrix_t<T>::RowsAtCompileTime], __tmp[matrix_t<T>::RowsAtCompileTime];
-        my_vector_t<data_type> s{__s}, tmp{__tmp};
+        DataType __s[matrix_t<T>::RowsAtCompileTime], __tmp[matrix_t<T>::RowsAtCompileTime];
+        my_vector_t<DataType> s{__s}, tmp{__tmp};
         while (nPassive > 0) {
           switch (nPassive) {
           case 1:
@@ -412,14 +457,80 @@ void kernel_fnnls() {
           Eigen::numext::swap(
                 mapping[offset + nPassive], 
                 mapping[offset + alpha_idx]);
+        }
     }
-  }
+
+    // store back to global
+    g_npassive[tid] = nPassive;
 }
 
 __global__
 void kernel_compute_chi2() {
+    // constants, typedefs
+    using DataType = SampleVector::Scalar;
+    constexpr auto nsamples = SampleVector::RowsAtCompileTime;
 
+    // indices
+    auto const gtx = threadIdx.x + blockDim.x * blockIdx.x;
+    auto const gch = gtx / nsamples;
+    auto const lch = threadIdx.x  / nsamples;
+    auto const sample = threadIdx % nsamples;
+
+    if (gch >= channelsTotal) return;
+
+    // shared mem
+    extern __shared__ char smem[];
+    DataType* __shrL;
+    DataType* __shrP;
+
+    // mov to shared mem
+    auto const x_sample = x(sample);
+    auto const s_sample = s(sample);
+    #pragma unroll
+    for (int i=0; i<nsamples; ++i) {
+        shrP(i, sample) = P(i, sample) * x_sample;
+        if (sample>=i)
+            shrL(sample, i) = L(sample, i);
+    }
+    __syncthreads();
+
+    // prepare input for forward subst
+    DataType sum{0};
+    #pragma unroll
+    for (int i=0; i<nsamples; ++i)
+        sum += P(sample, i);
+    auto const v_sample = sum - s_sample;
+    shrv(sample) = v_sample;
+    __syncthreads();
+
+    // use single thread in here for now
+    // FIXME: should we add?
+    if (sample == 0) {
+        // f/b subst solver
+        ForwardSubsttitutionUnrolled<DataType, nsamples>::compute(
+            shrL, shrv, shrtmpx);
+        BackwardSubstitutionUnrolled<DataType, nsamples>::compute(
+            shrL, shrtmpx, shrv);
+
+        // sum will be the chi2 
+        DataType chi2_new{0};
+        auto const chi2_old =  g_chi2[gch];
+        #pragma unroll
+        for (int i=0; i<nsamples; i++)
+            chi2_new += shrv(i)*shrv(i);
+        g_chi2[gch] = chi2_new;
+        auto const chi2_diff = chi2_new - chi2_old;
+
+        // state management logic
+        // if this ch needs to continue, inc the counter atomically
+        if (ecal::abs(chi2_diff) >= 1e-3) {
+            auto const pos = atomicAdd(pChannelsLeft, 1);
+            thread2ch[pos] = chid;
+        }
+    }
 }
+
+*/
 
 /*
 __global__

@@ -15,14 +15,20 @@ uint32_t hashedIndexEE(uint32_t id);
 
 template<typename T>
 struct MapV {
-    T* data;
-    MapV(T* )
+    using type = T;
+    using base_type = typename std::remove_const<type>::type;
+
+    type* data;
+    __forceinline__ __device__
+    MapV(type* data) : data{data} {}
 
     __forceinline__ __device__
-    T const& operator()(int i) const { return data[i]; }
+    base_type const& operator()(int i) const { return data[i]; }
     
+    template<typename U = T>
     __forceinline__ __device__
-    T& operator()(int i) { return data[i]; }
+    typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
+    operator()(int i) { return data[i]; }
 };
 
 
@@ -33,24 +39,38 @@ template
     int Order = Eigen::ColMajor
 >
 struct MapM {
-    T* data;
+    using type = T;
+    using base_type = typename std::remove_const<type>::type;
+
+    type* data;
+    __forceinline__ __device__
+    MapM(type* data) : data{data} {}
 
     __forceinline__ __device__
-    T const& operator()(int row, int col) const { return data[col*Stride + row]; }
+    base_type const& operator()(int row, int col) const { return data[col*Stride + row]; }
 
+    template<typename U = T>
     __forceinline__ __device__
-    T& operator()(int row, int col) { return data[col*Stride + row]; }
+    typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
+    operator()(int row, int col) { return data[col*Stride + row]; }
 };
 
 template<typename T, int Stride>
 struct MapM<T, Stride, Eigen::RowMajor> {
-    T* data;
+    using type = T;
+    using base_type = typename std::remove_const<type>::type;
+
+    type* data;
+    __forceinline__ __device__
+    MapM(type* data) : data{data} {}
 
     __forceinline__ __device__
-    T const& operator()(int row, int col) const { return data[row*Stride + col]; }
+    base_type const& operator()(int row, int col) const { return data[row*Stride + col]; }
 
+    template<typename U = T>
     __forceinline__ __device__
-    T& operator()(int row, int col) { return data[row*Stride + col]; }
+    typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
+    operator()(int row, int col) { return data[row*Stride + col]; }
 };
 
 template
@@ -60,9 +80,14 @@ template
     int Order = Eigen::ColMajor
 >
 struct MapSymM {
+    using type = T;
+    using base_type = typename std::remove_const<type>::type;
+
     // TODO: replace with shifting after verifying correctness
     static constexpr auto total = Stride * (Stride + 1) / 2;
     T* data;
+    __forceinline__ __device__
+    MapSymM(T* data) : data{data} {}
 
     __forceinline__ __device__
     T const& operator()(int row, int col) const {
@@ -72,8 +97,10 @@ struct MapSymM {
         return data[index];
     }
     
+    template<typename U = T>
     __forceinline__ __device__
-    T& operator()(int row, int col) {
+    typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
+    operator()(int row, int col) {
         // TODO: replace with shifting
         auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
         auto const index = total - tmp + row - col;
@@ -83,7 +110,13 @@ struct MapSymM {
 
 template<typename T, int Stride>
 struct MapSymM<T, Stride, Eigen::RowMajor> {
+    using type = T;
+    using base_type = typename std::remove_const<type>::type;
+
+    static constexpr auto total = Stride * (Stride + 1) / 2;
     T* data;
+    __forceinline__ __device__
+    MapSymM(T* data) : data{data} {}
 
     __forceinline__ __device__
     T const& operator()(int row, int col) const {
@@ -92,8 +125,10 @@ struct MapSymM<T, Stride, Eigen::RowMajor> {
         return data[index];
     }
 
+    template<typename U = T>
     __forceinline__ __device__
-    T& operator()(int row, int col) {
+    typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
+    operator()(int row, int col) {
         // TODO: replace with shifting
         auto const index = row * (row + 1) / 2 + col;
         return data[index];
@@ -102,11 +137,12 @@ struct MapSymM<T, Stride, Eigen::RowMajor> {
 
 template<typename T, int N>
 struct ForwardSubstitutionUnrolled {
-    __forceinline__
-    __device__ static void compute(
-            MapM<T, N, Order> const& A,
-            MapM<T, N, Order> const& B,
-            MapM<T, N, Order> &X,
+    template<int Order1, int Order2, int Order3>
+    __forceinline__ __device__ 
+    static void compute(
+            MapM<T, N, Order1> const& A,
+            MapM<T, N, Order2> const& B,
+            MapM<T, N, Order3> &X,
             unsigned int const tid) {
         // 0 element
         auto const x_0 = B(0, tid) / A(0, 0);
@@ -123,8 +159,9 @@ struct ForwardSubstitutionUnrolled {
         }
     }
 
-    __forceinline__
-    __device__ static void compute(
+    template<int Order>
+    __forceinline__ __device__ 
+    static void compute(
             MapM<T, N, Order> const& A,
             MapV<T> const& b,
             MapV<T>& x) {
@@ -148,11 +185,12 @@ struct ForwardSubstitutionUnrolled {
 // therefore we use L directly as L.transpose()
 template<typename T, int N>
 struct BackwardSubstitutionUnrolled {
-    __forceinline__
-    __device__ static void compute(
-            MapM<T, N, Order> const& A,
-            MapM<T, N, Order> const& B,
-            MapM<T, N, Order>& X,
+    template<int Order1, int Order2, int Order3>
+    __forceinline__ __device__ 
+    static void compute(
+            MapM<T, N, Order1> const& A,
+            MapM<T, N, Order2> const& B,
+            MapM<T, N, Order3>& X,
             unsigned int const tid) {
         // first element (last one in the vector)
         X(N-1, tid) = B(N-1, tid)/A(N-1, N-1);
@@ -169,8 +207,9 @@ struct BackwardSubstitutionUnrolled {
         }
     }
 
-    __forceinline__
-    __device__ static void compute(,
+    template<int Order>
+    __forceinline__ __device__ 
+    static void compute(
             MapM<T, N, Order> const& A,
             MapV<T> const& b,
             MapV<T>& x) {
