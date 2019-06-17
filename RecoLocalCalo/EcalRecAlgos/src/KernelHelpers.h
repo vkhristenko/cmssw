@@ -137,12 +137,12 @@ struct MapSymM<T, Stride, Eigen::RowMajor> {
 
 template<typename T, int N>
 struct ForwardSubstitutionUnrolled {
-    template<int Order1, int Order2, int Order3>
+    template<typename M1, typename M2, typename M3>
     __forceinline__ __device__ 
     static void compute(
-            MapM<T, N, Order1> const& A,
-            MapM<T, N, Order2> const& B,
-            MapM<T, N, Order3> &X,
+            M1 const& A,
+            M2 const& B,
+            M3 &X,
             unsigned int const tid) {
         // 0 element
         auto const x_0 = B(0, tid) / A(0, 0);
@@ -153,18 +153,18 @@ struct ForwardSubstitutionUnrolled {
            T sum = 0;
            auto const b_i = B(i, tid);
            for (int j=0; j<i; ++j) 
-               sum += A(i, j) * X(j);
+               sum += A(i, j) * X(j, tid);
 
            X(i, tid) = sum / b_i;
         }
     }
 
-    template<int Order>
+    template<typename M1, typename M2, typename M3>
     __forceinline__ __device__ 
     static void compute(
-            MapM<T, N, Order> const& A,
-            MapV<T> const& b,
-            MapV<T>& x) {
+            M1 const& A,
+            M2 const& b,
+            M3& x) {
         // 0 element
         auto const x_0 = b(0) / A(0, 0);
         x(0) = x_0;
@@ -185,12 +185,12 @@ struct ForwardSubstitutionUnrolled {
 // therefore we use L directly as L.transpose()
 template<typename T, int N>
 struct BackwardSubstitutionUnrolled {
-    template<int Order1, int Order2, int Order3>
+    template<typename M1, typename M2, typename M3>
     __forceinline__ __device__ 
     static void compute(
-            MapM<T, N, Order1> const& A,
-            MapM<T, N, Order2> const& B,
-            MapM<T, N, Order3>& X,
+            M1 const& A,
+            M2 const& B,
+            M3& X,
             unsigned int const tid) {
         // first element (last one in the vector)
         X(N-1, tid) = B(N-1, tid)/A(N-1, N-1);
@@ -207,12 +207,12 @@ struct BackwardSubstitutionUnrolled {
         }
     }
 
-    template<int Order>
+    template<typename M1, typename M2, typename M3>
     __forceinline__ __device__ 
     static void compute(
-            MapM<T, N, Order> const& A,
-            MapV<T> const& b,
-            MapV<T>& x) {
+            M1 const& A,
+            M2 const& b,
+            M3& x) {
         // first element (last one in the vector)
         x(N-1) = b(N-1)/A(N-1, N-1);
         

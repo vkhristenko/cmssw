@@ -91,6 +91,8 @@ bool update_covariance(SampleMatrix const& noisecov,
 /// 
 
 /// launch ctx
+// FIXME: add __restrict__ whenever is needed
+// TODO: add boundaries checking for threads
 __global__
 void kernel_update_covariance_compute_cholesky(
         EcalPulseCovariance const* g_PulseCovariance,
@@ -231,29 +233,59 @@ void kernel_update_covariance_compute_cholesky(
     L(ty, tx) = shrL(ty, tx);
 }
 
-/*
-
+// FIXME: add __restrict__ whenever is needed
+// TODO: add boundaries checking for threads
 __global__
-void kernel_solve_mm_mv_mults() {
+void kernel_solve_mm_mv_mults(
+        PulseMatrixType const* g_pulseMatrix,
+        SampleVector::Scalar const* g_L,
+        SampleVector const* g_s,
+        SampleVector::Scalar* g_AtA,
+        SampleVector::Scalar* g_Atb,
+        uint32_t const* v2ridmapping) {
     // constants, typedefs
     using DataType = SampleVector::Scalar;
+    using ConstDataType = DataType const;
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
+    constexpr auto nvaluesForL = MapSymM<DataType, nsamples>::total;
 
     // indices
     auto const tx = threadIdx.x;
     auto const ty = threadIdx.y;
     auto const lch = threadIdx.z;
-    auto const gch = lch + blockIdx.x * blockDim.z;
-
-    if (gch >= nchannelsTotal) return;
+    auto const gvch = lch + blockIdx.x * blockDim.z;
+    auto const grch = v2ridmapping[gvch];
+//    auto const did = DetId{dids[grch]};
 
     // configure shared mem
     extern __shared__ char smem[];
-    DataType* __shrL;
-    DataType* __shrP;
-    DataType* __shrs;
-    DataType* __shrAtmp;
-    DataType* __shrbtmp;
+    DataType* __shrL = reinterpret_cast<DataType*>(smem);
+    DataType* __shrP = __shrL + nvaluesForL * blockDim.z;
+    DataType* __shrs = __shrP + nsamples * nsamples * blockDim.z;
+    DataType* __shrAtmp = __shrs + nsamples * blockDim.z;
+    DataType* __shrbtmp = __shrAtmp + nsamples * nsamples * blockDim.z;
+
+    // map global mem
+    // NOTE: this guy needs to be in sync with what is used above/below
+    MapSymM<ConstDataType, nsamples, Eigen::RowMajor> L
+    {g_L + grch*nvaluesForL};
+    // FIXME: note, we do not need to have a matrix in global mem
+    MapM<ConstDataType, nsamples> P{g_pulseMatrix[grch].data()};
+    MapV<ConstDataType> s{g_s[grch].data()};
+    // FIXME: we should use symmetric matrix in here
+    MapM<DataType, nsamples, Eigen::RowMajor> AtA
+    {g_AtA + grch * nsamples*nsamples};
+    MapV<DataType> Atb{g_Atb + grch * nsamples};
+
+    // map shared mem
+    MapSymM<DataType, nsamples, Eigen::RowMajor> shrL
+    {__shrL + lch * nvaluesForL};
+    MapM<DataType, nsamples, Eigen::RowMajor> shrP
+    {__shrP + lch*nsamples*nsamples};
+    MapV<DataType> shrs{__shrs + lch*nsamples};
+    MapM<DataType, nsamples, Eigen::RowMajor> shrAtmp
+    {__shrAtmp + lch*nsamples*nsamples};
+    MapV<DataType> shrbtmp{__shrbtmp + lch*nsamples};
 
     // move into shared mem
     shrP(ty, tx) = P(ty, tx);
@@ -268,11 +300,11 @@ void kernel_solve_mm_mv_mults() {
     // TODO: would it be better with more threads + synching???
     if (ty==0) {
         ForwardSubstitutionUnrolled<DataType, nsamples>::compute(
-            shrL, shrP, shrAtmp);
+            shrL, shrP, shrAtmp, tx);
         // note, we are reusing shrP as the result space
         // for backward substitution, there are races!
         BackwardSubstitutionUnrolled<DataType, nsamples>::compute(
-            shrL, shrAtmp, shrP);
+            shrL, shrAtmp, shrP, tx);
     } else if (ty==1 && tx == 1) {
         ForwardSubstitutionUnrolled<DataType, nsamples>::compute(
             shrL, shrs, shrbtmp);
@@ -304,6 +336,7 @@ void kernel_solve_mm_mv_mults() {
     }
 }
 
+/*
 
 void kernel_fnnls() {
     // 
