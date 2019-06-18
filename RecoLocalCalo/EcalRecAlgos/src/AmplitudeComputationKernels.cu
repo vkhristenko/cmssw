@@ -128,11 +128,11 @@ void kernel_newiter_update_covariance_compute_cholesky(
     }
 
     auto const grch = v2ridmapping[gvch];
-    auto const did = DetId{dids[grch]};
-    auto const isBarrel = did.subdetId() == EcalBarrel;
-    auto const hashedId = isBarrel
-        ? hashedIndexEB(did.rawId())
-        : offsetForHashes + hashedIndexEE(did.rawId());
+    /*
+    if (blockIdx.x==17)
+        printf("tx=%d ty=%d tz=%d gvch=%d grch=%d nchannels=%d\n",
+            tx, ty, vch_per_block, gvch, grch, nchannels);
+            */
 
     // non-divergent branch!
     // only for the first iteration...
@@ -145,6 +145,14 @@ void kernel_newiter_update_covariance_compute_cholesky(
         if (noiseCovIsZero[grch]==noiseCovIsZeroMask)
             return;
     }
+    
+//    if (blockIdx.x==17)
+//    printf("iteration=%d tx=%d ty=%d tz=%d gvch=%d grch=%d")
+    auto const did = DetId{dids[grch]};
+    auto const isBarrel = did.subdetId() == EcalBarrel;
+    auto const hashedId = isBarrel
+        ? hashedIndexEB(did.rawId())
+        : offsetForHashes + hashedIndexEE(did.rawId());
 
     // shared mem configuration
     extern __shared__ char smem[];
@@ -885,7 +893,12 @@ void minimization_procedure(
         unsigned int offsetForHashes) {
     unsigned int totalChannels = eventInputCPU.ebDigis.size() 
         + eventInputCPU.eeDigis.size();
-    uint32_t nchannels = totalChannels;
+
+    // FIXME: proper solution: 
+    // Can we perform memcpy from a stack allocated segment?
+    std::vector<uint32_t> tmp(1);
+    uint32_t &nchannels = tmp[0];
+    nchannels = totalChannels;
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
     using DataType = SampleVector::Scalar;
 
@@ -904,7 +917,7 @@ void minimization_procedure(
             scratch.noisecov,
             (SampleVector const*)eventOutputGPU.amplitudesAll,
             scratch.decompMatrixMainLoop,
-            scratch.v2rmapping_1,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
             scratch.noiseCovIsZero,
             eventInputGPU.ids,
             scratch.pChannelsCounter,
@@ -923,7 +936,7 @@ void minimization_procedure(
             scratch.samples,
             scratch.AtA,
             scratch.Atb,
-            scratch.v2rmapping_1,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
             scratch.noiseCovIsZero,
             iteration,
             nchannels);
@@ -944,7 +957,7 @@ void minimization_procedure(
             (SampleVector*)eventOutputGPU.amplitudesAll,
             scratch.samplesMapping,
             scratch.npassive,
-            scratch.v2rmapping_1,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
             scratch.noiseCovIsZero,
             nchannels,
             iteration);
@@ -962,8 +975,8 @@ void minimization_procedure(
             (SampleVector const*)eventOutputGPU.amplitudesAll,
             scratch.samples,
             eventOutputGPU.chi2,
-            scratch.v2rmapping_1, // FIXME: 
-            scratch.v2rmapping_2,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
+            iteration%2==0 ? scratch.v2rmapping_2 : scratch.v2rmapping_1,
             scratch.noiseCovIsZero,
             scratch.pChannelsCounter,
             nchannels,
@@ -971,8 +984,8 @@ void minimization_procedure(
         cudaCheck( cudaGetLastError() );
 
         // 
-        cudaCheck( cudaMemcpyAsync(&nchannels, scratch.pChannelsCounter, 
-            sizeof(uint32_t), cudaMemcpyHostToDevice, cudaStream.id()) );
+        cudaCheck( cudaMemcpyAsync(tmp.data(), scratch.pChannelsCounter, 
+            sizeof(uint32_t), cudaMemcpyDeviceToHost, cudaStream.id()) );
         cudaCheck( cudaStreamSynchronize(cudaStream.id()) );
         
         // 
