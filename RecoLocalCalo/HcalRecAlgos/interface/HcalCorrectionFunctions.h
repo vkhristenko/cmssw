@@ -6,9 +6,15 @@
 ///  the HPD.  Calculated based on a weighted sum of the -1,0,+1 samples relative to the peak                                  
 ///  as follows:  wpksamp = (0*sample[0] + 1*sample[1] + 2*sample[2]) / (sample[0] + sample[1] + sample[2])                    
 ///  where sample[1] is the maximum ADC sample value.                                                                          
+#ifdef __CUDA_ARCH__
+__host__ __device__ 
+#endif
 float timeshift_ns_hbheho(float wpksamp);
 
 /// Special energy correction for some HB- cells
+#ifdef __CUDA_ARCH__
+__host__ __device__
+#endif
 float hbminus_special_ecorr(int ieta, int iphi, double energy, int runnum);
 
 #endif // RecoLocalCalo_HcalRecAlgos_HcalCorrectionFunctions_h_
