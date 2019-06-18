@@ -336,45 +336,57 @@ void kernel_solve_mm_mv_mults(
     }
 }
 
-/*
-
-void kernel_fnnls() {
+// TODO: add __restrict__ 
+__global__
+void kernel_fnnls(
+        SampleVector::Scalar const* g_AtA,
+        SampleVector::Scalar const* g_Atb,
+        SampleVector::Scalar *g_L,
+        SampleVector *xs,
+        char *g_mapping,
+        char *g_npassive,
+        uint32_t const* v2ridmapping,
+        uint32_t const nchannels) {
     // 
     using DataType = SampleVector::Scalar;
+    using ConstDataType = DataType const;
     constexpr double eps = 1e-11;
     constexpr unsigned int max_iterations = 1000;
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
+    constexpr auto nvaluesForL = MapSymM<DataType, nsamples>::total;
 
     // indices
-    int const tid = threadIdx.x + blockIdx.x * blockDim.x;
-    int const offset = tid * nsamples;
-    char const* current_mapping = mapping + offset;
+    auto const vch = threadIdx.x + blockIdx.x * blockDim.x;
+    auto const rch = v2ridmapping[vch];
 
-    if (tid >= n) return;
+    if (vch >= nchannels) return;
 
-    MapM<DataType, ...> AtA{AtAs[tid].data()};
-    MapM<DataType, ...> L{Ls[tid].data()};
-    MapM<DataType> Atb{Atbs[tid].data()};
-    MapM<DataType> x{xs[tid].data()};
+    // map global mem
+    MapM<ConstDataType, nsamples, Eigen::RowMajor> AtA{g_AtA + nsamples*nsamples*rch};
+    MapSymM<DataType, nsamples, Eigen::RowMajor> L{g_L + nvaluesForL*rch};
+    MapV<ConstDataType> Atb{g_Atb + nsamples*rch};
+    MapV<DataType> x{xs[rch].data()};
+    MapV<char> mapping{g_mapping + rch*nsamples};
 
-    auto nPassive = g_npassive[tid];
+    // load number of elements in the passive set
+    auto nPassive = g_npassive[rch];
 
     // main loop
     for (auto iter = 0; iter < max_iterations; ++iter) {
-        const auto nActive = VECTOR_SIZE - nPassive;
+        const auto nActive = nsamples - nPassive;
 
         if(!nActive)
           break;
 
         //  
         unsigned int w_max_idx = -1;
-        auto max_w {static_cast<T>(-1)};
-        for (unsigned int i=VECTOR_SIZE-nActive; i<VECTOR_SIZE; i++) {
-            auto sum_per_row{static_cast<T>(0)};
-            auto const real_i = mapping[offset + i];
+        auto max_w {static_cast<DataType>(-1)};
+        for (unsigned int i=nsamples-nActive; i<nsamples; i++) {
+            auto sum_per_row{static_cast<DataType>(0)};
+            auto const real_i = mapping(i);
             auto const atb = Atb(real_i);
             #pragma unroll
-            for (unsigned int k=0; k<VECTOR_SIZE; ++k)
+            for (unsigned int k=0; k<nsamples; ++k)
                 // note, we do not need to look up k in the mapping
                 // both AtA and x have swaps applied -> therefore dot product will 
                 // not change per row
@@ -393,53 +405,53 @@ void kernel_fnnls() {
           break;
 
         Eigen::numext::swap(
-                mapping[offset + nPassive], 
-                mapping[offset + w_max_idx]);
+                mapping(nPassive), 
+                mapping(w_max_idx));
         ++nPassive;
 
         // inner loop
-        DataType __s[matrix_t<T>::RowsAtCompileTime], __tmp[matrix_t<T>::RowsAtCompileTime];
-        my_vector_t<DataType> s{__s}, tmp{__tmp};
+        DataType __s[nsamples], __tmp[nsamples];
+        MapV<DataType> s{__s}, tmp{__tmp};
         while (nPassive > 0) {
           switch (nPassive) {
           case 1:
-              FusedCholeskySolver<T, 1>::compute(AtA, Atb, s, current_mapping);
+              FusedCholeskySolver<DataType, 1>::compute(AtA, Atb, s, mapping);
               break;
           case 2:
-              FusedCholeskySolver<T, 2>::compute(AtA, Atb, s, current_mapping);
+              FusedCholeskySolver<DataType, 2>::compute(AtA, Atb, s, mapping);
               break;
           case 3:
-              FusedCholeskySolver<T, 3>::compute(AtA, Atb, s, current_mapping);
+              FusedCholeskySolver<DataType, 3>::compute(AtA, Atb, s, mapping);
               break;
           case 4:
-              FusedCholeskyForwardSubstUnrolled<T, 4>::compute(AtA, Atb, L, tmp, 
-                current_mapping);
-              BackwardSubstUnrolled<T, 4>::compute(L, tmp, s);
+              FusedCholeskyForwardSubstUnrolled<DataType, 4>::compute(AtA, Atb, L, tmp, 
+                mapping);
+              BackwardSubstitutionUnrolled<DataType, 4>::compute(L, tmp, s);
               break;
           case 5:
-              FusedCholeskyForwardSubstUnrolled<T, 5>::compute(AtA, Atb, L, tmp,
-                current_mapping);
-              BackwardSubstUnrolled<T, 5>::compute(L, tmp, s);
+              FusedCholeskyForwardSubstUnrolled<DataType, 5>::compute(AtA, Atb, L, tmp,
+                mapping);
+              BackwardSubstitutionUnrolled<DataType, 5>::compute(L, tmp, s);
               break;
           case 6:
-              FusedCholeskyForwardSubstUnrolled<T, 6>::compute(AtA, Atb, L, tmp,
-                current_mapping);
-              BackwardSubstUnrolled<T, 6>::compute(L, tmp, s);
+              FusedCholeskyForwardSubstUnrolled<DataType, 6>::compute(AtA, Atb, L, tmp,
+                mapping);
+              BackwardSubstitutionUnrolled<DataType, 6>::compute(L, tmp, s);
               break;
           case 7:
-              FusedCholeskyForwardSubstUnrolled<T, 7>::compute(AtA, Atb, L, tmp,
-                current_mapping);
-              BackwardSubstUnrolled<T, 7>::compute(L, tmp, s);
+              FusedCholeskyForwardSubstUnrolled<DataType, 7>::compute(AtA, Atb, L, tmp,
+                mapping);
+              BackwardSubstitutionUnrolled<DataType, 7>::compute(L, tmp, s);
               break;
           case 8:
-              FusedCholeskyForwardSubstUnrolled<T, 8>::compute(AtA, Atb, L, tmp,
-                current_mapping);
-              BackwardSubstUnrolled<T, 8>::compute(L, tmp, s);
+              FusedCholeskyForwardSubstUnrolled<DataType, 8>::compute(AtA, Atb, L, tmp,
+                mapping);
+              BackwardSubstitutionUnrolled<DataType, 8>::compute(L, tmp, s);
               break;
           default:
-              FusedCholeskyForwardSubst<T>::compute(AtA, Atb, L, tmp,
-                current_mapping, nPassive);
-              BackwardSubst<T>::compute(L, tmp, s, nPassive);
+              FusedCholeskyForwardSubst<DataType>::compute(AtA, Atb, L, tmp,
+                mapping, nPassive);
+              BackwardSubstitution<DataType>::compute(L, tmp, s, nPassive);
           }
 
           bool hasNegative = false;
@@ -450,18 +462,18 @@ void kernel_fnnls() {
               for (int i=0; i<nPassive; ++i) {
                   // note, s contains passive/active set layout
                   // and x contains unpermuted final values in their repective pos
-                  auto const real_i = mapping[offset + i];
+                  auto const real_i = mapping(i);
                   x(real_i) = s(i);
               }
               break;
           }
 
-          auto alpha = std::numeric_limits<T>::max();
+          auto alpha = std::numeric_limits<DataType>::max();
           char alpha_idx=0, real_alpha_idx=0;
 
           for (auto i = 0; i < nPassive; ++i) {
             if (s(i) <= 0.) {
-              auto const real_i = mapping[offset + i];
+              auto const real_i = mapping(i);
               auto const x_i = x(real_i);
               auto const ratio = x_i / (x_i - s(i));
               if (ratio < alpha) {
@@ -472,16 +484,16 @@ void kernel_fnnls() {
             }
           }
 
-          if (std::numeric_limits<T>::max() == alpha) {
+          if (std::numeric_limits<DataType>::max() == alpha) {
             for (int i=0; i<nPassive; ++i) {
-                auto const real_i = mapping[offset + i];
+                auto const real_i = mapping(i);
                 x(real_i) = s(i);
             }
             break;
           }
 
           for (int ii=0; ii<nPassive; ++ii) {
-            auto const real_i = mapping[offset+ii];
+            auto const real_i = mapping(ii);
             auto const x_ii = x(real_i);
             x(real_i) += alpha * (s(ii) - x_ii);
           }
@@ -489,14 +501,16 @@ void kernel_fnnls() {
           --nPassive;
 
           Eigen::numext::swap(
-                mapping[offset + nPassive], 
-                mapping[offset + alpha_idx]);
+                mapping(nPassive), 
+                mapping(alpha_idx));
         }
     }
 
     // store back to global
-    g_npassive[tid] = nPassive;
+    g_npassive[rch] = nPassive;
 }
+
+/*
 
 __global__
 void kernel_compute_chi2() {
