@@ -12,6 +12,8 @@ constexpr int SampleVectorSize = 10;
 constexpr int FullSampleVectorSize = 19;
 constexpr int PulseVectorSize = 12;
 constexpr int NGains = 3;
+constexpr uint32_t noiseCovIsZeroMask = 0xffffffff;
+constexpr uint32_t idIsInvalidMask = 0xffffffff;
 
 using data_type = ::ecal::reco::ComputationScalarType;
 

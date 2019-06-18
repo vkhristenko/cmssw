@@ -90,18 +90,23 @@ bool update_covariance(SampleMatrix const& noisecov,
 ///     - real  channel id - channel id for the original array
 /// 
 
-/// launch ctx
+/// launch ctx:
+/// 10 x 10 x nchannels per block
 // FIXME: add __restrict__ whenever is needed
 // TODO: add boundaries checking for threads
 __global__
-void kernel_update_covariance_compute_cholesky(
+void kernel_newiter_update_covariance_compute_cholesky(
         EcalPulseCovariance const* g_PulseCovariance,
         SampleMatrix const* g_noiseCovariance,
         SampleVector const* g_amplitudes,
         SampleVector::Scalar* g_L,
-        uint32_t *v2ridmapping,
+        uint32_t const* v2ridmapping,
+        uint32_t const* noiseCovIsZero,
         uint32_t *dids,
-        uint32_t offsetForHashes) {
+        uint32_t *pChannelsCounter,
+        uint32_t const offsetForHashes,
+        uint32_t const iteration,
+        uint32_t const nchannels) {
     // constants
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
     constexpr auto npulses = nsamples;
@@ -115,12 +120,31 @@ void kernel_update_covariance_compute_cholesky(
     auto const ty = threadIdx.y;
     auto const vch_per_block = threadIdx.z;
     auto const gvch = vch_per_block + blockIdx.x*blockDim.z;
+    if (gvch >= nchannels) return;
+
+    // done for each new iteration...
+    if (tx==0 && ty==0 && gvch==0) {
+        *pChannelsCounter = 0;
+    }
+
     auto const grch = v2ridmapping[gvch];
     auto const did = DetId{dids[grch]};
     auto const isBarrel = did.subdetId() == EcalBarrel;
     auto const hashedId = isBarrel
         ? hashedIndexEB(did.rawId())
         : offsetForHashes + hashedIndexEE(did.rawId());
+
+    // non-divergent branch!
+    // only for the first iteration...
+    if (iteration == 0) {
+        // we need to filter out channels that either
+        // - have values that are precomputed
+        // - noise matrix is 0
+        if (grch==idIsInvalidMask)
+            return;
+        if (noiseCovIsZero[grch]==noiseCovIsZeroMask)
+            return;
+    }
 
     // shared mem configuration
     extern __shared__ char smem[];
@@ -233,6 +257,8 @@ void kernel_update_covariance_compute_cholesky(
     L(ty, tx) = shrL(ty, tx);
 }
 
+/// launch ctx:
+/// 10 x 10 x nchannels per block
 // FIXME: add __restrict__ whenever is needed
 // TODO: add boundaries checking for threads
 __global__
@@ -242,7 +268,10 @@ void kernel_solve_mm_mv_mults(
         SampleVector const* g_s,
         SampleVector::Scalar* g_AtA,
         SampleVector::Scalar* g_Atb,
-        uint32_t const* v2ridmapping) {
+        uint32_t const* v2ridmapping,
+        uint32_t const* noiseCovIsZero,
+        uint32_t const iteration,
+        uint32_t const nchannels) {
     // constants, typedefs
     using DataType = SampleVector::Scalar;
     using ConstDataType = DataType const;
@@ -254,8 +283,22 @@ void kernel_solve_mm_mv_mults(
     auto const ty = threadIdx.y;
     auto const lch = threadIdx.z;
     auto const gvch = lch + blockIdx.x * blockDim.z;
+    if (gvch >= nchannels) return;
+
     auto const grch = v2ridmapping[gvch];
 //    auto const did = DetId{dids[grch]};
+    
+    // non-divergent branch!
+    // only for the first iteration...
+    if (iteration == 0) {
+        // we need to filter out channels that either
+        // - have values that are precomputed
+        // - noise matrix is 0
+        if (grch==idIsInvalidMask)
+            return;
+        if (noiseCovIsZero[grch]==noiseCovIsZeroMask)
+            return;
+    }
 
     // configure shared mem
     extern __shared__ char smem[];
@@ -336,7 +379,10 @@ void kernel_solve_mm_mv_mults(
     }
 }
 
+/// launch ctx:
+/// 1 thread per channel
 // TODO: add __restrict__ 
+// TODO: add logic to conform to the existing impl
 __global__
 void kernel_fnnls(
         SampleVector::Scalar const* g_AtA,
@@ -346,20 +392,33 @@ void kernel_fnnls(
         char *g_mapping,
         char *g_npassive,
         uint32_t const* v2ridmapping,
-        uint32_t const nchannels) {
+        uint32_t const* noiseCovIsZero,
+        uint32_t const nchannels,
+        uint32_t const ml_iteration) {
     // 
     using DataType = SampleVector::Scalar;
     using ConstDataType = DataType const;
     constexpr double eps = 1e-11;
-    constexpr unsigned int max_iterations = 1000;
+    constexpr unsigned int max_iterations = 500;
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
     constexpr auto nvaluesForL = MapSymM<DataType, nsamples>::total;
 
     // indices
     auto const vch = threadIdx.x + blockIdx.x * blockDim.x;
+    if (vch >= nchannels) return;
     auto const rch = v2ridmapping[vch];
 
-    if (vch >= nchannels) return;
+    // non-divergent branch!
+    // only for the first iteration...
+    if (ml_iteration == 0) {
+        // we need to filter out channels that either
+        // - have values that are precomputed
+        // - noise matrix is 0
+        if (rch==idIsInvalidMask)
+            return;
+        if (noiseCovIsZero[rch]==noiseCovIsZeroMask)
+            return;
+    }
 
     // map global mem
     MapM<ConstDataType, nsamples, Eigen::RowMajor> AtA{g_AtA + nsamples*nsamples*rch};
@@ -511,7 +570,7 @@ void kernel_fnnls(
 }
 
 // TODO: add __restrict__
-// launch ctx: 10 threads per channel
+// launch ctx: 10 threads per channel x nchannels per block
 __global__
 void kernel_compute_chi2(
         SampleVector::Scalar const* g_L,
@@ -521,8 +580,10 @@ void kernel_compute_chi2(
         ::ecal::reco::StorageScalarType* g_chi2,
         uint32_t const* input_v2ridmapping,
         uint32_t *output_v2ridmapping,
+        uint32_t const* noiseCovIsZero,
         uint32_t *pChannelsLeft,
-        uint32_t const nchannels) {
+        uint32_t const nchannels,
+        uint32_t const iteration) {
     // constants, typedefs
     using DataType = SampleVector::Scalar;
     using ConstDataType = DataType const;
@@ -532,11 +593,23 @@ void kernel_compute_chi2(
     // indices
     auto const gtx = threadIdx.x + blockDim.x * blockIdx.x;
     auto const gvch = gtx / nsamples;
+    if (gvch >= nchannels) return;
+    
     auto const grch = input_v2ridmapping[gvch];
     auto const lch = threadIdx.x  / nsamples;
     auto const sample = threadIdx.x % nsamples;
 
-    if (gvch >= nchannels) return;
+    // non-divergent branch!
+    // only for the first iteration...
+    if (iteration == 0) {
+        // we need to filter out channels that either
+        // - have values that are precomputed
+        // - noise matrix is 0
+        if (grch==idIsInvalidMask)
+            return;
+        if (noiseCovIsZero[grch]==noiseCovIsZeroMask)
+            return;
+    }
 
     // shared mem
     extern __shared__ char smem[];
@@ -684,7 +757,7 @@ void kernel_minimize(SampleMatrix const* noisecov,
     int idx = threadIdx.x + blockDim.x*blockIdx.x;
     if (idx < nchannels) {
         // this channel had values precomputed
-        if (v2rmapping[idx] == 0xffffffff)
+        if (v2rmapping[idx] == idIsInvalidMask)
             return;
         /*
         if (static_cast<MinimizationState>(acState[idx]) == 
@@ -706,7 +779,7 @@ void kernel_minimize(SampleMatrix const* noisecov,
         
         // FIXME: 
         // need to identify this earrlier and set the state properly
-        if (noiseCovIsZero[idx] == 0xffff)
+        if (noiseCovIsZero[idx] == noiseCovIsZeroMask)
             return;
         /*
         if (noisecov[idx].isZero(0))
@@ -812,8 +885,102 @@ void minimization_procedure(
         unsigned int offsetForHashes) {
     unsigned int totalChannels = eventInputCPU.ebDigis.size() 
         + eventInputCPU.eeDigis.size();
-//    unsigned int threads_min = conf.threads.x;
-    // TODO: configure from python
+    uint32_t nchannels = totalChannels;
+    constexpr auto nsamples = SampleVector::RowsAtCompileTime;
+    using DataType = SampleVector::Scalar;
+
+    // FIXME: all the constants below need to be propagated properly
+    // once results are valid
+
+    for (int iteration=0; iteration<50; ++iteration) {
+        //
+        dim3 const ts1{nsamples, nsamples, nchannels>10 ? 10 : nchannels};
+        uint32_t const bs1 = nchannels>10
+            ? (nchannels + 10 - 1) / 10
+            : 1;
+        uint32_t const shrBytes1 = 10 * (sizeof(DataType)*(55 + 55 + 10));
+        kernel_newiter_update_covariance_compute_cholesky<<<bs1, ts1, shrBytes1, cudaStream.id()>>>(
+            conditions.pulseCovariances.values,
+            scratch.noisecov,
+            (SampleVector const*)eventOutputGPU.amplitudesAll,
+            scratch.decompMatrixMainLoop,
+            scratch.v2rmapping_1,
+            scratch.noiseCovIsZero,
+            eventInputGPU.ids,
+            scratch.pChannelsCounter,
+            offsetForHashes,
+            iteration,
+            nchannels);
+        cudaCheck( cudaGetLastError() );
+
+        //
+        auto const ts2 = ts1;
+        auto const bs2 = bs1;
+        uint32_t const shrBytes2 = 10 * (sizeof(DataType)*(55 + 100 + 10 + 100 + 10));
+        kernel_solve_mm_mv_mults<<<bs2, ts2, shrBytes2, cudaStream.id()>>>(
+            scratch.pulse_matrix,
+            scratch.decompMatrixMainLoop,
+            scratch.samples,
+            scratch.AtA,
+            scratch.Atb,
+            scratch.v2rmapping_1,
+            scratch.noiseCovIsZero,
+            iteration,
+            nchannels);
+        cudaCheck( cudaGetLastError() );
+
+        //
+        // FIXME: rename kernelMinimizeThreads
+        uint32_t ts3 = nchannels>configParameters.kernelMinimizeThreads[0]
+            ? configParameters.kernelMinimizeThreads[0]
+            : nchannels;
+        uint32_t bs3 = nchannels>ts3
+            ? (nchannels + ts3 - 1) / ts3
+            : 1;
+        kernel_fnnls<<<bs3, ts3, 0, cudaStream.id()>>>(
+            scratch.AtA,
+            scratch.Atb,
+            scratch.decompMatrixFnnls,
+            (SampleVector*)eventOutputGPU.amplitudesAll,
+            scratch.samplesMapping,
+            scratch.npassive,
+            scratch.v2rmapping_1,
+            scratch.noiseCovIsZero,
+            nchannels,
+            iteration);
+        cudaCheck( cudaGetLastError() );
+
+        //
+        uint32_t const ts4 = nchannels>20 ? 20 : nchannels;
+        uint32_t const bs4 = nchannels>ts4
+            ? (nchannels + ts4 - 1) / ts4
+            : 1;
+        uint32_t const shrBytes4 = 20 * (sizeof(DataType)*(55 + 100 + 10 + 10));
+        kernel_compute_chi2<<<bs4, ts4, shrBytes4, cudaStream.id()>>>(
+            scratch.decompMatrixMainLoop,
+            scratch.pulse_matrix,
+            (SampleVector const*)eventOutputGPU.amplitudesAll,
+            scratch.samples,
+            eventOutputGPU.chi2,
+            scratch.v2rmapping_1, // FIXME: 
+            scratch.v2rmapping_2,
+            scratch.noiseCovIsZero,
+            scratch.pChannelsCounter,
+            nchannels,
+            iteration);
+        cudaCheck( cudaGetLastError() );
+
+        // 
+        cudaCheck( cudaMemcpyAsync(&nchannels, scratch.pChannelsCounter, 
+            sizeof(uint32_t), cudaMemcpyHostToDevice, cudaStream.id()) );
+        cudaCheck( cudaStreamSynchronize(cudaStream.id()) );
+        
+        // 
+        if (nchannels == 0)
+            return;
+    }
+
+    /*
     unsigned int threads_min = configParameters.kernelMinimizeThreads[0];
     unsigned int blocks_min = threads_min > totalChannels
         ? 1
@@ -851,6 +1018,7 @@ void minimization_procedure(
         scratch.v2rmapping_1,
         totalChannels);
     cudaCheck(cudaGetLastError());
+    */
 }
 
 }}
