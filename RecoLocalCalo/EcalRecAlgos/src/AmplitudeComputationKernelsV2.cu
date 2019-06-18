@@ -510,26 +510,58 @@ void kernel_fnnls(
     g_npassive[rch] = nPassive;
 }
 
-/*
-
+// TODO: add __restrict__
+// launch ctx: 10 threads per channel
 __global__
-void kernel_compute_chi2() {
+void kernel_compute_chi2(
+        SampleVector::Scalar const* g_L,
+        PulseMatrixType const* g_P,
+        SampleVector const* g_x,
+        SampleVector const* g_s,
+        ::ecal::reco::StorageScalarType* g_chi2,
+        uint32_t const* input_v2ridmapping,
+        uint32_t *output_v2ridmapping,
+        uint32_t *pChannelsLeft,
+        uint32_t const nchannels) {
     // constants, typedefs
     using DataType = SampleVector::Scalar;
+    using ConstDataType = DataType const;
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
+    constexpr auto nvaluesForL = MapSymM<DataType, nsamples>::total;
 
     // indices
     auto const gtx = threadIdx.x + blockDim.x * blockIdx.x;
-    auto const gch = gtx / nsamples;
+    auto const gvch = gtx / nsamples;
+    auto const grch = input_v2ridmapping[gvch];
     auto const lch = threadIdx.x  / nsamples;
-    auto const sample = threadIdx % nsamples;
+    auto const sample = threadIdx.x % nsamples;
 
-    if (gch >= channelsTotal) return;
+    if (gvch >= nchannels) return;
 
     // shared mem
     extern __shared__ char smem[];
-    DataType* __shrL;
-    DataType* __shrP;
+    DataType* __shrL = reinterpret_cast<DataType*>(smem);
+    // FIXME: Pulse matrix should be a vector with proper indexing, not a matrix
+    // nchannels per block (threads per block / 10) * values for L m
+    DataType* __shrP = __shrL + nvaluesForL * blockDim.x / nsamples;
+    DataType *__shrv = __shrP + nsamples*blockDim.x;
+    DataType *__shrtmpx = __shrv + blockDim.x;
+
+    // map global mem
+    MapSymM<ConstDataType, nsamples, Eigen::RowMajor> L
+    {g_L + nvaluesForL * grch};
+    MapM<ConstDataType, nsamples> P
+    {g_P[grch].data()};
+    MapV<ConstDataType> x{g_x[grch].data()};
+    MapV<ConstDataType> s{g_s[grch].data()};
+
+    // map shared mem
+    MapSymM<DataType, nsamples, Eigen::RowMajor> shrL
+    {__shrL + nvaluesForL*lch};
+    MapM<DataType, nsamples, Eigen::RowMajor> shrP
+    {__shrP + nsamples*nsamples*lch};
+    MapV<DataType> shrv{__shrv + nsamples*lch};
+    MapV<DataType> shrtmpx{__shrtmpx + nsamples*lch};
 
     // mov to shared mem
     auto const x_sample = x(sample);
@@ -555,30 +587,28 @@ void kernel_compute_chi2() {
     // FIXME: should we add?
     if (sample == 0) {
         // f/b subst solver
-        ForwardSubsttitutionUnrolled<DataType, nsamples>::compute(
+        ForwardSubstitutionUnrolled<DataType, nsamples>::compute(
             shrL, shrv, shrtmpx);
         BackwardSubstitutionUnrolled<DataType, nsamples>::compute(
             shrL, shrtmpx, shrv);
 
         // sum will be the chi2 
         DataType chi2_new{0};
-        auto const chi2_old =  g_chi2[gch];
+        auto const chi2_old =  g_chi2[grch];
         #pragma unroll
         for (int i=0; i<nsamples; i++)
             chi2_new += shrv(i)*shrv(i);
-        g_chi2[gch] = chi2_new;
+        g_chi2[grch] = chi2_new;
         auto const chi2_diff = chi2_new - chi2_old;
 
         // state management logic
         // if this ch needs to continue, inc the counter atomically
         if (ecal::abs(chi2_diff) >= 1e-3) {
             auto const pos = atomicAdd(pChannelsLeft, 1);
-            thread2ch[pos] = chid;
+            output_v2ridmapping[pos] = grch;
         }
     }
 }
-
-*/
 
 /*
 __global__
