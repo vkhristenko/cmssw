@@ -18,7 +18,7 @@
 #include "cuda.h"
 
 #include "AmplitudeComputationCommonKernels.h"
-#include "AmplitudeComputationKernelsV1.h"
+#include "AmplitudeComputationKernels.h"
 #include "TimeComputationKernels.h"
 
 //#define DEBUG
@@ -114,7 +114,8 @@ void entryPoint(
         eventOutputGPU.chi2,
         eventOutputGPU.pedestal,
         eventOutputGPU.flags,
-        scratch.acState,
+        scratch.v2rmapping_1,
+        scratch.noiseCovIsZero,
         scratch.activeBXs,
         offsetForHashes,
         gainSwitchUseMaxSampleEB,
@@ -147,11 +148,12 @@ void entryPoint(
         scratch.hasSwitchToGain6,
         scratch.hasSwitchToGain1,
         scratch.isSaturated,
+        scratch.noiseCovIsZero,
         offsetForHashes);
     cudaCheck(cudaGetLastError());
     
     // run minimization kernels
-    v1::minimization_procedure(
+    minimization_procedure(
         eventInputCPU, eventInputGPU, eventOutputGPU,
         scratch, conditions, configParameters, cudaStream, offsetForHashes);
 

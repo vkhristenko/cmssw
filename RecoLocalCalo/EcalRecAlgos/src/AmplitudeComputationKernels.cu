@@ -12,11 +12,11 @@
 #include "DataFormats/EcalDigi/interface/EcalDigiCollections.h"
 
 #include "inplace_fnnls.h"
-#include "AmplitudeComputationKernelsV2.h"
+#include "AmplitudeComputationKernels.h"
 #include "AmplitudeComputationCommonKernels.h"
 #include "KernelHelpers.h"
 
-namespace ecal { namespace multifit { namespace v2 {
+namespace ecal { namespace multifit { 
 
 #define PRINT_MATRIX_10x10(M)\
             printf("%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n", \
@@ -61,7 +61,7 @@ bool update_covariance(SampleMatrix const& noisecov,
 
         int bx = bxs.coeff(ipulse);
         int first_sample_t = std::max(0, bx+3);
-        int offset = 3 - bx;
+        int offset = -3 - bx;
 
         auto const value = amplitudes.coeff(ipulse);
         auto const value_sq = value*value;
@@ -676,15 +676,21 @@ void kernel_minimize(SampleMatrix const* noisecov,
                      PulseMatrixType* pulse_matrix, 
                      ::ecal::reco::StorageScalarType* chi2s,
                      uint32_t const* dids,
-                     char *acState,
+                     uint32_t const* v2rmapping,
+                     uint32_t const* noiseCovIsZero,
                      int nchannels,
                      int max_iterations,
                      unsigned int offsetForHashes) {
     int idx = threadIdx.x + blockDim.x*blockIdx.x;
     if (idx < nchannels) {
+        // this channel had values precomputed
+        if (v2rmapping[idx] == 0xffffffff)
+            return;
+        /*
         if (static_cast<MinimizationState>(acState[idx]) == 
             MinimizationState::Precomputed)
             return;
+            */
 
         auto const did = DetId{dids[idx]};
         auto const isBarrel = did.subdetId() == EcalBarrel;
@@ -700,8 +706,12 @@ void kernel_minimize(SampleMatrix const* noisecov,
         
         // FIXME: 
         // need to identify this earrlier and set the state properly
+        if (noiseCovIsZero[idx] == 0xffff)
+            return;
+        /*
         if (noisecov[idx].isZero(0))
             return;
+            */
 
         // inits
         SampleDecompLLT covariance_decomposition;
@@ -817,7 +827,8 @@ void minimization_procedure(
         scratch.pulse_matrix,
         eventOutputGPU.chi2,
         eventInputGPU.ids,
-        scratch.acState,
+        scratch.v2rmapping_1,
+        scratch.noiseCovIsZero,
         totalChannels,
         50,
         offsetForHashes);
@@ -837,11 +848,9 @@ void minimization_procedure(
         (SampleVector*)eventOutputGPU.amplitudesAll,
         scratch.activeBXs,
         eventOutputGPU.amplitude,
-        scratch.acState,
+        scratch.v2rmapping_1,
         totalChannels);
     cudaCheck(cudaGetLastError());
-}
-
 }
 
 }}

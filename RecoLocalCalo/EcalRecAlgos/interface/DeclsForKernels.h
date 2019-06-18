@@ -148,7 +148,9 @@ struct EventDataForScratchGPU {
     SampleMatrix* noisecov = nullptr;
     PulseMatrixType *pulse_matrix = nullptr;
     BXVectorType *activeBXs = nullptr;
-    char *acState = nullptr;
+    //char *acState = nullptr;
+    uint32_t *v2rmapping_1=nullptr;
+    uint32_t *noiseCovIsZero=nullptr;
 
     bool *hasSwitchToGain6=nullptr,
          *hasSwitchToGain1=nullptr,
@@ -178,8 +180,10 @@ struct EventDataForScratchGPU {
             size * sizeof(PulseMatrixType)) );
         cudaCheck( cudaMalloc((void**)&activeBXs,
             size * sizeof(BXVectorType)) );
-        cudaCheck( cudaMalloc((void**)&acState,
-            size * sizeof(char)) );
+        cudaCheck( cudaMalloc((void**)&noiseCovIsZero,
+            size * sizeof(uint32_t)) );
+        cudaCheck( cudaMalloc((void**)&v2rmapping_1,
+            size * sizeof(uint32_t)) );
 
         cudaCheck( cudaMalloc((void**)&hasSwitchToGain6,
             size * sizeof(bool)) );
@@ -232,7 +236,8 @@ struct EventDataForScratchGPU {
         cudaCheck( cudaFree(noisecov) );
         cudaCheck( cudaFree(pulse_matrix) );
         cudaCheck( cudaFree(activeBXs) );
-        cudaCheck( cudaFree(acState) );
+        cudaCheck( cudaFree(v2rmapping_1) );
+        cudaCheck( cudaFree(noiseCovIsZero) );
 
         cudaCheck( cudaFree(hasSwitchToGain6) );
         cudaCheck( cudaFree(hasSwitchToGain1) );

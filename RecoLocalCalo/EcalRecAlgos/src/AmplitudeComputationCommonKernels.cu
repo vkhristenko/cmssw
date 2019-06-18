@@ -21,8 +21,9 @@ namespace ecal { namespace multifit {
 ///
 /// assume kernel launch configuration is 
 /// (MAXSAMPLES * nchannels, blocks)
-/// TODO: is there a point to split this kernel further to separate reductions
+/// TODO: is there a point to split this kernel further to separate reduction
 /// 
+// FIXME: add __restrict__
 __global__
 void kernel_prep_1d_and_initialize(
                     EcalPulseShape const* shapes_in,
@@ -44,7 +45,8 @@ void kernel_prep_1d_and_initialize(
                     ::ecal::reco::StorageScalarType* chi2,
                     ::ecal::reco::StorageScalarType* g_pedestal,
                     uint32_t *flags,
-                    char* acState,
+                    uint32_t *v2rmapping,
+                    uint32_t *noiseCovIsZero,
                     BXVectorType *bxs,
                     uint32_t const offsetForHashes,
                     bool const gainSwitchUseMaxSampleEB,
@@ -240,11 +242,12 @@ void kernel_prep_1d_and_initialize(
             //
             // initialization
             //
-            acState[ch] = static_cast<char>(MinimizationState::NotFinished);
+            v2rmapping[ch] = ch;
             energies[ch] = 0;
             chi2[ch] = 0;
             g_pedestal[ch] = 0;
             uint32_t flag = 0;
+            noiseCovIsZero[ch] = 0xffffffff;
 
             // start of this channel in shared mem
             int const chStart = threadIdx.x - sample_max;
@@ -282,7 +285,7 @@ void kernel_prep_1d_and_initialize(
                     //---- AM FIXME : no pedestal subtraction???  It should be "(4095. - pedestal) * gainratio"
 
                 // set state flag to terminate further processing of this channel
-                acState[ch] = static_cast<char>(MinimizationState::Precomputed); 
+                v2rmapping[ch] = 0xffffffff;
                 flag |= 0x1 << EcalUncalibratedRecHit::kSaturated;
                 flags[ch] = flag;
                 return;
@@ -303,7 +306,7 @@ void kernel_prep_1d_and_initialize(
             if (hasGainSwitch && gainSwitchUseMaxSample) {
                 // thread for sample=0 will access the right guys
                 energies[ch] = max_amplitude / shape_value;
-                acState[ch] = static_cast<char>(MinimizationState::Precomputed);
+                v2rmapping[ch] = 0xffffffff;
                 flags[ch] = flag;
                 return;
             }
@@ -312,7 +315,7 @@ void kernel_prep_1d_and_initialize(
             // needs to be checkec why this is the case
             // general case here is that noisecov is a Zero matrix
             if (rmsForChecking == 0) {
-                acState[ch] = static_cast<char>(MinimizationState::Precomputed);
+                v2rmapping[ch] = 0xffffffff;
                 flags[ch] = flag;
                 return;
             }
@@ -326,6 +329,7 @@ void kernel_prep_1d_and_initialize(
 ///
 /// assume kernel launch configuration is 
 /// ([MAXSAMPLES, MAXSAMPLES], nchannels)
+// FIXME: add more thrads per block!
 ///
 __global__
 void kernel_prep_2d(SampleGainVector const* gainNoise,
@@ -347,6 +351,7 @@ void kernel_prep_2d(SampleGainVector const* gainNoise,
                     bool const* hasSwitchToGain6,
                     bool const* hasSwitchToGain1,
                     bool const* isSaturated,
+                    uint32_t *noiseCovIsZero,
                     uint32_t const offsetForHashes) {
     int ch = blockIdx.x;
     int tx = threadIdx.x;
@@ -468,6 +473,11 @@ void kernel_prep_2d(SampleGainVector const* gainNoise,
         }
 
         noisecov[ch](ty, tx) = noise_value;
+        
+        // FIXME: this guy can not be 0, but it happens rarely
+        // need to propogate downstream
+        uint32_t const isZero = noise_value == 0 ? 0xffffffff : 0x0;
+        atomicAnd(&noiseCovIsZero[ch], isZero);
     } else {
         auto rms = rms_x12[hashedId];
         float noise_value = rms*rms * G12SamplesCorrelation[vidx];
@@ -476,6 +486,11 @@ void kernel_prep_2d(SampleGainVector const* gainNoise,
             noise_value += addPedestalUncertainty*addPedestalUncertainty;
         }
         noisecov[ch](ty, tx) = noise_value;
+        
+        // FIXME: this guy can not be 0, but it happens rarely
+        // need to propogate downstream
+        uint16_t const isZero = noise_value == 0 ? 0xffffffff : 0x0;
+        atomicAnd(&noiseCovIsZero[ch], isZero);
     }
 
     //---- 
@@ -495,7 +510,7 @@ void kernel_permute_results(
         SampleVector *amplitudes,
         BXVectorType const*activeBXs,
         ::ecal::reco::StorageScalarType *energies,
-        char const* acState,
+        uint32_t const* v2rmapping,
         int const nchannels) {
     // constants
     constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
@@ -508,10 +523,15 @@ void kernel_permute_results(
     if (ch >= nchannels) return;
     
     // channels that have amplitude precomputed do not need results to be permuted
+    auto const id = v2rmapping[ch];
+    if (id == 0xffffffff)
+        return;
+    /*
     auto const state = static_cast<MinimizationState>(acState[ch]);
     if (static_cast<MinimizationState>(acState[ch]) ==
         MinimizationState::Precomputed)
         return;
+        */
 
     // configure shared memory and cp into it
     extern __shared__ char smem[];

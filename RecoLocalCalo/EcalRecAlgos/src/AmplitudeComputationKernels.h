@@ -1,5 +1,5 @@
-#ifndef RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernelsV2
-#define RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernelsV2
+#ifndef RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernels
+#define RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernels
 
 #include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes_gpu.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/DeclsForKernels.h"
@@ -10,8 +10,6 @@ class EcalPulseCovariance;
 class EcalUncalibratedRecHit;
 
 namespace ecal { namespace multifit {
-
-namespace v2 {
 
 void minimization_procedure(
         EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
@@ -39,12 +37,11 @@ void kernel_minimize(SampleMatrix const* noisecov,
                      PulseMatrixType* pulse_matrix, 
                      ::ecal::reco::StorageScalarType* chi2s,
                      uint32_t const* dids,
-                     char *acState,
+                     uint32_t const* v2rmapping,
+                     uint32_t const* noiseCovIsZero,
                      int nchannels,
                      int max_iterations,
                      unsigned int offsetForHashes);
-
-}
 
 }}
 

@@ -37,7 +37,8 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
                     ::ecal::reco::StorageScalarType* chi2,
                     ::ecal::reco::StorageScalarType* pedestal,
                     uint32_t *flags,
-                    char* acState,
+                    uint32_t *v2rmapping,
+                    uint32_t *noiseCovIsZero,
                     BXVectorType *bxs,
                     uint32_t offsetForHashes,
                     bool const gainSwitchUseMaxSampleEB,
@@ -68,6 +69,7 @@ void kernel_prep_2d(SampleGainVector const* gainNoise,
                     bool const* hasSwitchToGain6,
                     bool const* hasSwitchToGain1,
                     bool const* isSaturated,
+                    uint32_t *noiseCovIsZero,
                     uint32_t const offsetForHashes);
 
 __global__
@@ -75,7 +77,7 @@ void kernel_permute_results(
         SampleVector *amplitudes,
         BXVectorType const* activeBXs,
         ::ecal::reco::StorageScalarType *energies,
-        char const* acState,
+        uint32_t const* v2rmapping,
         int const nchannels);
 
 ///
