@@ -18,30 +18,6 @@
 
 namespace ecal { namespace multifit { 
 
-#define PRINT_MATRIX_10x10(M)\
-            printf("%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n", \
-                M(0, 0), M(1, 0), M(2, 0), M(3, 0), M(4, 0), \
-                M(5, 0), M(6, 0), M(7, 0), M(8, 0), M(9, 0), \
-                M(0, 1), M(1, 1), M(2, 1), M(3, 1), M(4, 1), \
-                M(5, 1), M(6, 1), M(7, 1), M(8, 1), M(9, 1), \
-                M(0, 2), M(1, 2), M(2, 2), M(3, 2), M(4, 2), \
-                M(5, 2), M(6, 2), M(7, 2), M(8, 2), M(9, 2), \
-                M(0, 3), M(1, 3), M(2, 3), M(3, 3), M(4, 3), \
-                M(5, 3), M(6, 3), M(7, 3), M(8, 3), M(9, 3), \
-                M(0, 4), M(1, 4), M(2, 4), M(3, 4), M(4, 4), \
-                M(5, 4), M(6, 4), M(7, 4), M(8, 4), M(9, 4), \
-                M(0, 5), M(1, 5), M(2, 5), M(3, 5), M(4, 5), \
-                M(5, 5), M(6, 5), M(7, 5), M(8, 5), M(9, 5), \
-                M(0, 6), M(1, 6), M(2, 6), M(3, 6), M(4, 6), \
-                M(5, 6), M(6, 6), M(7, 6), M(8, 6), M(9, 6), \
-                M(0, 7), M(1, 7), M(2, 7), M(3, 7), M(4, 7), \
-                M(5, 7), M(6, 7), M(7, 7), M(8, 7), M(9, 7), \
-                M(0, 8), M(1, 8), M(2, 8), M(3, 8), M(4, 8), \
-                M(5, 8), M(6, 8), M(7, 8), M(8, 8), M(9, 8), \
-                M(0, 9), M(1, 9), M(2, 9), M(3, 9), M(4, 9), \
-                M(5, 9), M(6, 9), M(7, 9), M(8, 9), M(9, 9) \
-            )
-
 __device__
 __forceinline__
 bool update_covariance(SampleMatrix const& noisecov,
@@ -70,15 +46,6 @@ bool update_covariance(SampleMatrix const& noisecov,
         for (int i=first_sample_t; i<first_sample_t+nsample_pulse; ++i)
             for (int j=first_sample_t; j<first_sample_t+nsample_pulse; ++j)
                 inverse_cov(i, j) += value_sq * pulse_cov.covval[i+offset][j+offset];
-
-        /*
-        inverse_cov.block(first_sample_t, first_sample_t, 
-                          nsample_pulse, nsample_pulse)
-            += value_sq * full_pulse_cov.block(first_sample_t + offset,
-                                               first_sample_t + offset,
-                                               nsample_pulse,
-                                               nsample_pulse);
-                                               */
     }
 
     return true;
@@ -262,18 +229,8 @@ void kernel_newiter_update_covariance_compute_cholesky(
     }
 
     // store back to global
-    if (ty>=tx) {
+    if (ty>=tx)
         L(ty, tx) = shrL(ty, tx);
-        /*
-        if (grch==0 && tx==0) {
-            printf("ty=%d tx=%d L(%d, %d) = %f\n",
-                ty, tx, ty, tx, shrL(ty, tx));
-        }
-        if (grch==0 && tx==1) {
-            printf("ty=%d tx=%d L(%d, %d) = %f\n",
-                ty, tx, ty, tx, shrL(ty, tx));
-        }*/
-    }
 }
 
 /// launch ctx:
@@ -357,57 +314,7 @@ void kernel_solve_mm_mv_mults(
         shrs(tx) = s(tx);
     __syncthreads();
 
-    if (ty>=tx) {
-        if (grch==0 && tx==0) {
-            printf("ty=%d tx=%d L(%d, %d) = %f\n",
-                ty, tx, ty, tx, shrL(ty, tx));
-        }
-        if (grch==0 && tx==1) {
-            printf("ty=%d tx=%d L(%d, %d) = %f\n",
-                ty, tx, ty, tx, shrL(ty, tx));
-        }
-        
-        if (grch==0 && tx==2) {
-            printf("ty=%d tx=%d L(%d, %d) = %f\n",
-                ty, tx, ty, tx, shrL(ty, tx));
-        }
-        
-        if (grch==0 && tx==3) {
-            printf("ty=%d tx=%d L(%d, %d) = %f\n",
-                ty, tx, ty, tx, shrL(ty, tx));
-        }
-        
-        if (grch==0 && tx==8) {
-            printf("ty=%d tx=%d L(%d, %d) = %f\n",
-                ty, tx, ty, tx, shrL(ty, tx));
-        }
-        
-        if (grch==0 && tx==7) {
-            printf("ty=%d tx=%d L(%d, %d) = %f\n",
-                ty, tx, ty, tx, shrL(ty, tx));
-        }
-
-        if (grch==0 && tx==9)
-            printf("ty=%d tx=%d L(%d, %d) = %f\n",
-                ty, tx, ty, tx, shrL(ty, tx));
-    }
-    
-    if (grch == 0 && ty==0) {
-        printf(">>> tx=%d shrbtmp(%d) = %f s(%d) = %f shrs(%d) = %f\n",
-            tx, tx, shrbtmp(tx), tx, s(tx), tx, shrs(tx));
-    }
-    __syncthreads();
-    
-//    printf(">>> ty=%d tx=%d shrP(%d, %d) = %f\n",
-//        ty, tx, ty, tx, shrP(ty, tx));
-    //if (ty==0)
-    //    printf(">>> tx=%d s(%d) = %f shrs(%d) = %f shrbtmp(%d) = %f\n",
-    //        tx, tx, s(tx), tx, shrs(tx), tx, shrbtmp(tx));
-    //if (tx==0)
-    //    printf(">>> grch = %d ty=%d tx=%d shrL(%d, %d) = %f L(%d, %d) = %f\n",
-    //        grch, ty, tx, ty, tx, shrL(ty, tx), ty, tx, L(ty, tx));
-
-    // run forward and backward substitution
+    // run forward substitution
     // use 10 thraeds for matrix and 1 thread vector
     // TODO: would it be better with more threads + synching???
     if (ty==0) {
@@ -446,19 +353,6 @@ void kernel_solve_mm_mv_mults(
 
         // store back to global
         Atb(tx) = sum;
-    }
-
-    if (grch == 0 && ty==0) {
-        printf("<<< tx=%d b(%d) = %f s(%d) = %f\n",
-            tx, tx, shrbtmp(tx), tx, s(tx));
-    }
-
-    if (grch == 0) {
-        printf("ty=%d tx=%d AtA(%d, %d)=%f\n",
-            ty, tx, ty, tx, AtA(ty, tx));
-        if (ty==0) 
-            printf("tx=%d Atb(%d) = %f\n",
-                tx, tx, Atb(tx));
     }
 }
 
@@ -668,12 +562,6 @@ void kernel_fnnls(
 
     // store back to global
     g_npassive[rch] = nPassive;
-
-    if (rch==0) {
-        for (int i=0; i<10; i++)
-            printf("tx=%d x(%d) = %f\n",
-                i, i, x(i));
-    }
 }
 
 // TODO: add __restrict__
@@ -759,6 +647,7 @@ void kernel_compute_chi2(
         energies[grch] = x_sample;
     __syncthreads();
 
+    /*
     if (grch == 0) {
         printf(">>> tx=%d s(%d) = %f x(%d) = %f\n",
             sample, sample, s(sample), sample, x(sample));
@@ -769,7 +658,7 @@ void kernel_compute_chi2(
         for (int i=0; i<nsamples; i++)
             printf("ty=%d tx=%d P(%d, %d) = %f\n",
                 sample, i, sample, i, P(sample, i));
-    }
+    }*/
 
     // prepare input for forward subst
     DataType sum{0};
@@ -796,10 +685,16 @@ void kernel_compute_chi2(
         g_chi2[grch] = chi2_new;
         auto const chi2_diff = chi2_new - chi2_old;
 
+        /*
         if (grch==0) {
             printf("chi2_old = %f chi2_new = %f\n",
                 chi2_old, chi2_new);
         }
+
+        if (chi2_new > 10000)
+            printf("xxxx grch = %d chi2_new = %f\n",
+                grch, chi2_new);
+                */
 
         // state management logic
         // if this ch needs to continue, inc the counter atomically
