@@ -116,6 +116,8 @@ void entryPoint(
         eventOutputGPU.flags,
         scratch.v2rmapping_1,
         scratch.noiseCovIsZero,
+        scratch.npassive,
+        scratch.samplesMapping,
         scratch.activeBXs,
         offsetForHashes,
         gainSwitchUseMaxSampleEB,

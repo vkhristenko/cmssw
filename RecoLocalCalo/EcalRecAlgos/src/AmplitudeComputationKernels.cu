@@ -256,13 +256,17 @@ void kernel_newiter_update_covariance_compute_cholesky(
             }
         }
 
-        if (tx>=column && ty>=tx)
+        if (tx>column && ty>=tx)
             shrLSums(ty, tx) += shrL(ty, column-1) * shrL(tx, column-1);
         __syncthreads();
     }
 
     // store back to global
-    L(ty, tx) = shrL(ty, tx);
+    if (ty>=tx) {
+        L(ty, tx) = shrL(ty, tx);
+     //   printf("ty=%d tx=%d L(%d, %d) = %f\n",
+     //       ty, tx, ty, tx, shrL(ty, tx));
+    }
 }
 
 /// launch ctx:
@@ -345,6 +349,15 @@ void kernel_solve_mm_mv_mults(
     if (ty == 0)
         shrs(tx) = s(tx);
     __syncthreads();
+    
+//    printf(">>> ty=%d tx=%d shrP(%d, %d) = %f\n",
+//        ty, tx, ty, tx, shrP(ty, tx));
+    //if (ty==0)
+    //    printf(">>> tx=%d s(%d) = %f shrs(%d) = %f shrbtmp(%d) = %f\n",
+    //        tx, tx, s(tx), tx, shrs(tx), tx, shrbtmp(tx));
+    //if (tx==0)
+    //    printf(">>> grch = %d ty=%d tx=%d shrL(%d, %d) = %f L(%d, %d) = %f\n",
+    //        grch, ty, tx, ty, tx, shrL(ty, tx), ty, tx, L(ty, tx));
 
     // run forward and backward substitution
     // use 10 thraeds for matrix and 1 thread vector
@@ -363,6 +376,13 @@ void kernel_solve_mm_mv_mults(
             shrL, shrbtmp, shrs);
     }
     __syncthreads();
+
+    //if (tx==0)
+    //    printf("ty=%d tx=%d shrP(%d, %d) = %f shrAtmp(%d, %d) = %f\n",
+    //        ty, tx, ty, tx, shrP(ty, tx), ty, tx, shrAtmp(ty, tx));
+    //if (ty==0)
+    //    printf("tx=%d shrs(%d) = %f shrbtmp(%d) = %f\n",
+    //        tx, tx, shrs(tx), tx, shrbtmp(tx));
 
     // matrix matrix and matrix vector mult
     // shrP is matrix A
@@ -385,6 +405,15 @@ void kernel_solve_mm_mv_mults(
         // store back to global
         Atb(tx) = sum;
     }
+
+    /*
+    printf("tx=%d ty=%d AtA(%d, %d)=%f\n",
+        tx, ty, tx, ty, ata_i_j);
+    if (ty==0) {
+        printf("tx=%d Atb(%d) = %f\n",
+            tx, tx, Atb(tx));
+    }
+    */
 }
 
 /// launch ctx:
@@ -438,43 +467,56 @@ void kernel_fnnls(
     // load number of elements in the passive set
     auto nPassive = g_npassive[rch];
 
+    // used to break from the loop
+    unsigned int w_max_idx_prev = 0;
+    DataType w_max_prev = 0;
+    double eps_to_use = eps;
+
     // main loop
-    for (auto iter = 0; iter < max_iterations; ++iter) {
-        const auto nActive = nsamples - nPassive;
+    for (int iter = 0; iter < max_iterations; ++iter) {
+        if (iter>0 || nPassive==0) {
+            const auto nActive = nsamples - nPassive;
 
-        if(!nActive)
-          break;
+            if(!nActive)
+              break;
 
-        //  
-        unsigned int w_max_idx = -1;
-        auto max_w {static_cast<DataType>(-1)};
-        for (unsigned int i=nsamples-nActive; i<nsamples; i++) {
-            auto sum_per_row{static_cast<DataType>(0)};
-            auto const real_i = mapping(i);
-            auto const atb = Atb(real_i);
-            #pragma unroll
-            for (unsigned int k=0; k<nsamples; ++k)
-                // note, we do not need to look up k in the mapping
-                // both AtA and x have swaps applied -> therefore dot product will 
-                // not change per row
-                sum_per_row += AtA(real_i, k) * x(k);
+            //  
+            unsigned int w_max_idx = -1;
+            auto max_w {static_cast<DataType>(-1)};
+            for (unsigned int i=nsamples-nActive; i<nsamples; i++) {
+                auto sum_per_row{static_cast<DataType>(0)};
+                auto const real_i = mapping(i);
+                auto const atb = Atb(real_i);
+                #pragma unroll
+                for (unsigned int k=0; k<nsamples; ++k)
+                    // note, we do not need to look up k in the mapping
+                    // both AtA and x have swaps applied -> therefore dot product will 
+                    // not change per row
+                    sum_per_row += AtA(real_i, k) * x(k);
 
-            // compute gradient value and check if it is greater than max
-            auto const wvalue = atb - sum_per_row;
-            if (max_w < wvalue) {
-                max_w = wvalue;
-                w_max_idx = i;
+                // compute gradient value and check if it is greater than max
+                auto const wvalue = atb - sum_per_row;
+                if (max_w < wvalue) {
+                    max_w = wvalue;
+                    w_max_idx = i;
+                }
             }
+
+            // check for convergence
+            if (max_w < eps_to_use || 
+                (w_max_idx==w_max_idx_prev && max_w==w_max_prev))
+              break;
+
+            // update
+            w_max_prev = max_w;
+            w_max_idx_prev = w_max_idx;
+
+            // swap samples to maintain passive vs active set
+            Eigen::numext::swap(
+                    mapping(nPassive), 
+                    mapping(w_max_idx));
+            ++nPassive;
         }
-
-        // check for convergence
-        if (max_w < eps)
-          break;
-
-        Eigen::numext::swap(
-                mapping(nPassive), 
-                mapping(w_max_idx));
-        ++nPassive;
 
         // inner loop
         DataType __s[nsamples], __tmp[nsamples];
@@ -571,6 +613,10 @@ void kernel_fnnls(
                 mapping(nPassive), 
                 mapping(alpha_idx));
         }
+
+        // this is as it was in cpu version
+        if (iter % 16 == 0)
+            eps_to_use *= 2;
     }
 
     // store back to global
@@ -584,6 +630,7 @@ void kernel_compute_chi2(
         SampleVector::Scalar const* g_L,
         PulseMatrixType const* g_P,
         SampleVector const* g_x,
+        ::ecal::reco::StorageScalarType *energies,
         SampleVector const* g_s,
         ::ecal::reco::StorageScalarType* g_chi2,
         uint32_t const* input_v2ridmapping,
@@ -653,6 +700,10 @@ void kernel_compute_chi2(
         if (sample>=i)
             shrL(sample, i) = L(sample, i);
     }
+
+    // store to global the amplitude value for soi
+    if (sample == 5)
+        energies[grch] = x_sample;
     __syncthreads();
 
     // prepare input for forward subst
@@ -906,6 +957,10 @@ void minimization_procedure(
     // once results are valid
 
     for (int iteration=0; iteration<50; ++iteration) {
+        std::cout << "iteration = " << iteration 
+                  << "\nnchannels = " << nchannels
+                  << std::endl;
+
         //
         dim3 const ts1{nsamples, nsamples, nchannels>10 ? 10 : nchannels};
         uint32_t const bs1 = nchannels>10
@@ -973,6 +1028,7 @@ void minimization_procedure(
             scratch.decompMatrixMainLoop,
             scratch.pulse_matrix,
             (SampleVector const*)eventOutputGPU.amplitudesAll,
+            eventOutputGPU.amplitude,
             scratch.samples,
             eventOutputGPU.chi2,
             iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,

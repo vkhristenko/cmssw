@@ -23,12 +23,12 @@ struct MapV {
     MapV(type* data) : data{data} {}
 
     __forceinline__ __device__
-    base_type const& operator()(int i) const { return data[i]; }
+    base_type const& operator()(int const i) const { return data[i]; }
     
     template<typename U = T>
     __forceinline__ __device__
     typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
-    operator()(int i) { return data[i]; }
+    operator()(int const i) { return data[i]; }
 };
 
 
@@ -47,12 +47,12 @@ struct MapM {
     MapM(type* data) : data{data} {}
 
     __forceinline__ __device__
-    base_type const& operator()(int row, int col) const { return data[col*Stride + row]; }
+    base_type const& operator()(int const row, int const col) const { return data[col*Stride + row]; }
 
     template<typename U = T>
     __forceinline__ __device__
     typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
-    operator()(int row, int col) { return data[col*Stride + row]; }
+    operator()(int const row, int const col) { return data[col*Stride + row]; }
 };
 
 template<typename T, int Stride>
@@ -65,12 +65,12 @@ struct MapM<T, Stride, Eigen::RowMajor> {
     MapM(type* data) : data{data} {}
 
     __forceinline__ __device__
-    base_type const& operator()(int row, int col) const { return data[row*Stride + col]; }
+    base_type const& operator()(int const row, int const col) const { return data[row*Stride + col]; }
 
     template<typename U = T>
     __forceinline__ __device__
     typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
-    operator()(int row, int col) { return data[row*Stride + col]; }
+    operator()(int const row, int const col) { return data[row*Stride + col]; }
 };
 
 template
@@ -90,7 +90,7 @@ struct MapSymM {
     MapSymM(T* data) : data{data} {}
 
     __forceinline__ __device__
-    T const& operator()(int row, int col) const {
+    T const& operator()(int const row, int const col) const {
         // TODO: replace with shifting
         auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
         auto const index = total - tmp + row - col;
@@ -100,7 +100,7 @@ struct MapSymM {
     template<typename U = T>
     __forceinline__ __device__
     typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
-    operator()(int row, int col) {
+    operator()(int const row, int const col) {
         // TODO: replace with shifting
         auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
         auto const index = total - tmp + row - col;
@@ -119,7 +119,7 @@ struct MapSymM<T, Stride, Eigen::RowMajor> {
     MapSymM(T* data) : data{data} {}
 
     __forceinline__ __device__
-    T const& operator()(int row, int col) const {
+    T const& operator()(int const row, int const col) const {
         // TODO: replace with shifting 
         auto const index = row * (row + 1) / 2 + col;
         return data[index];
@@ -128,7 +128,7 @@ struct MapSymM<T, Stride, Eigen::RowMajor> {
     template<typename U = T>
     __forceinline__ __device__
     typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
-    operator()(int row, int col) {
+    operator()(int const row, int const col) {
         // TODO: replace with shifting
         auto const index = row * (row + 1) / 2 + col;
         return data[index];
@@ -155,7 +155,7 @@ struct ForwardSubstitutionUnrolled {
            for (int j=0; j<i; ++j) 
                sum += A(i, j) * X(j, tid);
 
-           X(i, tid) = sum / b_i;
+           X(i, tid) = (b_i - sum) / A(i, i);
         }
     }
 
@@ -176,7 +176,7 @@ struct ForwardSubstitutionUnrolled {
            for (int j=0; j<i; ++j) 
                sum += A(i, j) * x(j);
 
-           x(i) = sum / b_i;
+           x(i) = (b_i - sum) / A(i, i);
         }
     }
 };

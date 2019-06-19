@@ -47,6 +47,8 @@ void kernel_prep_1d_and_initialize(
                     uint32_t *flags,
                     uint32_t *v2rmapping,
                     uint32_t *noiseCovIsZero,
+                    char *npassive,
+                    char *samplesMapping,
                     BXVectorType *bxs,
                     uint32_t const offsetForHashes,
                     bool const gainSwitchUseMaxSampleEB,
@@ -237,6 +239,7 @@ void kernel_prep_1d_and_initialize(
         //
         amplitudesForMinimization[ch](sample) = 0;
         bxs[ch](sample) = sample - 5;
+        samplesMapping[ch*nsamples + sample] = sample;
 
         if (sample == sample_max) { // select the thread for the max sample ---> hardcoded above to be 5th sample, ok
             //
@@ -248,6 +251,7 @@ void kernel_prep_1d_and_initialize(
             g_pedestal[ch] = 0;
             uint32_t flag = 0;
             noiseCovIsZero[ch] = 0xffffffff;
+            npassive[ch] = 0;
 
             // start of this channel in shared mem
             int const chStart = threadIdx.x - sample_max;
@@ -270,6 +274,7 @@ void kernel_prep_1d_and_initialize(
                 // assign for the case some sample having gainId == 0
 //                energies[ch] = amplitudes[ch][sample_max];
                 energies[ch] = amplitude;
+                amplitudesForMinimization[ch](sample) = amplitude;
 
                 // check if samples before sample_max have true
                 bool saturated_before_max = false;
@@ -280,9 +285,11 @@ void kernel_prep_1d_and_initialize(
 
                 // if saturation is in the max sample and not in the first 5
                 if (!saturated_before_max && 
-                    shr_hasSwitchToGain0[threadMax])
+                    shr_hasSwitchToGain0[threadMax]) {
                     energies[ch] = 49140; // 4095 * 12
                     //---- AM FIXME : no pedestal subtraction???  It should be "(4095. - pedestal) * gainratio"
+                    amplitudesForMinimization[ch](sample) = 49140;
+                }
 
                 // set state flag to terminate further processing of this channel
                 v2rmapping[ch] = 0xffffffff;
@@ -306,6 +313,7 @@ void kernel_prep_1d_and_initialize(
             if (hasGainSwitch && gainSwitchUseMaxSample) {
                 // thread for sample=0 will access the right guys
                 energies[ch] = max_amplitude / shape_value;
+                amplitudesForMinimization[ch](sample) = max_amplitude / shape_value;
                 v2rmapping[ch] = 0xffffffff;
                 flags[ch] = flag;
                 return;
