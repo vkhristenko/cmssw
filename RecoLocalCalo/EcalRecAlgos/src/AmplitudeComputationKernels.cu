@@ -264,8 +264,15 @@ void kernel_newiter_update_covariance_compute_cholesky(
     // store back to global
     if (ty>=tx) {
         L(ty, tx) = shrL(ty, tx);
-     //   printf("ty=%d tx=%d L(%d, %d) = %f\n",
-     //       ty, tx, ty, tx, shrL(ty, tx));
+        /*
+        if (grch==0 && tx==0) {
+            printf("ty=%d tx=%d L(%d, %d) = %f\n",
+                ty, tx, ty, tx, shrL(ty, tx));
+        }
+        if (grch==0 && tx==1) {
+            printf("ty=%d tx=%d L(%d, %d) = %f\n",
+                ty, tx, ty, tx, shrL(ty, tx));
+        }*/
     }
 }
 
@@ -349,6 +356,47 @@ void kernel_solve_mm_mv_mults(
     if (ty == 0)
         shrs(tx) = s(tx);
     __syncthreads();
+
+    if (ty>=tx) {
+        if (grch==0 && tx==0) {
+            printf("ty=%d tx=%d L(%d, %d) = %f\n",
+                ty, tx, ty, tx, shrL(ty, tx));
+        }
+        if (grch==0 && tx==1) {
+            printf("ty=%d tx=%d L(%d, %d) = %f\n",
+                ty, tx, ty, tx, shrL(ty, tx));
+        }
+        
+        if (grch==0 && tx==2) {
+            printf("ty=%d tx=%d L(%d, %d) = %f\n",
+                ty, tx, ty, tx, shrL(ty, tx));
+        }
+        
+        if (grch==0 && tx==3) {
+            printf("ty=%d tx=%d L(%d, %d) = %f\n",
+                ty, tx, ty, tx, shrL(ty, tx));
+        }
+        
+        if (grch==0 && tx==8) {
+            printf("ty=%d tx=%d L(%d, %d) = %f\n",
+                ty, tx, ty, tx, shrL(ty, tx));
+        }
+        
+        if (grch==0 && tx==7) {
+            printf("ty=%d tx=%d L(%d, %d) = %f\n",
+                ty, tx, ty, tx, shrL(ty, tx));
+        }
+
+        if (grch==0 && tx==9)
+            printf("ty=%d tx=%d L(%d, %d) = %f\n",
+                ty, tx, ty, tx, shrL(ty, tx));
+    }
+    
+    if (grch == 0 && ty==0) {
+        printf(">>> tx=%d shrbtmp(%d) = %f s(%d) = %f shrs(%d) = %f\n",
+            tx, tx, shrbtmp(tx), tx, s(tx), tx, shrs(tx));
+    }
+    __syncthreads();
     
 //    printf(">>> ty=%d tx=%d shrP(%d, %d) = %f\n",
 //        ty, tx, ty, tx, shrP(ty, tx));
@@ -365,15 +413,9 @@ void kernel_solve_mm_mv_mults(
     if (ty==0) {
         ForwardSubstitutionUnrolled<DataType, nsamples>::compute(
             shrL, shrP, shrAtmp, tx);
-        // note, we are reusing shrP as the result space
-        // for backward substitution, there are races!
-        BackwardSubstitutionUnrolled<DataType, nsamples>::compute(
-            shrL, shrAtmp, shrP, tx);
     } else if (ty==1 && tx == 1) {
         ForwardSubstitutionUnrolled<DataType, nsamples>::compute(
             shrL, shrs, shrbtmp);
-        BackwardSubstitutionUnrolled<DataType, nsamples>::compute(
-            shrL, shrbtmp, shrs);
     }
     __syncthreads();
 
@@ -385,13 +427,13 @@ void kernel_solve_mm_mv_mults(
     //        tx, tx, shrs(tx), tx, shrbtmp(tx));
 
     // matrix matrix and matrix vector mult
-    // shrP is matrix A
-    // shrs is vector b
+    // shrAtmp is matrix A
+    // shrbtmp is vector b
     DataType ata_i_j = 0;
     #pragma unroll
     for (int i=0; i<nsamples; ++i) {
-        auto const A_i_ty = shrP(i, ty);
-        ata_i_j += shrP(i, ty) * shrP(i, tx);
+        auto const A_i_ty = shrAtmp(i, ty);
+        ata_i_j += shrAtmp(i, ty) * shrAtmp(i, tx);
     }
 
     // store back to global
@@ -400,20 +442,24 @@ void kernel_solve_mm_mv_mults(
         DataType sum = 0;
         #pragma unroll
         for (int i=0; i<nsamples; i++)
-            sum += shrP(i, tx) * shrs(i);
+            sum += shrAtmp(i, tx) * shrbtmp(i);
 
         // store back to global
         Atb(tx) = sum;
     }
 
-    /*
-    printf("tx=%d ty=%d AtA(%d, %d)=%f\n",
-        tx, ty, tx, ty, ata_i_j);
-    if (ty==0) {
-        printf("tx=%d Atb(%d) = %f\n",
-            tx, tx, Atb(tx));
+    if (grch == 0 && ty==0) {
+        printf("<<< tx=%d b(%d) = %f s(%d) = %f\n",
+            tx, tx, shrbtmp(tx), tx, s(tx));
     }
-    */
+
+    if (grch == 0) {
+        printf("ty=%d tx=%d AtA(%d, %d)=%f\n",
+            ty, tx, ty, tx, AtA(ty, tx));
+        if (ty==0) 
+            printf("tx=%d Atb(%d) = %f\n",
+                tx, tx, Atb(tx));
+    }
 }
 
 /// launch ctx:
@@ -593,13 +639,14 @@ void kernel_fnnls(
             }
           }
 
+          /*
           if (std::numeric_limits<DataType>::max() == alpha) {
             for (int i=0; i<nPassive; ++i) {
                 auto const real_i = mapping(i);
                 x(real_i) = s(i);
             }
             break;
-          }
+          }*/
 
           for (int ii=0; ii<nPassive; ++ii) {
             auto const real_i = mapping(ii);
@@ -621,6 +668,12 @@ void kernel_fnnls(
 
     // store back to global
     g_npassive[rch] = nPassive;
+
+    if (rch==0) {
+        for (int i=0; i<10; i++)
+            printf("tx=%d x(%d) = %f\n",
+                i, i, x(i));
+    }
 }
 
 // TODO: add __restrict__
@@ -706,6 +759,11 @@ void kernel_compute_chi2(
         energies[grch] = x_sample;
     __syncthreads();
 
+    if (grch == 0) {
+        printf("tx=%d s(%d) = %f x(%d) = %f\n",
+            sample, sample, s(sample), sample, x(sample));
+    }
+
     // prepare input for forward subst
     DataType sum{0};
     #pragma unroll
@@ -721,17 +779,20 @@ void kernel_compute_chi2(
         // f/b subst solver
         ForwardSubstitutionUnrolled<DataType, nsamples>::compute(
             shrL, shrv, shrtmpx);
-        BackwardSubstitutionUnrolled<DataType, nsamples>::compute(
-            shrL, shrtmpx, shrv);
 
         // sum will be the chi2 
         DataType chi2_new{0};
         auto const chi2_old =  g_chi2[grch];
         #pragma unroll
         for (int i=0; i<nsamples; i++)
-            chi2_new += shrv(i)*shrv(i);
+            chi2_new += shrtmpx(i)*shrtmpx(i);
         g_chi2[grch] = chi2_new;
         auto const chi2_diff = chi2_new - chi2_old;
+
+        if (grch==0) {
+            printf("chi2_old = %f chi2_new = %f\n",
+                chi2_old, chi2_new);
+        }
 
         // state management logic
         // if this ch needs to continue, inc the counter atomically
@@ -958,7 +1019,7 @@ void minimization_procedure(
 
     for (int iteration=0; iteration<50; ++iteration) {
         std::cout << "iteration = " << iteration 
-                  << "\nnchannels = " << nchannels
+                  << "  nchannels = " << nchannels
                   << std::endl;
 
         //
@@ -1019,11 +1080,11 @@ void minimization_procedure(
         cudaCheck( cudaGetLastError() );
 
         //
-        uint32_t const ts4 = nchannels>20 ? 20 : nchannels;
+        uint32_t const ts4 = nchannels>32 ? 10*32 : nchannels*10;
         uint32_t const bs4 = nchannels>ts4
             ? (nchannels + ts4 - 1) / ts4
             : 1;
-        uint32_t const shrBytes4 = 20 * (sizeof(DataType)*(55 + 100 + 10 + 10));
+        uint32_t const shrBytes4 = 32 * (sizeof(DataType)*(55 + 100 + 10 + 10));
         kernel_compute_chi2<<<bs4, ts4, shrBytes4, cudaStream.id()>>>(
             scratch.decompMatrixMainLoop,
             scratch.pulse_matrix,
