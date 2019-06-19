@@ -207,7 +207,7 @@ void kernel_newiter_update_covariance_compute_cholesky(
         
         // note: we are no longer using 19 x 19 pulse covariance matrix,
         // just what conditions provide directly
-        auto const offset = 3 - bx;
+        auto const offset = -3 - bx;
         auto const amp_sq = amplitude * amplitude;
         auto const nsample_pulse = nsamples - first_sample_t;
 
