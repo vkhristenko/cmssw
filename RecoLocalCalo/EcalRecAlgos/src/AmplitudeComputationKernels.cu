@@ -702,7 +702,7 @@ void kernel_compute_chi2(
     auto const gtx = threadIdx.x + blockDim.x * blockIdx.x;
     auto const gvch = gtx / nsamples;
     if (gvch >= nchannels) return;
-    
+   
     auto const grch = input_v2ridmapping[gvch];
     auto const lch = threadIdx.x  / nsamples;
     auto const sample = threadIdx.x % nsamples;
@@ -760,15 +760,22 @@ void kernel_compute_chi2(
     __syncthreads();
 
     if (grch == 0) {
-        printf("tx=%d s(%d) = %f x(%d) = %f\n",
+        printf(">>> tx=%d s(%d) = %f x(%d) = %f\n",
             sample, sample, s(sample), sample, x(sample));
+        for (int i=0; i<nsamples; i++)
+            if (sample>=i)
+                printf("ty=%d tx=%d shrL(%d, %d) = %f\n",
+                    sample, i, sample, i, shrL(sample, i));
+        for (int i=0; i<nsamples; i++)
+            printf("ty=%d tx=%d P(%d, %d) = %f\n",
+                sample, i, sample, i, P(sample, i));
     }
 
     // prepare input for forward subst
     DataType sum{0};
     #pragma unroll
     for (int i=0; i<nsamples; ++i)
-        sum += P(sample, i);
+        sum += shrP(sample, i);
     auto const v_sample = sum - s_sample;
     shrv(sample) = v_sample;
     __syncthreads();
@@ -1008,9 +1015,9 @@ void minimization_procedure(
 
     // FIXME: proper solution: 
     // Can we perform memcpy from a stack allocated segment?
-    std::vector<uint32_t> tmp(1);
-    uint32_t &nchannels = tmp[0];
-    nchannels = totalChannels;
+    //std::vector<uint32_t> tmp(1);
+    //uint32_t &nchannels = tmp[0];
+    uint32_t nchannels = totalChannels;
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
     using DataType = SampleVector::Scalar;
 
@@ -1082,7 +1089,7 @@ void minimization_procedure(
         //
         uint32_t const ts4 = nchannels>32 ? 10*32 : nchannels*10;
         uint32_t const bs4 = nchannels>ts4
-            ? (nchannels + ts4 - 1) / ts4
+            ? (nchannels*10 + ts4 - 1) / ts4
             : 1;
         uint32_t const shrBytes4 = 32 * (sizeof(DataType)*(55 + 100 + 10 + 10));
         kernel_compute_chi2<<<bs4, ts4, shrBytes4, cudaStream.id()>>>(
@@ -1101,7 +1108,7 @@ void minimization_procedure(
         cudaCheck( cudaGetLastError() );
 
         // 
-        cudaCheck( cudaMemcpyAsync(tmp.data(), scratch.pChannelsCounter, 
+        cudaCheck( cudaMemcpyAsync(&nchannels, scratch.pChannelsCounter, 
             sizeof(uint32_t), cudaMemcpyDeviceToHost, cudaStream.id()) );
         cudaCheck( cudaStreamSynchronize(cudaStream.id()) );
         
