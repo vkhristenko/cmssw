@@ -84,7 +84,7 @@ private:
     ecal::multifit::EventDataForScratchGPU eventDataForScratchGPU_;
     bool shouldTransferToHost_{true};
 
-    CUDAContextToken cudaState_;
+    CUDAContextState cudaState_;
 
     std::unique_ptr<ecal::UncalibratedRecHit<ecal::Tag::soa>> ebRecHits_{nullptr}, 
                                                               eeRecHits_{nullptr};
