@@ -84,7 +84,7 @@ private:
     ecal::multifit::EventDataForScratchGPU eventDataForScratchGPU_;
     bool shouldTransferToHost_{true};
 
-    CUDAContextToken ctxToken_;
+    CUDAContextToken cudaState_;
 
     std::unique_ptr<ecal::UncalibratedRecHit<ecal::Tag::soa>> ebRecHits_{nullptr}, 
                                                               eeRecHits_{nullptr};
@@ -316,7 +316,7 @@ void EcalUncalibRecHitProducerGPU::acquire(
     DurationMeasurer<std::chrono::milliseconds> timer{std::string{"acquire duration"}};
 
     // raii
-    CUDAScopedContext ctx{event.streamID(), std::move(holder)};
+    CUDAScopedContextAcquire ctx{event.streamID(), std::move(holder), cudaState_};
 
     // conditions
     setup.get<EcalPedestalsRcd>().get(pedestalsHandle_);
@@ -388,9 +388,6 @@ void EcalUncalibRecHitProducerGPU::acquire(
         std::memcpy(eeRecHits_->did.data(), eeDigis->ids().data(),
             eeDigis->ids().size() * sizeof(uint32_t));
     }
-
-    // preserve token
-    ctxToken_ = ctx.toToken();
 }
 
 void EcalUncalibRecHitProducerGPU::produce(
@@ -398,7 +395,7 @@ void EcalUncalibRecHitProducerGPU::produce(
         edm::EventSetup const& setup) 
 {
     DurationMeasurer<std::chrono::milliseconds> timer{std::string{"produce duration"}};
-    CUDAScopedContext ctx{std::move(ctxToken_)};
+    CUDAScopedContextProduce ctx{cudaState_};
 
     if (shouldTransferToHost_) {
         // rec hits objects were not originally member variables
