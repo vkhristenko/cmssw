@@ -178,7 +178,8 @@ void MahiFit::doFit(float correctedOutput[3], int nbx) const {
   if (foundintime) {
     correctedOutput[0] = nnlsWork_.ampVec.coeff(ipulseintime); //charge
     if (correctedOutput[0]!=0) {
-	float arrivalTime = calculateArrivalTime();
+        float arrivalTime = 0.f;
+	if(calculateArrivalTime_) arrivalTime = calculateArrivalTime();
 	correctedOutput[1] = arrivalTime; //time
     }
     else correctedOutput[1] = -9999;//time
@@ -272,7 +273,7 @@ void MahiFit::updatePulseShape(double itQ, FullSampleVector &pulseShape, FullSam
   //with previous SOI=TS4 case assumed by psfPtr_->getPulseShape()
   int delta = 4 - nnlsWork_.tsOffset;
 
-  auto invDt = 0.25 / nnlsWork_.dt;
+  auto invDt = 0.5 / nnlsWork_.dt;
 
   for (unsigned int iTS=0; iTS<nnlsWork_.tsSize; ++iTS) {
 
@@ -327,11 +328,12 @@ float MahiFit::calculateArrivalTime() const {
   for (unsigned int iBX=0; iBX<nnlsWork_.nPulseTot; ++iBX) {
     int offset=nnlsWork_.bxs.coeff(iBX);
     if (offset==0) itIndex=iBX;
+    nnlsWork_.pulseDerivMat.col(iBX) *= nnlsWork_.ampVec.coeff(iBX);
   }
 
-  PulseVector residuals = nnlsWork_.pulseMat*nnlsWork_.ampVec - nnlsWork_.amplitudes;
+  SampleVector residuals = nnlsWork_.pulseMat*nnlsWork_.ampVec - nnlsWork_.amplitudes;
   PulseVector solution = nnlsWork_.pulseDerivMat.colPivHouseholderQr().solve(residuals);
-  float t = solution.coeff(itIndex)/nnlsWork_.ampVec.coeff(itIndex);
+  float t = solution.coeff(itIndex);
   t = (t>timeLimit_) ?  timeLimit_ : 
     ((t<-timeLimit_) ? -timeLimit_ : t);
 

@@ -165,12 +165,14 @@ class MahiFit
   // on the nominal arrival time
   static constexpr float timeLimit_ = 12.5;
 
+  bool calculateArrivalTime_ {true};
+
   // Python-configurables
   bool dynamicPed_ {false};
   float ts4Thresh_ {0.0};
   float chiSqSwitch_{15.0}; 
 
-  bool applyTimeSlew_{true}; 
+  bool applyTimeSlew_{false};
   /* HcalTimeSlew::BiasSetting */ int slewFlavor_{1};
   float tsDelay1GeV_{10.0};
 
