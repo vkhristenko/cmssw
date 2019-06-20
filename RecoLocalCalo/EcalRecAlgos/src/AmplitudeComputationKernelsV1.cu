@@ -176,7 +176,6 @@ void kernel_minimize(SampleMatrix const* noisecov,
             return;
 
         // inits
-        bool status = false;
         int iter = 0;
         int npassive = 0;
         
@@ -199,7 +198,7 @@ void kernel_minimize(SampleMatrix const* noisecov,
             if (iter >= max_iterations)
                 break;
 
-            status = update_covariance(
+            update_covariance(
                 noisecov[idx], 
                 full_pulse_cov[idx],
                 inverse_cov,
@@ -216,7 +215,7 @@ void kernel_minimize(SampleMatrix const* noisecov,
             SampleVector b = covariance_decomposition.matrixL()
                 .solve(samples[idx]);
             
-            status = inplace_fnnls(
+            inplace_fnnls(
                 A, b, amplitudes[idx],
                 npassive, bxs[idx], pulse_matrix[idx]);
                 
