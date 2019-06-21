@@ -227,13 +227,6 @@ void kernel_prep_1d_and_initialize(
 
         amplitudes[ch][sample] = amplitude;
 
-#ifdef ECAL_RECO_CUDA_DEBUG
-        printf("%d %d %d %d %f %f %f\n", tx, ch, sample, adc, amplitude,
-            pedestal, gainratio);
-        if (adc==0)
-            printf("adc is zero\n");
-#endif
-
         //
         // initialization
         //
@@ -398,9 +391,8 @@ void kernel_prep_2d(SampleGainVector const* gainNoise,
             */
 
     // non-divergent branch for all threads per block
+    float noise_value = 0;
     if (hasGainSwitch) {
-        // TODO: did not include simplified noise model
-        float noise_value = 0;
 
         // non-divergent branch - all threads per block
         // TODO: all of these constants indicate that 
@@ -479,27 +471,22 @@ void kernel_prep_2d(SampleGainVector const* gainNoise,
                     * pedestal;
             }
         }
-
-        noisecov[ch](ty, tx) = noise_value;
-        
-        // FIXME: this guy can not be 0, but it happens rarely
-        // need to propogate downstream
-        uint32_t const isZero = noise_value == 0 ? 0xffffffff : 0x0;
-        atomicAnd(&noiseCovIsZero[ch], isZero);
     } else {
         auto rms = rms_x12[hashedId];
-        float noise_value = rms*rms * G12SamplesCorrelation[vidx];
+        noise_value = rms*rms * G12SamplesCorrelation[vidx];
         if (!dynamicPedestal && addPedestalUncertainty>0.f) {
             //----  add fully correlated component to noise covariance to inflate pedestal uncertainty
             noise_value += addPedestalUncertainty*addPedestalUncertainty;
         }
-        noisecov[ch](ty, tx) = noise_value;
-        
-        // FIXME: this guy can not be 0, but it happens rarely
-        // need to propogate downstream
-        uint16_t const isZero = noise_value == 0 ? 0xffffffff : 0x0;
-        atomicAnd(&noiseCovIsZero[ch], isZero);
     }
+    
+    // store to global
+    noisecov[ch](ty, tx) = noise_value;
+
+    // FIXME: this guy can not be 0, but it happens rarely
+    // need to propogate downstream
+    uint32_t const isZero = noise_value == 0 ? 0xffffffff : 0x0;
+    atomicAnd(&noiseCovIsZero[ch], isZero);
 
     //---- 
     // pulse matrix

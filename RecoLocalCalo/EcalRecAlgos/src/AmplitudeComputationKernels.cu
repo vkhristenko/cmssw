@@ -95,11 +95,6 @@ void kernel_newiter_update_covariance_compute_cholesky(
     }
 
     auto const grch = v2ridmapping[gvch];
-    /*
-    if (blockIdx.x==17)
-        printf("tx=%d ty=%d tz=%d gvch=%d grch=%d nchannels=%d\n",
-            tx, ty, vch_per_block, gvch, grch, nchannels);
-            */
 
     // non-divergent branch!
     // only for the first iteration...
@@ -109,12 +104,11 @@ void kernel_newiter_update_covariance_compute_cholesky(
         // - noise matrix is 0
         if (grch==idIsInvalidMask)
             return;
+
         if (noiseCovIsZero[grch]==noiseCovIsZeroMask)
             return;
     }
     
-//    if (blockIdx.x==17)
-//    printf("iteration=%d tx=%d ty=%d tz=%d gvch=%d grch=%d")
     auto const did = DetId{dids[grch]};
     auto const isBarrel = did.subdetId() == EcalBarrel;
     auto const hashedId = isBarrel
@@ -325,13 +319,6 @@ void kernel_solve_mm_mv_mults(
             shrL, shrs, shrbtmp);
     }
     __syncthreads();
-
-    //if (tx==0)
-    //    printf("ty=%d tx=%d shrP(%d, %d) = %f shrAtmp(%d, %d) = %f\n",
-    //        ty, tx, ty, tx, shrP(ty, tx), ty, tx, shrAtmp(ty, tx));
-    //if (ty==0)
-    //    printf("tx=%d shrs(%d) = %f shrbtmp(%d) = %f\n",
-    //        tx, tx, shrs(tx), tx, shrbtmp(tx));
 
     // matrix matrix and matrix vector mult
     // shrAtmp is matrix A
@@ -556,7 +543,8 @@ void kernel_fnnls(
         }
 
         // this is as it was in cpu version
-        if (iter % 16 == 0)
+        // note: iter was incremented first and then the check was done
+        if ((iter+1) % 16 == 0)
             eps_to_use *= 2;
     }
 
@@ -647,19 +635,6 @@ void kernel_compute_chi2(
         energies[grch] = x_sample;
     __syncthreads();
 
-    /*
-    if (grch == 0) {
-        printf(">>> tx=%d s(%d) = %f x(%d) = %f\n",
-            sample, sample, s(sample), sample, x(sample));
-        for (int i=0; i<nsamples; i++)
-            if (sample>=i)
-                printf("ty=%d tx=%d shrL(%d, %d) = %f\n",
-                    sample, i, sample, i, shrL(sample, i));
-        for (int i=0; i<nsamples; i++)
-            printf("ty=%d tx=%d P(%d, %d) = %f\n",
-                sample, i, sample, i, P(sample, i));
-    }*/
-
     // prepare input for forward subst
     DataType sum{0};
     #pragma unroll
@@ -684,17 +659,6 @@ void kernel_compute_chi2(
             chi2_new += shrtmpx(i)*shrtmpx(i);
         g_chi2[grch] = chi2_new;
         auto const chi2_diff = chi2_new - chi2_old;
-
-        /*
-        if (grch==0) {
-            printf("chi2_old = %f chi2_new = %f\n",
-                chi2_old, chi2_new);
-        }
-
-        if (chi2_new > 10000)
-            printf("xxxx grch = %d chi2_new = %f\n",
-                grch, chi2_new);
-                */
 
         // state management logic
         // if this ch needs to continue, inc the counter atomically
@@ -850,37 +814,6 @@ void kernel_minimize(SampleMatrix const* noisecov,
                 samples[idx]);
             auto deltachi2 = chi2_now - chi2;
 
-
-#ifdef ECAL_MULTIFIT_KERNEL_MINIMIZE_V1
-            if (iter > 10) {
-                printf("idx = %d iter = %d chi2 = %f chi2old = %f\n",
-                    idx, iter, chi2_now, chi2);
-                
-                printf("noisecov(0, i): %f %f %f %f %f %f %f %f %f %f\n",
-                    noisecov[idx](0, 0),
-                    noisecov[idx](0, 1),
-                    noisecov[idx](0, 2),
-                    noisecov[idx](0, 3),
-                    noisecov[idx](0, 4),
-                    noisecov[idx](0, 5),
-                    noisecov[idx](0, 6),
-                    noisecov[idx](0, 7),
-                    noisecov[idx](0, 8),
-                    noisecov[idx](0, 9));
-
-                printf("ampls: %f %f %f %f %f %f %f %f %f %f\n",
-                    amplitudes[idx](0),
-                    amplitudes[idx](1),
-                    amplitudes[idx](2),
-                    amplitudes[idx](3),
-                    amplitudes[idx](4),
-                    amplitudes[idx](5),
-                    amplitudes[idx](6),
-                    amplitudes[idx](7),
-                    amplitudes[idx](8),
-                    amplitudes[idx](9));
-            }
-#endif
 
             chi2 = chi2_now;
 
