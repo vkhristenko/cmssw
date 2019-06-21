@@ -179,11 +179,6 @@ void kernel_minimize(SampleMatrix const* noisecov,
         int iter = 0;
         int npassive = 0;
         
-        // FIXME: 
-        // need to identify this earrlier and set the state properly
-        if (noisecov[idx].isZero(0))
-            return;
-
         // inits
         SampleDecompLLT covariance_decomposition;
         SampleMatrix inverse_cov;
