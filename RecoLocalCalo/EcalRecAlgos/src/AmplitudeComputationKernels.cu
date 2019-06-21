@@ -479,11 +479,21 @@ void kernel_fnnls(
                 mapping, nPassive);
               BackwardSubstitution<DataType>::compute(L, tmp, s, nPassive);
           }
-
+        
           bool hasNegative = false;
+          // TODO: how to go around instabilities in cholesky+solvesr?
+          // 1) there are situations where cholesky decomposition + solvers yield nans
+          // 2) there are situations, in particularly for the Cholesky decom,
+          //   when computing L_i_i = std::sqrt(M_ii - Sum) is non-deterministic
+          //   and not stable. This is different from plain nans as there is a result
+          //   value that appears to be normal, but differes from cpu 
+          bool hasNans = false;
           for (int ii=0; ii<nPassive; ++ii) {
               hasNegative |= s(ii) <= 0;
+              hasNans |= isnan(s(ii));
           }
+          if (hasNans)
+              break;
           if (!hasNegative) {
               for (int i=0; i<nPassive; ++i) {
                   // note, s contains passive/active set layout
@@ -509,15 +519,6 @@ void kernel_fnnls(
               }
             }
           }
-
-          /*
-          if (std::numeric_limits<DataType>::max() == alpha) {
-            for (int i=0; i<nPassive; ++i) {
-                auto const real_i = mapping(i);
-                x(real_i) = s(i);
-            }
-            break;
-          }*/
 
           for (int ii=0; ii<nPassive; ++ii) {
             auto const real_i = mapping(ii);
