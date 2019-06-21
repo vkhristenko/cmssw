@@ -151,7 +151,6 @@ struct EventDataForScratchGPU {
     //char *acState = nullptr;
     uint32_t *v2rmapping_1=nullptr;
     uint32_t *v2rmapping_2=nullptr;
-    uint32_t *noiseCovIsZero=nullptr;
     uint32_t *pChannelsCounter = nullptr;
 
     SampleVector::Scalar *decompMatrixMainLoop = nullptr, *decompMatrixFnnls=nullptr;
@@ -186,8 +185,6 @@ struct EventDataForScratchGPU {
             size * sizeof(PulseMatrixType)) );
         cudaCheck( cudaMalloc((void**)&activeBXs,
             size * sizeof(BXVectorType)) );
-        cudaCheck( cudaMalloc((void**)&noiseCovIsZero,
-            size * sizeof(uint32_t)) );
         cudaCheck( cudaMalloc((void**)&v2rmapping_1,
             size * sizeof(uint32_t)) );
         cudaCheck( cudaMalloc((void**)&v2rmapping_2,
@@ -261,7 +258,6 @@ struct EventDataForScratchGPU {
         cudaCheck( cudaFree(activeBXs) );
         cudaCheck( cudaFree(v2rmapping_1) );
         cudaCheck( cudaFree(v2rmapping_2) );
-        cudaCheck( cudaFree(noiseCovIsZero) );
         cudaCheck( cudaFree(pChannelsCounter) );
 
         cudaCheck( cudaFree(decompMatrixMainLoop) );

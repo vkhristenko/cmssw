@@ -46,7 +46,6 @@ void kernel_prep_1d_and_initialize(
                     ::ecal::reco::StorageScalarType* g_pedestal,
                     uint32_t *flags,
                     uint32_t *v2rmapping,
-                    uint32_t *noiseCovIsZero,
                     char *npassive,
                     char *samplesMapping,
                     BXVectorType *bxs,
@@ -243,7 +242,6 @@ void kernel_prep_1d_and_initialize(
             chi2[ch] = 0;
             g_pedestal[ch] = 0;
             uint32_t flag = 0;
-            noiseCovIsZero[ch] = 0xffffffff;
             npassive[ch] = 0;
 
             // start of this channel in shared mem
@@ -352,7 +350,6 @@ void kernel_prep_2d(SampleGainVector const* gainNoise,
                     bool const* hasSwitchToGain6,
                     bool const* hasSwitchToGain1,
                     bool const* isSaturated,
-                    uint32_t *noiseCovIsZero,
                     uint32_t const offsetForHashes) {
     int ch = blockIdx.x;
     int tx = threadIdx.x;
@@ -482,11 +479,6 @@ void kernel_prep_2d(SampleGainVector const* gainNoise,
     
     // store to global
     noisecov[ch](ty, tx) = noise_value;
-
-    // FIXME: this guy can not be 0, but it happens rarely
-    // need to propogate downstream
-    uint32_t const isZero = noise_value == 0 ? 0xffffffff : 0x0;
-    atomicAnd(&noiseCovIsZero[ch], isZero);
 
     //---- 
     // pulse matrix

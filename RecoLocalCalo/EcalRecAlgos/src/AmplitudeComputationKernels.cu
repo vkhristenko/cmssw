@@ -68,7 +68,6 @@ void kernel_newiter_update_covariance_compute_cholesky(
         SampleVector const* g_amplitudes,
         SampleVector::Scalar* g_L,
         uint32_t const* v2ridmapping,
-        uint32_t const* noiseCovIsZero,
         uint32_t *dids,
         uint32_t *pChannelsCounter,
         uint32_t const offsetForHashes,
@@ -103,9 +102,6 @@ void kernel_newiter_update_covariance_compute_cholesky(
         // - have values that are precomputed
         // - noise matrix is 0
         if (grch==idIsInvalidMask)
-            return;
-
-        if (noiseCovIsZero[grch]==noiseCovIsZeroMask)
             return;
     }
     
@@ -239,7 +235,6 @@ void kernel_solve_mm_mv_mults(
         SampleVector::Scalar* g_AtA,
         SampleVector::Scalar* g_Atb,
         uint32_t const* v2ridmapping,
-        uint32_t const* noiseCovIsZero,
         uint32_t const iteration,
         uint32_t const nchannels) {
     // constants, typedefs
@@ -265,8 +260,6 @@ void kernel_solve_mm_mv_mults(
         // - have values that are precomputed
         // - noise matrix is 0
         if (grch==idIsInvalidMask)
-            return;
-        if (noiseCovIsZero[grch]==noiseCovIsZeroMask)
             return;
     }
 
@@ -356,7 +349,6 @@ void kernel_fnnls(
         char *g_mapping,
         char *g_npassive,
         uint32_t const* v2ridmapping,
-        uint32_t const* noiseCovIsZero,
         uint32_t const nchannels,
         uint32_t const ml_iteration) {
     // 
@@ -379,8 +371,6 @@ void kernel_fnnls(
         // - have values that are precomputed
         // - noise matrix is 0
         if (rch==idIsInvalidMask)
-            return;
-        if (noiseCovIsZero[rch]==noiseCovIsZeroMask)
             return;
     }
 
@@ -564,7 +554,6 @@ void kernel_compute_chi2(
         ::ecal::reco::StorageScalarType* g_chi2,
         uint32_t const* input_v2ridmapping,
         uint32_t *output_v2ridmapping,
-        uint32_t const* noiseCovIsZero,
         uint32_t *pChannelsLeft,
         uint32_t const nchannels,
         uint32_t const iteration) {
@@ -590,8 +579,6 @@ void kernel_compute_chi2(
         // - have values that are precomputed
         // - noise matrix is 0
         if (grch==idIsInvalidMask)
-            return;
-        if (noiseCovIsZero[grch]==noiseCovIsZeroMask)
             return;
     }
 
@@ -716,121 +703,6 @@ SampleVector::Scalar compute_chi2(SampleDecompLLT& covariance_decomposition,
         .squaredNorm();
 }
 
-///
-/// launch ctx parameters are (nchannels / block, blocks)
-/// TODO: trivial impl for now, there must be a way to improve
-///
-/// Conventions:
-///   - amplitudes -> solution vector, what we are fitting for
-///   - samples -> raw detector responses
-///   - passive constraint - satisfied constraint
-///   - active constraint - unsatisfied (yet) constraint
-///
-__global__
-void kernel_minimize(SampleMatrix const* noisecov,
-                     EcalPulseCovariance const* pulse_cov,
-                     BXVectorType *bxs,
-                     SampleVector const* samples,
-                     SampleVector* amplitudes,
-                     PulseMatrixType* pulse_matrix, 
-                     ::ecal::reco::StorageScalarType* chi2s,
-                     uint32_t const* dids,
-                     uint32_t const* v2rmapping,
-                     uint32_t const* noiseCovIsZero,
-                     int nchannels,
-                     int max_iterations,
-                     unsigned int offsetForHashes) {
-    int idx = threadIdx.x + blockDim.x*blockIdx.x;
-    if (idx < nchannels) {
-        // this channel had values precomputed
-        if (v2rmapping[idx] == idIsInvalidMask)
-            return;
-        /*
-        if (static_cast<MinimizationState>(acState[idx]) == 
-            MinimizationState::Precomputed)
-            return;
-            */
-
-        auto const did = DetId{dids[idx]};
-        auto const isBarrel = did.subdetId() == EcalBarrel;
-        auto const hashedId = isBarrel
-            ? hashedIndexEB(did.rawId())
-            : offsetForHashes + hashedIndexEE(did.rawId());
-
-
-        // inits
-        bool status = false;
-        int iter = 0;
-        int npassive = 0;
-        
-        // FIXME: 
-        // need to identify this earrlier and set the state properly
-        if (noiseCovIsZero[idx] == noiseCovIsZeroMask)
-            return;
-        /*
-        if (noisecov[idx].isZero(0))
-            return;
-            */
-
-        // inits
-        SampleDecompLLT covariance_decomposition;
-        SampleMatrix inverse_cov;
-        SampleVector::Scalar chi2 = 0, chi2_now = 0;
-
-#ifdef ECAL_MULTIFIT_KERNEL_MINIMIZE_V1
-//    PRINT_MATRIX_10x10(noisecov[idx]);
-#endif
-
-        // loop until ocnverge
-        while (true) {
-            if (iter >= max_iterations)
-                break;
-
-            status = update_covariance(
-                noisecov[idx], 
-                pulse_cov[hashedId],
-                inverse_cov,
-                bxs[idx],
-                covariance_decomposition,
-                amplitudes[idx]);
-
-            // compute actual covariance decomposition
-            covariance_decomposition.compute(inverse_cov);
-
-            // prepare input matrices for fnnls
-            SampleMatrix A = covariance_decomposition.matrixL()
-                .solve(pulse_matrix[idx]);
-            SampleVector b = covariance_decomposition.matrixL()
-                .solve(samples[idx]);
-            
-            status = inplace_fnnls(
-                A, b, amplitudes[idx],
-                npassive, bxs[idx], pulse_matrix[idx]);
-                
-            chi2_now = compute_chi2(
-                covariance_decomposition,
-                pulse_matrix[idx],
-                amplitudes[idx],
-                samples[idx]);
-            auto deltachi2 = chi2_now - chi2;
-
-
-            chi2 = chi2_now;
-
-            if (ecal::abs(deltachi2) < 1e-3)
-                break;
-
-            //---- AM: TEST
-            //---- it was 3 lines above, now here as in the CPU version
-            ++iter;
-            
-        }
-
-        // the rest will be set later
-        chi2s[idx] = chi2;
-    }
-}
-
 void minimization_procedure(
         EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
         EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
@@ -869,7 +741,6 @@ void minimization_procedure(
             (SampleVector const*)eventOutputGPU.amplitudesAll,
             scratch.decompMatrixMainLoop,
             iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
-            scratch.noiseCovIsZero,
             eventInputGPU.ids,
             scratch.pChannelsCounter,
             offsetForHashes,
@@ -888,7 +759,6 @@ void minimization_procedure(
             scratch.AtA,
             scratch.Atb,
             iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
-            scratch.noiseCovIsZero,
             iteration,
             nchannels);
         cudaCheck( cudaGetLastError() );
@@ -909,7 +779,6 @@ void minimization_procedure(
             scratch.samplesMapping,
             scratch.npassive,
             iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
-            scratch.noiseCovIsZero,
             nchannels,
             iteration);
         cudaCheck( cudaGetLastError() );
@@ -929,7 +798,6 @@ void minimization_procedure(
             eventOutputGPU.chi2,
             iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
             iteration%2==0 ? scratch.v2rmapping_2 : scratch.v2rmapping_1,
-            scratch.noiseCovIsZero,
             scratch.pChannelsCounter,
             nchannels,
             iteration);
@@ -944,46 +812,6 @@ void minimization_procedure(
         if (nchannels == 0)
             return;
     }
-
-    /*
-    unsigned int threads_min = configParameters.kernelMinimizeThreads[0];
-    unsigned int blocks_min = threads_min > totalChannels
-        ? 1
-        : (totalChannels + threads_min - 1) / threads_min;
-    kernel_minimize<<<blocks_min, threads_min, 0, cudaStream.id()>>>(
-        scratch.noisecov,
-        conditions.pulseCovariances.values,
-        scratch.activeBXs,
-        scratch.samples,
-        (SampleVector*)eventOutputGPU.amplitudesAll,
-        scratch.pulse_matrix,
-        eventOutputGPU.chi2,
-        eventInputGPU.ids,
-        scratch.v2rmapping_1,
-        scratch.noiseCovIsZero,
-        totalChannels,
-        50,
-        offsetForHashes);
-    cudaCheck(cudaGetLastError());
-
-    //
-    // permute computed amplitudes
-    // and assign the final uncalibared energy value
-    //
-    unsigned int threadsPermute = 32 * EcalDataFrame::MAXSAMPLES; // 32 * 10
-    unsigned int blocksPermute = threadsPermute > 10 * totalChannels
-        ? 1
-        : (10 * totalChannels + threadsPermute - 1) / threadsPermute;
-    int bytesPermute = threadsPermute * sizeof(SampleVector::Scalar);
-    kernel_permute_results<<<blocksPermute, threadsPermute, 
-                             bytesPermute, cudaStream.id()>>>(
-        (SampleVector*)eventOutputGPU.amplitudesAll,
-        scratch.activeBXs,
-        eventOutputGPU.amplitude,
-        scratch.v2rmapping_1,
-        totalChannels);
-    cudaCheck(cudaGetLastError());
-    */
 }
 
 }}

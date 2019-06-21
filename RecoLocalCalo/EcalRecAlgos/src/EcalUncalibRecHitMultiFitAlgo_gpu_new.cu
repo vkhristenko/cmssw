@@ -115,7 +115,6 @@ void entryPoint(
         eventOutputGPU.pedestal,
         eventOutputGPU.flags,
         scratch.v2rmapping_1,
-        scratch.noiseCovIsZero,
         scratch.npassive,
         scratch.samplesMapping,
         scratch.activeBXs,
@@ -150,7 +149,6 @@ void entryPoint(
         scratch.hasSwitchToGain6,
         scratch.hasSwitchToGain1,
         scratch.isSaturated,
-        scratch.noiseCovIsZero,
         offsetForHashes);
     cudaCheck(cudaGetLastError());
     

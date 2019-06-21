@@ -38,7 +38,6 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
                     ::ecal::reco::StorageScalarType* pedestal,
                     uint32_t *flags,
                     uint32_t *v2rmapping,
-                    uint32_t *noiseCovIsZero,
                     char *npassive,
                     char *samplesMapping,
                     BXVectorType *bxs,
@@ -71,7 +70,6 @@ void kernel_prep_2d(SampleGainVector const* gainNoise,
                     bool const* hasSwitchToGain6,
                     bool const* hasSwitchToGain1,
                     bool const* isSaturated,
-                    uint32_t *noiseCovIsZero,
                     uint32_t const offsetForHashes);
 
 __global__
