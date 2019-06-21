@@ -6,6 +6,7 @@
 
 </bin>
 
+
 <library   file="stubs/testEcalSeverityLevelAlgo.cc" name="testEcalSeverityLevelAlgo">
 
   <flags   EDM_PLUGIN="1"/>
