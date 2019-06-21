@@ -16,9 +16,10 @@ EcalGainRatiosGPU::EcalGainRatiosGPU(EcalGainRatios const& values)
     
     // fill in ee
     auto const& endcapValues = values.endcapItems();
+    auto const offset = barrelValues.size();
     for (unsigned int i=0; i<endcapValues.size(); i++) {
-        gain12Over6_[i] = endcapValues[i].gain12Over6();
-        gain6Over1_[i] = endcapValues[i].gain6Over1();
+        gain12Over6_[offset + i] = endcapValues[i].gain12Over6();
+        gain6Over1_[offset + i] = endcapValues[i].gain6Over1();
     }
 }
 
