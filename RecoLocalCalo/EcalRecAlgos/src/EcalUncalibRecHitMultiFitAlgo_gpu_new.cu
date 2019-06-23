@@ -18,7 +18,7 @@
 #include "cuda.h"
 
 #include "AmplitudeComputationCommonKernels.h"
-#include "AmplitudeComputationKernelsV1.h"
+#include "AmplitudeComputationKernels.h"
 #include "TimeComputationKernels.h"
 
 //#define DEBUG
@@ -36,10 +36,10 @@ void entryPoint(
     using digis_type = std::vector<uint16_t>;
     using dids_type = std::vector<uint32_t>;
     // accodring to the cpu setup  //----> hardcoded
-    bool const gainSwitchUseMaxSampleEB = true;
+    bool const gainSwitchUseMaxSampleEB = true; 
     // accodring to the cpu setup  //----> hardcoded
-    bool const gainSwitchUseMaxSampleEE = false;
-    
+    bool const gainSwitchUseMaxSampleEE = false; 
+
     uint32_t const offsetForHashes = conditions.offsetForHashes;
     unsigned int totalChannels = eventInputCPU.ebDigis.size() 
         + eventInputCPU.eeDigis.size();
@@ -116,7 +116,9 @@ void entryPoint(
         eventOutputGPU.chi2,
         eventOutputGPU.pedestal,
         eventOutputGPU.flags,
-        scratch.acState,
+        scratch.v2rmapping_1,
+        scratch.npassive,
+        scratch.samplesMapping,
         scratch.activeBXs,
         offsetForHashes,
         gainSwitchUseMaxSampleEB,
@@ -130,8 +132,6 @@ void entryPoint(
     int blocks_2d = totalChannels;
     dim3 threads_2d{10, 10};
     kernel_prep_2d<<<blocks_2d, threads_2d, 0, cudaStream.id()>>>(
-        conditions.pulseCovariances.values, 
-        scratch.pulse_covariances,
         scratch.gainsNoise,
         eventInputGPU.ids,
         conditions.pedestals.rms_x12,
@@ -155,9 +155,9 @@ void entryPoint(
     cudaCheck(cudaGetLastError());
     
     // run minimization kernels
-    v1::minimization_procedure(
+    minimization_procedure(
         eventInputCPU, eventInputGPU, eventOutputGPU,
-        scratch, conditions, configParameters, cudaStream);
+        scratch, conditions, configParameters, cudaStream, offsetForHashes);
 
     if (configParameters.shouldRunTimingComputation) {
         

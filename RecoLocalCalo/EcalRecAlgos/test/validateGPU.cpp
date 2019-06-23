@@ -36,6 +36,8 @@ int main(int argc, char *argv[]) {
     TH2D *hSOIAmplitudesEBGPUvsCPU, *hSOIAmplitudesEEGPUvsCPU;
     TH2D *hChi2EBGPUvsCPU, *hChi2EEGPUvsCPU;
     TH1D *hAmplitudesEB, *hAmplitudesEE;
+    TH1D *hAmplitudesAbsDiffEB, *hAmplitudesAbsDiffEE;
+    TH1D *hChi2AbsDiffEB, *hChi2AbsDiffEE;
 
     int nbins = 100; int last = 1000;
     hSOIAmplitudesEBGPU = new TH1D("hSOIAmplitudesEBGPU", "hSOIAmplitudesEBGPU",
@@ -46,6 +48,18 @@ int main(int argc, char *argv[]) {
         nbins, 0, last);
     hSOIAmplitudesEECPU = new TH1D("hSOIAmplitudesEECPU", "hSOIAmplitudesEECPU",
         nbins, 0, last);
+    
+    int nbins_absdiff = 100;
+    hAmplitudesAbsDiffEB = new TH1D("hAmplitudesAbsDiffEB", 
+        "hAmplitudesAbsDiffEB",
+        nbins_absdiff, -1, 1);
+    hAmplitudesAbsDiffEE = new TH1D("hAmplitudesAbsDiffEE", 
+        "hAmplitudesAbsDiffEE",
+        nbins_absdiff, -1, 1);
+    hChi2AbsDiffEB = new TH1D("hChi2AbsDiffEB", "hChi2AbsDiffEB",
+        nbins_absdiff, -1, 1);
+    hChi2AbsDiffEE = new TH1D("hChi2AbsDiffEE", "hChi2AbsDiffEE",
+        nbins_absdiff, -1, 1);
     
     int nbins_chi2 = 100; int last_chi2 = 100;
     hChi2EBGPU = new TH1D("hChi2EBGPU", "hChi2EBGPU",
@@ -78,6 +92,10 @@ int main(int argc, char *argv[]) {
 
     constexpr float eps_diff = 1e-3;
 
+    int n1pdiscr = 0;
+    int ndiscrs = 0;
+    int nchannelsTotal = 0;
+
     // accumulate
     auto const nentries = rt->GetEntries();
     std::cout << "#events to validate over: " << nentries << std::endl;
@@ -94,6 +112,12 @@ int main(int argc, char *argv[]) {
             auto const soi_amp_cpu = wcpuEB->bareProduct()[i].amplitude();
             auto const chi2_gpu = wgpuEB->bareProduct().chi2[i];
             auto const chi2_cpu = wcpuEB->bareProduct()[i].chi2();
+            auto const abs_diff_amp = soi_amp_cpu == 0 
+                ? 0
+                : (soi_amp_gpu - soi_amp_cpu) / soi_amp_cpu;
+            auto const abs_diff_chi2 = chi2_cpu == 0
+                ? 0
+                : (chi2_gpu - chi2_cpu) / chi2_cpu;
 
             hSOIAmplitudesEBGPU->Fill(soi_amp_gpu);
             hSOIAmplitudesEBCPU->Fill(soi_amp_cpu);
@@ -101,16 +125,28 @@ int main(int argc, char *argv[]) {
             hChi2EBGPU->Fill(chi2_gpu);
             hChi2EBCPU->Fill(chi2_cpu);
             hChi2EBGPUvsCPU->Fill(chi2_cpu, chi2_gpu);
+            hAmplitudesAbsDiffEB->Fill(abs_diff_amp);
+            hChi2AbsDiffEB->Fill(abs_diff_chi2);
 
-            if (std::abs(soi_amp_gpu - soi_amp_cpu) >= eps_diff)
+            if (std::abs(soi_amp_gpu - soi_amp_cpu) >= eps_diff) {
                 printf("eb eventid = %d chid = %d amp_gpu = %f amp_cpu %f chi2_gpu = %f chi2_cpu = %f\n",
                     ie, i, soi_amp_gpu, soi_amp_cpu, chi2_gpu, chi2_cpu);
+                ndiscrs++;
+            }
             
-            if (std::abs(chi2_gpu - chi2_cpu) >= eps_diff || std::isnan(chi2_gpu))
+            if (std::abs(chi2_gpu - chi2_cpu) >= eps_diff || std::isnan(chi2_gpu)) {
                 printf("eb eventid = %d chid = %d amp_gpu = %f amp_cpu %f chi2_gpu = %f chi2_cpu = %f\n",
                     ie, i, soi_amp_gpu, soi_amp_cpu, chi2_gpu, chi2_cpu);
+                ndiscrs++;
+            }
             if (std::isnan(chi2_gpu))
                 printf("*** nan ***\n");
+
+            if (std::abs(abs_diff_amp)*100 > 1 ||
+                std::abs(abs_diff_chi2)*100 > 1)
+                n1pdiscr++;
+
+            nchannelsTotal++;
         }
 
         for (uint32_t i=0; i<nee; ++i) {
@@ -118,6 +154,12 @@ int main(int argc, char *argv[]) {
             auto const soi_amp_cpu = wcpuEE->bareProduct()[i].amplitude();
             auto const chi2_gpu = wgpuEE->bareProduct().chi2[i];
             auto const chi2_cpu = wcpuEE->bareProduct()[i].chi2();
+            auto const abs_diff_amp = soi_amp_cpu == 0 
+                ? 0
+                : (soi_amp_gpu - soi_amp_cpu) / soi_amp_cpu;
+            auto const abs_diff_chi2 = chi2_cpu == 0
+                ? 0
+                : (chi2_gpu - chi2_cpu) / chi2_cpu;
 
             hSOIAmplitudesEEGPU->Fill(soi_amp_gpu);
             hSOIAmplitudesEECPU->Fill(soi_amp_cpu);
@@ -125,18 +167,39 @@ int main(int argc, char *argv[]) {
             hChi2EEGPU->Fill(chi2_gpu);
             hChi2EECPU->Fill(chi2_cpu);
             hChi2EEGPUvsCPU->Fill(chi2_cpu, chi2_gpu);
+            hAmplitudesAbsDiffEE->Fill(abs_diff_amp);
+            hChi2AbsDiffEE->Fill(abs_diff_chi2);
             
-            if (std::abs(soi_amp_gpu - soi_amp_cpu) >= eps_diff)
+            if (std::abs(soi_amp_gpu - soi_amp_cpu) >= eps_diff) {
                 printf("ee eventid = %d chid = %d amp_gpu = %f amp_cpu %f chi2_gpu = %f chi2_cpu = %f\n",
                     ie, static_cast<int>(i+neb), soi_amp_gpu, soi_amp_cpu, chi2_gpu, chi2_cpu);
+                ndiscrs++;
+            }
             
-            if (std::abs(chi2_gpu - chi2_cpu) >= eps_diff || std::isnan(chi2_gpu))
+            if (std::abs(chi2_gpu - chi2_cpu) >= eps_diff || std::isnan(chi2_gpu)) {
                 printf("ee eventid = %d chid = %d amp_gpu = %f amp_cpu %f chi2_gpu = %f chi2_cpu = %f\n",
                     ie, static_cast<int>(neb+i), soi_amp_gpu, soi_amp_cpu, chi2_gpu, chi2_cpu);
+                ndiscrs++;
+            }
             if (std::isnan(chi2_gpu))
                 printf("*** nan ***\n");
+
+            if (std::abs(abs_diff_amp)*100 > 1 ||
+                std::abs(abs_diff_chi2)*100 > 1)
+                n1pdiscr++;
+
+            nchannelsTotal++;
         }
     }
+
+    std::cout 
+        << "-----------------------\n" 
+        << "--- summary\n"
+        << "--- events = " << nentries << std::endl
+        << "--- nchannelsTotal = " << nchannelsTotal << std::endl
+        << "--- num discrs (amp or chi2) = " << ndiscrs << std::endl
+        << "--- percentage of discrs (num discrs / nchannels) = " << static_cast<double>(ndiscrs) / static_cast<double>(nchannelsTotal) << std::endl
+        << "--- num of discrs with abs diff >= 1% = " << n1pdiscr << std::endl; 
 
     rf.Close();
     rfout.Write();
