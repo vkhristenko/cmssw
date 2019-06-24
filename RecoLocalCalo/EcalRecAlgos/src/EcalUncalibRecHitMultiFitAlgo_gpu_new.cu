@@ -125,34 +125,6 @@ void entryPoint(
         totalChannels);
     cudaCheck(cudaGetLastError());
 
-    //
-    // 2d preparation kernel
-    //
-    /*
-    int blocks_2d = totalChannels;
-    dim3 threads_2d{10, 10};
-    kernel_prep_2d<<<blocks_2d, threads_2d, 0, cudaStream.id()>>>(
-        scratch.gainsNoise,
-        eventInputGPU.ids,
-        conditions.pedestals.rms_x12,
-        conditions.pedestals.rms_x6,
-        conditions.pedestals.rms_x1,
-        conditions.gainRatios.gain12Over6,
-        conditions.gainRatios.gain6Over1,
-        conditions.samplesCorrelation.EBG12SamplesCorrelation,
-        conditions.samplesCorrelation.EBG6SamplesCorrelation,
-        conditions.samplesCorrelation.EBG1SamplesCorrelation,
-        conditions.samplesCorrelation.EEG12SamplesCorrelation,
-        conditions.samplesCorrelation.EEG6SamplesCorrelation,
-        conditions.samplesCorrelation.EEG1SamplesCorrelation,
-        scratch.noisecov,
-        scratch.hasSwitchToGain6,
-        scratch.hasSwitchToGain1,
-        scratch.isSaturated,
-        offsetForHashes);
-    cudaCheck(cudaGetLastError());
-    */
-    
     // run minimization kernels
     minimization_procedure(
         eventInputCPU, eventInputGPU, eventOutputGPU,
