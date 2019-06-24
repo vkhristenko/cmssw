@@ -64,36 +64,10 @@ void kernel_prep_2d(SampleGainVector const* gainNoise,
                     double const* G6SamplesCorrelationEE,
                     double const* G1SamplesCorrelationEE,
                     SampleMatrix* noisecov,
-                    PulseMatrixType* pulse_matrix,
-                    EcalPulseShape const* pulse_shape,
                     bool const* hasSwitchToGain6,
                     bool const* hasSwitchToGain1,
                     bool const* isSaturated,
                     uint32_t const offsetForHashes);
-
-__global__
-void kernel_permute_results(
-        SampleVector *amplitudes,
-        BXVectorType const* activeBXs,
-        ::ecal::reco::StorageScalarType *energies,
-        uint32_t const* v2rmapping,
-        int const nchannels);
-
-///
-/// Build an Ecal RecHit.
-/// TODO: Use SoA data structures on the host directly
-/// the reason for removing this from minimize kernel is to isolate the minimize + 
-/// again, building an aos rec hit involves strides... -> bad memory access pattern
-///
-#ifdef RUN_BUILD_AOS_RECHIT
-__global__
-void kernel_build_rechit(
-    float const* energies,
-    float const* chi2s,
-    uint32_t* dids,
-    EcalUncalibratedRecHit* rechits,
-    int nchannels);
-#endif
 
 }}
 

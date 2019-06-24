@@ -335,8 +335,6 @@ void kernel_prep_2d(SampleGainVector const* gainNoise,
                     double const* G6SamplesCorrelationEE,
                     double const* G1SamplesCorrelationEE,
                     SampleMatrix* noisecov,
-                    PulseMatrixType* pulse_matrix,
-                    EcalPulseShape const* pulse_shape,
                     bool const* hasSwitchToGain6,
                     bool const* hasSwitchToGain1,
                     bool const* isSaturated,
@@ -349,7 +347,6 @@ void kernel_prep_2d(SampleGainVector const* gainNoise,
     constexpr bool dynamicPedestal = false;
     //---- default is true
     constexpr bool simplifiedNoiseModelForGainSwitch = true;  
-    constexpr int template_samples = EcalPulseShape::TEMPLATESAMPLES;
 
     bool tmp0 = hasSwitchToGain6[ch];
     bool tmp1 = hasSwitchToGain1[ch];
@@ -468,13 +465,6 @@ void kernel_prep_2d(SampleGainVector const* gainNoise,
     
     // store to global
     noisecov[ch](ty, tx) = noise_value;
-
-    // pulse matrix
-    int const posToAccess = 9 - tx + ty; // see cpu for reference
-    float const value = posToAccess>=7 
-        ? pulse_shape[hashedId].pdfval[posToAccess-7]
-        : 0;
-    pulse_matrix[ch](ty, tx) = value;
 }
 
 }}

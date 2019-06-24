@@ -17,7 +17,7 @@ constexpr uint32_t idIsInvalidMask = 0xffffffff;
 
 using data_type = ::ecal::reco::ComputationScalarType;
 
-typedef Eigen::Matrix<data_type, SampleVectorSize, SampleVectorSize> PulseMatrixType;
+//typedef Eigen::Matrix<data_type, SampleVectorSize, SampleVectorSize> PulseMatrixType;
 typedef Eigen::Matrix<char, SampleVectorSize, 1> BXVectorType;
 using SampleMatrixD = Eigen::Matrix<double,SampleVectorSize,SampleVectorSize>;
 

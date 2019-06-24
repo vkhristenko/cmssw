@@ -93,8 +93,8 @@ void kernel_newiter_update_covariance_compute_cholesky(
         blockDim.z * nvaluesForL;
 
     // map global mem
-    MapM<ConstDataType, template_samples, Eigen::RowMajor> PulseCovariance
-    {reinterpret_cast<DataType const*>(g_PulseCovariance + hashedId)};
+    MapM<float const, template_samples, Eigen::RowMajor> PulseCovariance
+    {reinterpret_cast<float const*>(g_PulseCovariance + hashedId)};
     MapM<ConstDataType, nsamples> noiseCovariance
     {g_noiseCovariance[grch].data()};
     MapV<ConstDataType> amplitudes{g_amplitudes[grch].data()};
@@ -194,12 +194,14 @@ void kernel_newiter_update_covariance_compute_cholesky(
 // TODO: add boundaries checking for threads
 __global__
 void kernel_solve_mm_mv_mults(
-        PulseMatrixType const* g_pulseMatrix,
+        EcalPulseShape const* g_pulse_shape,
         SampleVector::Scalar const* g_L,
         SampleVector const* g_s,
         SampleVector::Scalar* g_AtA,
         SampleVector::Scalar* g_Atb,
         uint32_t const* v2ridmapping,
+        uint32_t *dids,
+        uint32_t const offsetForHashes,
         uint32_t const iteration,
         uint32_t const nchannels) {
     // constants, typedefs
@@ -207,6 +209,7 @@ void kernel_solve_mm_mv_mults(
     using ConstDataType = DataType const;
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
     constexpr auto nvaluesForL = MapSymM<DataType, nsamples>::total;
+    constexpr auto nvaluesForPulseShape=EcalPulseShape::TEMPLATESAMPLES;
 
     // indices
     auto const tx = threadIdx.x;
@@ -215,8 +218,8 @@ void kernel_solve_mm_mv_mults(
     auto const gvch = lch + blockIdx.x * blockDim.z;
     if (gvch >= nchannels) return;
 
+    // get teh real ch id
     auto const grch = v2ridmapping[gvch];
-//    auto const did = DetId{dids[grch]};
     
     // non-divergent branch!
     // only for the first iteration...
@@ -227,12 +230,19 @@ void kernel_solve_mm_mv_mults(
         if (grch==idIsInvalidMask)
             return;
     }
+    
+    // get did and hashedId
+    auto const did = DetId{dids[grch]};
+    auto const isBarrel = did.subdetId() == EcalBarrel;
+    auto const hashedId = isBarrel
+        ? hashedIndexEB(did.rawId())
+        : offsetForHashes + hashedIndexEE(did.rawId());
 
     // configure shared mem
     extern __shared__ char smem[];
     DataType* __shrL = reinterpret_cast<DataType*>(smem);
-    DataType* __shrP = __shrL + nvaluesForL * blockDim.z;
-    DataType* __shrs = __shrP + nsamples * nsamples * blockDim.z;
+    float* __shrP = __shrL + nvaluesForL * blockDim.z;
+    DataType* __shrs = __shrP + nvaluesForPulseShape * blockDim.z;
     DataType* __shrAtmp = __shrs + nsamples * blockDim.z;
     DataType* __shrbtmp = __shrAtmp + nsamples * nsamples * blockDim.z;
 
@@ -241,7 +251,8 @@ void kernel_solve_mm_mv_mults(
     MapSymM<ConstDataType, nsamples, Eigen::RowMajor> L
     {g_L + grch*nvaluesForL};
     // FIXME: note, we do not need to have a matrix in global mem
-    MapM<ConstDataType, nsamples> P{g_pulseMatrix[grch].data()};
+    //MapM<ConstDataType, nsamples> P{g_pulseMatrix[grch].data()};
+    MapMForPM<float> pulse_shape {(float*)&g_pulse_shape[hashedId]};
     MapV<ConstDataType> s{g_s[grch].data()};
     // FIXME: we should use symmetric matrix in here
     MapM<DataType, nsamples, Eigen::RowMajor> AtA
@@ -251,19 +262,24 @@ void kernel_solve_mm_mv_mults(
     // map shared mem
     MapSymM<DataType, nsamples, Eigen::RowMajor> shrL
     {__shrL + lch * nvaluesForL};
-    MapM<DataType, nsamples, Eigen::RowMajor> shrP
-    {__shrP + lch*nsamples*nsamples};
+    MapMForPM<float> shrP
+    {__shrP + lch*nvaluesForPulseShape};
     MapV<DataType> shrs{__shrs + lch*nsamples};
     MapM<DataType, nsamples, Eigen::RowMajor> shrAtmp
     {__shrAtmp + lch*nsamples*nsamples};
     MapV<DataType> shrbtmp{__shrbtmp + lch*nsamples};
 
     // move into shared mem
-    shrP(ty, tx) = P(ty, tx);
+    //shrP(ty, tx) = P(ty, tx);
     if (ty>=tx)
         shrL(ty, tx) = L(ty, tx);
     if (ty == 0)
         shrs(tx) = s(tx);
+    // store to shared memory. note we are using plain buffers
+    if (ty == 1)
+        shrP.data[tx] = pulse_shape.data[tx];
+    if (ty == 2 && tx<2)
+        shrP.data[10 + tx] = pulse_shape.data[10 + tx];
     __syncthreads();
 
     // run forward substitution
@@ -513,13 +529,15 @@ void kernel_fnnls(
 __global__
 void kernel_compute_chi2(
         SampleVector::Scalar const* g_L,
-        PulseMatrixType const* g_P,
+        EcalPulseShape const* g_pulse_shape,
         SampleVector const* g_x,
         ::ecal::reco::StorageScalarType *energies,
         SampleVector const* g_s,
         ::ecal::reco::StorageScalarType* g_chi2,
         uint32_t const* input_v2ridmapping,
         uint32_t *output_v2ridmapping,
+        uint32_t *dids,
+        uint32_t const offsetForHashes,
         uint32_t *pChannelsLeft,
         uint32_t const nchannels,
         uint32_t const iteration) {
@@ -528,6 +546,7 @@ void kernel_compute_chi2(
     using ConstDataType = DataType const;
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
     constexpr auto nvaluesForL = MapSymM<DataType, nsamples>::total;
+    constexpr auto nvaluesForPulseShape=EcalPulseShape::TEMPLATESAMPLES;
 
     // indices
     auto const gtx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -547,31 +566,65 @@ void kernel_compute_chi2(
         if (grch==idIsInvalidMask)
             return;
     }
+    
+    // get did and hashedId
+    auto const did = DetId{dids[grch]};
+    auto const isBarrel = did.subdetId() == EcalBarrel;
+    auto const hashedId = isBarrel
+        ? hashedIndexEB(did.rawId())
+        : offsetForHashes + hashedIndexEE(did.rawId());
 
     // shared mem
     extern __shared__ char smem[];
     DataType* __shrL = reinterpret_cast<DataType*>(smem);
     // FIXME: Pulse matrix should be a vector with proper indexing, not a matrix
     // nchannels per block (threads per block / 10) * values for L m
-    DataType* __shrP = __shrL + nvaluesForL * blockDim.x / nsamples;
-    DataType *__shrv = __shrP + nsamples*blockDim.x;
+    float* __shrP = __shrL + nvaluesForL * blockDim.x / nsamples;
+    DataType *__shrv = __shrP + nvaluesForPulseShape*blockDim.x/nsamples;
     DataType *__shrtmpx = __shrv + blockDim.x;
 
     // map global mem
     MapSymM<ConstDataType, nsamples, Eigen::RowMajor> L
     {g_L + nvaluesForL * grch};
-    MapM<ConstDataType, nsamples> P
-    {g_P[grch].data()};
+    MapMForPM<float> pulse_shape{(float*)&g_pulse_shape[hashedId]};
     MapV<ConstDataType> x{g_x[grch].data()};
     MapV<ConstDataType> s{g_s[grch].data()};
 
     // map shared mem
     MapSymM<DataType, nsamples, Eigen::RowMajor> shrL
     {__shrL + nvaluesForL*lch};
-    MapM<DataType, nsamples, Eigen::RowMajor> shrP
-    {__shrP + nsamples*nsamples*lch};
+    MapMForPM<float> shrP{__shrP + nvaluesForPulseShape*lch};
     MapV<DataType> shrv{__shrv + nsamples*lch};
     MapV<DataType> shrtmpx{__shrtmpx + nsamples*lch};
+
+    // store to shared mem
+    shrtmpx(sample) = x(sample);
+    if (sample == 5)
+        energies[grch] = shrtmpx(sample); // store to global soi amplitude
+    // use plain buffers (global mem) for the pulse shape
+    shrP.data[sample] = pulse_shape.data[sample];
+    if (sample<2)
+        shrP.data[sample + 10] = pulse_shape.data[sample + 10];
+    #pragma unroll
+    for (int i=0; i<nsamples; i++) {
+        if (sample >= i)
+            shrL(sample, i) = L(sample, i);
+    }
+    __syncthreads();
+
+    // compute P*x - s
+    DataType sum{0};
+    auto const s_sample = s(sample);
+    #pragma unroll
+    for (int i=0; i<nsamples; ++i)
+        sum += shrP(sample, i) * shrtmpx(i);
+    auto const v_sample = sum - s_sample;
+    shrv(sample) = v_sample;
+    __syncthreads();
+
+
+    /*
+    auto const s_sample = s(sample);
 
     // mov to shared mem
     auto const x_sample = x(sample);
@@ -596,6 +649,7 @@ void kernel_compute_chi2(
     auto const v_sample = sum - s_sample;
     shrv(sample) = v_sample;
     __syncthreads();
+    */
 
     // use single thread in here for now
     // FIXME: should we add?
@@ -658,17 +712,6 @@ void kernel_minimization_launcher() {
 }
 */
 
-__device__
-__forceinline__
-SampleVector::Scalar compute_chi2(SampleDecompLLT& covariance_decomposition,
-                   PulseMatrixType const& pulse_matrix,
-                   SampleVector const& amplitudes,
-                   SampleVector const& samples) {
-    return covariance_decomposition.matrixL()
-        .solve(pulse_matrix * amplitudes - samples)
-        .squaredNorm();
-}
-
 void minimization_procedure(
         EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
         EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
@@ -717,14 +760,17 @@ void minimization_procedure(
         //
         auto const ts2 = ts1;
         auto const bs2 = bs1;
-        uint32_t const shrBytes2 = 10 * (sizeof(DataType)*(55 + 100 + 10 + 100 + 10));
+        uint32_t const shrBytes2 = 10 * (sizeof(DataType)*(55 + 10 + 100 + 10) + 
+            sizeof(float)*EcalPulseShape::TEMPLATESAMPLES);
         kernel_solve_mm_mv_mults<<<bs2, ts2, shrBytes2, cudaStream.id()>>>(
-            scratch.pulse_matrix,
+            conditions.pulseShapes.values,
             scratch.decompMatrixMainLoop,
             scratch.samples,
             scratch.AtA,
             scratch.Atb,
             iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
+            eventInputGPU.ids,
+            offsetForHashes,
             iteration,
             nchannels);
         cudaCheck( cudaGetLastError() );
@@ -754,16 +800,19 @@ void minimization_procedure(
         uint32_t const bs4 = nchannels>ts4
             ? (nchannels*10 + ts4 - 1) / ts4
             : 1;
-        uint32_t const shrBytes4 = 32 * (sizeof(DataType)*(55 + 100 + 10 + 10));
+        uint32_t const shrBytes4 = 32 * (sizeof(DataType)*(55 + 10 + 10)
+            + sizeof(float)*EcalPulseShape::TEMPLATESAMPLES);
         kernel_compute_chi2<<<bs4, ts4, shrBytes4, cudaStream.id()>>>(
             scratch.decompMatrixMainLoop,
-            scratch.pulse_matrix,
+            conditions.pulseShapes.values,
             (SampleVector const*)eventOutputGPU.amplitudesAll,
             eventOutputGPU.amplitude,
             scratch.samples,
             eventOutputGPU.chi2,
             iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
             iteration%2==0 ? scratch.v2rmapping_2 : scratch.v2rmapping_1,
+            eventInputGPU.ids,
+            offsetForHashes,
             scratch.pChannelsCounter,
             nchannels,
             iteration);

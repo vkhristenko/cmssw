@@ -145,8 +145,6 @@ void entryPoint(
         conditions.samplesCorrelation.EEG6SamplesCorrelation,
         conditions.samplesCorrelation.EEG1SamplesCorrelation,
         scratch.noisecov,
-        scratch.pulse_matrix,
-        conditions.pulseShapes.values,
         scratch.hasSwitchToGain6,
         scratch.hasSwitchToGain1,
         scratch.isSaturated,

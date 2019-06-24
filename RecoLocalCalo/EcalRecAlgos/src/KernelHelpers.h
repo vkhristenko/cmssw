@@ -31,6 +31,28 @@ struct MapV {
     operator()(int const i) { return data[i]; }
 };
 
+// FIXME: either use eigen or make this more generic
+// N is comping from pulse shape constexpr value. 
+// this is a map for a pulse matrix to avoid memcpy and hide indexing
+template
+<
+    typename T
+>
+struct MapMForPM {
+    using type = T;
+    using base_type = typename std::remove_cv<type>::type;
+
+    type* data;
+    __forceinline__ __device__
+    MapMForPM(type* data) : data{data} {}
+
+    // note, not returning a ref but by value
+    __forceinline__ __device__
+    base_type operator()(int const row, int const col) const {
+        auto const index = 2 - col + row;
+        return index>=0 ? data[index] : 0;
+    }
+};
 
 template
 <
