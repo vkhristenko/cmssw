@@ -682,8 +682,6 @@ void kernel_compute_chi2(
     // shared mem
     extern __shared__ char smem[];
     DataType* __shrL = reinterpret_cast<DataType*>(smem);
-    // FIXME: Pulse matrix should be a vector with proper indexing, not a matrix
-    // nchannels per block (threads per block / 10) * values for L m
     float* __shrP = __shrL + nvaluesForL * blockDim.x / nsamples;
     DataType *__shrv = __shrP + nvaluesForPulseShape*blockDim.x/nsamples;
     DataType *__shrtmpx = __shrv + blockDim.x;
@@ -798,11 +796,6 @@ void minimization_procedure(
         unsigned int offsetForHashes) {
     unsigned int totalChannels = eventInputCPU.ebDigis.size() 
         + eventInputCPU.eeDigis.size();
-
-    // FIXME: proper solution: 
-    // Can we perform memcpy from a stack allocated segment?
-    //std::vector<uint32_t> tmp(1);
-    //uint32_t &nchannels = tmp[0];
     uint32_t nchannels = totalChannels;
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
     using DataType = SampleVector::Scalar;

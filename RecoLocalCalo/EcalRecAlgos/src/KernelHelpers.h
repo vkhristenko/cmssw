@@ -31,7 +31,7 @@ struct MapV {
     operator()(int const i) { return data[i]; }
 };
 
-// FIXME: either use eigen or make this more generic
+// FIXME: either use/modify/improve eigen or make this more generic
 // N is comping from pulse shape constexpr value. 
 // this is a map for a pulse matrix to avoid memcpy and hide indexing
 template
