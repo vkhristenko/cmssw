@@ -47,7 +47,6 @@ void kernel_prep_1d_and_initialize(
                     uint32_t *v2rmapping,
                     char *npassive,
                     char *samplesMapping,
-                    BXVectorType *bxs,
                     uint32_t const offsetForHashes,
                     bool const gainSwitchUseMaxSampleEB,
                     bool const gainSwitchUseMaxSampleEE,
@@ -221,7 +220,6 @@ void kernel_prep_1d_and_initialize(
         // initialization
         //
         amplitudesForMinimization[ch](sample) = 0;
-        bxs[ch](sample) = sample - 5;
         samplesMapping[ch*nsamples + sample] = sample;
 
         // select the thread for the max sample 

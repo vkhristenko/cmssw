@@ -119,7 +119,6 @@ void entryPoint(
         scratch.v2rmapping_1,
         scratch.npassive,
         scratch.samplesMapping,
-        scratch.activeBXs,
         offsetForHashes,
         gainSwitchUseMaxSampleEB,
         gainSwitchUseMaxSampleEE,
