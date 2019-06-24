@@ -25,7 +25,6 @@ namespace ecal { namespace multifit {
 /// launch ctx:
 /// 10 x 10 x nchannels per block
 // FIXME: add __restrict__ whenever is needed
-// TODO: add boundaries checking for threads
 __global__
 void kernel_newiter_update_covariance_compute_cholesky(
         EcalPulseCovariance const* g_PulseCovariance,
@@ -111,9 +110,6 @@ void kernel_newiter_update_covariance_compute_cholesky(
     float noiseValue = 0;
     if (hasGainSwitch) {
         // non-divergent branch - all threads per block
-        // TODO: all of these constants indicate that 
-        // that these parts could be splitted into completely different 
-        // kernels and run one of them only depending on the config
         if (simplifiedNoiseModelForGainSwitch) {
             int isample_max = 5; // according to cpu defs
             int gainidx = gainNoise[grch][isample_max];
@@ -194,7 +190,6 @@ void kernel_newiter_update_covariance_compute_cholesky(
     DataType* __shrL = __shrCovarianceDiagValues + 
         blockDim.z * nsamples;
     // nchannels per block * 10 * 10
-    // TODO: do we need 10 x 10 here??? oro 55 is enough???
     DataType* __shrLSums = __shrL + 
         blockDim.z * nvaluesForL;
 
@@ -263,7 +258,7 @@ void kernel_newiter_update_covariance_compute_cholesky(
         shrL(ty, 0) = noiseValue / std::sqrt(m_j_j);
     __syncthreads();
 
-    // TODO: verify that the loop is unrolled
+    // TODO verify that hte loop is unrolled
     #pragma unroll
     for (int column=1; column<nsamples; ++column) {
         if (tx==column && ty>=column) {
