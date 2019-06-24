@@ -29,26 +29,43 @@ namespace ecal { namespace multifit {
 __global__
 void kernel_newiter_update_covariance_compute_cholesky(
         EcalPulseCovariance const* g_PulseCovariance,
-        SampleMatrix const* g_noiseCovariance,
         SampleVector const* g_amplitudes,
         SampleVector::Scalar* g_L,
         uint32_t const* v2ridmapping,
         uint32_t *dids,
         uint32_t *pChannelsCounter,
+        SampleGainVector const* gainNoise,
+        float const* rms_x12,
+        float const* rms_x6,
+        float const* rms_x1,
+        float const* gain12Over6,
+        float const* gain6Over1,
+        double const* G12SamplesCorrelationEB,
+        double const* G6SamplesCorrelationEB,
+        double const* G1SamplesCorrelationEB,
+        double const* G12SamplesCorrelationEE,
+        double const* G6SamplesCorrelationEE,
+        double const* G1SamplesCorrelationEE,
+        bool const* hasSwitchToGain6,
+        bool const* hasSwitchToGain1,
+        bool const* isSaturated,
         uint32_t const offsetForHashes,
         uint32_t const iteration,
         uint32_t const nchannels) {
-    // constants
+    // constants / type aliases
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
     constexpr auto npulses = nsamples;
     constexpr auto template_samples = EcalPulseShape::TEMPLATESAMPLES;
     using DataType = SampleVector::Scalar;
     using ConstDataType = DataType const;
     constexpr auto nvaluesForL = MapSymM<DataType, nsamples>::total;
+    constexpr bool simplifiedNoiseModelForGainSwitch = true; 
+    constexpr float addPedestalUncertainty = 0.f;
+    constexpr bool dynamicPedestal = false;
 
     // indices
-    auto const tx = threadIdx.x;
-    auto const ty = threadIdx.y;
+    int const tx = threadIdx.x;
+    int const ty = threadIdx.y;
     auto const vch_per_block = threadIdx.z;
     auto const gvch = vch_per_block + blockIdx.x*blockDim.z;
     if (gvch >= nchannels) return;
@@ -75,7 +92,96 @@ void kernel_newiter_update_covariance_compute_cholesky(
     auto const hashedId = isBarrel
         ? hashedIndexEB(did.rawId())
         : offsetForHashes + hashedIndexEE(did.rawId());
+    bool tmp0 = hasSwitchToGain6[grch];
+    bool tmp1 = hasSwitchToGain1[grch];
+    auto const* G12SamplesCorrelation = isBarrel
+        ? G12SamplesCorrelationEB
+        : G12SamplesCorrelationEE;
+    auto const* G6SamplesCorrelation = isBarrel
+        ? G6SamplesCorrelationEB
+        : G6SamplesCorrelationEE;
+    auto const* G1SamplesCorrelation = isBarrel
+        ? G1SamplesCorrelationEB
+        : G1SamplesCorrelationEE;
+    bool tmp2 = isSaturated[grch];
+    bool hasGainSwitch = tmp0 || tmp1 || tmp2;
+    auto const vidx = ecal::abs<int>(ty - tx);
 
+    // non-divergent branch for all threads per cnannel
+    float noiseValue = 0;
+    if (hasGainSwitch) {
+        // non-divergent branch - all threads per block
+        // TODO: all of these constants indicate that 
+        // that these parts could be splitted into completely different 
+        // kernels and run one of them only depending on the config
+        if (simplifiedNoiseModelForGainSwitch) {
+            int isample_max = 5; // according to cpu defs
+            int gainidx = gainNoise[grch][isample_max];
+
+            // non-divergent branches
+            if (gainidx==0)
+                noiseValue = rms_x12[hashedId]*rms_x12[hashedId]
+                    * G12SamplesCorrelation[vidx];
+            if (gainidx==1) 
+                noiseValue = gain12Over6[hashedId]*gain12Over6[hashedId] 
+                    * rms_x6[hashedId]*rms_x6[hashedId]
+                    * G6SamplesCorrelation[vidx];
+            if (gainidx==2)
+                noiseValue = gain12Over6[hashedId]*gain12Over6[hashedId]
+                    * gain6Over1[hashedId]*gain6Over1[hashedId] 
+                    * rms_x1[hashedId]*rms_x1[hashedId]
+                    * G1SamplesCorrelation[vidx];
+            if (!dynamicPedestal && addPedestalUncertainty>0.f)
+                noiseValue += addPedestalUncertainty*addPedestalUncertainty;
+        } else {
+            int gainidx=0;
+            char mask = gainidx;
+            int pedestal = gainNoise[grch][ty] == mask ? 1 : 0;
+            noiseValue += /* gainratio is 1*/ rms_x12[hashedId]*rms_x12[hashedId]
+                * pedestal* G12SamplesCorrelation[vidx];
+            // non-divergent branch
+            if (!dynamicPedestal && addPedestalUncertainty>0.f) {
+                noiseValue += /* gainratio is 1 */
+                    addPedestalUncertainty*addPedestalUncertainty*pedestal;
+            }
+
+            //
+            gainidx=1;
+            mask = gainidx;
+            pedestal = gainNoise[grch][ty] == mask ? 1 : 0;
+            noiseValue += gain12Over6[hashedId]*gain12Over6[hashedId]
+                *rms_x6[hashedId]*rms_x6[hashedId]*pedestal
+                * G6SamplesCorrelation[vidx];
+            // non-divergent branch
+            if (!dynamicPedestal && addPedestalUncertainty>0.f) {
+                noiseValue += gain12Over6[hashedId]*gain12Over6[hashedId]
+                    *addPedestalUncertainty*addPedestalUncertainty
+                    *pedestal;
+            }
+            
+            //
+            gainidx=2;
+            mask = gainidx;
+            pedestal = gainNoise[grch][ty] == mask ? 1 : 0;
+            float tmp = gain6Over1[hashedId] * gain12Over6[hashedId];
+            noiseValue+= tmp*tmp * rms_x1[hashedId]*rms_x1[hashedId]
+                *pedestal* G1SamplesCorrelation[vidx];
+            // non-divergent branch
+            if (!dynamicPedestal && addPedestalUncertainty>0.f) {
+                noiseValue += tmp*tmp * addPedestalUncertainty*addPedestalUncertainty
+                    * pedestal;
+            }
+        }
+    } else {
+        auto rms = rms_x12[hashedId];
+        noiseValue = rms*rms * G12SamplesCorrelation[vidx];
+        if (!dynamicPedestal && addPedestalUncertainty>0.f) {
+            //----  add fully correlated component to noise 
+            // covariance to inflate pedestal uncertainty
+            noiseValue += addPedestalUncertainty*addPedestalUncertainty;
+        }
+    }
+    
     // shared mem configuration
     extern __shared__ char smem[];
     // nchannels per block * 12 * 12 (TEMPLATESAMPLES)
@@ -95,8 +201,6 @@ void kernel_newiter_update_covariance_compute_cholesky(
     // map global mem
     MapM<float const, template_samples, Eigen::RowMajor> PulseCovariance
     {reinterpret_cast<float const*>(g_PulseCovariance + hashedId)};
-    MapM<ConstDataType, nsamples> noiseCovariance
-    {g_noiseCovariance[grch].data()};
     MapV<ConstDataType> amplitudes{g_amplitudes[grch].data()};
     MapSymM<DataType, nsamples, Eigen::RowMajor> L
     {g_L + nvaluesForL * grch};
@@ -110,7 +214,7 @@ void kernel_newiter_update_covariance_compute_cholesky(
     {__shrLSums + vch_per_block * nvaluesForL};
 
     // preload some values
-    auto noiseValue = noiseCovariance(ty, tx);
+    //auto noiseValue = noise_value;
     shrLSums(ty, tx) = 0;
 
     // compute the updated total covariance matrix
@@ -623,34 +727,6 @@ void kernel_compute_chi2(
     __syncthreads();
 
 
-    /*
-    auto const s_sample = s(sample);
-
-    // mov to shared mem
-    auto const x_sample = x(sample);
-    auto const s_sample = s(sample);
-    #pragma unroll
-    for (int i=0; i<nsamples; ++i) {
-        shrP(i, sample) = P(i, sample) * x_sample;
-        if (sample>=i)
-            shrL(sample, i) = L(sample, i);
-    }
-
-    // store to global the amplitude value for soi
-    if (sample == 5)
-        energies[grch] = x_sample;
-    __syncthreads();
-
-    // prepare input for forward subst
-    DataType sum{0};
-    #pragma unroll
-    for (int i=0; i<nsamples; ++i)
-        sum += shrP(sample, i);
-    auto const v_sample = sum - s_sample;
-    shrv(sample) = v_sample;
-    __syncthreads();
-    */
-
     // use single thread in here for now
     // FIXME: should we add?
     if (sample == 0) {
@@ -746,12 +822,26 @@ void minimization_procedure(
         uint32_t const shrBytes1 = 10 * (sizeof(DataType)*(55 + 55 + 10));
         kernel_newiter_update_covariance_compute_cholesky<<<bs1, ts1, shrBytes1, cudaStream.id()>>>(
             conditions.pulseCovariances.values,
-            scratch.noisecov,
             (SampleVector const*)eventOutputGPU.amplitudesAll,
             scratch.decompMatrixMainLoop,
             iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
             eventInputGPU.ids,
             scratch.pChannelsCounter,
+            scratch.gainsNoise,
+            conditions.pedestals.rms_x12,
+            conditions.pedestals.rms_x6,
+            conditions.pedestals.rms_x1,
+            conditions.gainRatios.gain12Over6,
+            conditions.gainRatios.gain6Over1,
+            conditions.samplesCorrelation.EBG12SamplesCorrelation,
+            conditions.samplesCorrelation.EBG6SamplesCorrelation,
+            conditions.samplesCorrelation.EBG1SamplesCorrelation,
+            conditions.samplesCorrelation.EEG12SamplesCorrelation,
+            conditions.samplesCorrelation.EEG6SamplesCorrelation,
+            conditions.samplesCorrelation.EEG1SamplesCorrelation,
+            scratch.hasSwitchToGain6,
+            scratch.hasSwitchToGain1,
+            scratch.isSaturated,
             offsetForHashes,
             iteration,
             nchannels);

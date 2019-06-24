@@ -45,30 +45,6 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
                     bool const gainSwitchUseMaxSampleEE,
                     int const nchannels);
 
-///
-/// assume kernel launch configuration is 
-/// ([MAXSAMPLES, MAXSAMPLES], nchannels)
-///
-__global__
-void kernel_prep_2d(SampleGainVector const* gainNoise,
-                    uint32_t const* dids,
-                    float const* rms_x12,
-                    float const* rms_x6,
-                    float const* rms_x1,
-                    float const* gain12Over6,
-                    float const* gain6Over1,
-                    double const* G12SamplesCorrelationEB,
-                    double const* G6SamplesCorrelationEB,
-                    double const* G1SamplesCorrelationEB,
-                    double const* G12SamplesCorrelationEE,
-                    double const* G6SamplesCorrelationEE,
-                    double const* G1SamplesCorrelationEE,
-                    SampleMatrix* noisecov,
-                    bool const* hasSwitchToGain6,
-                    bool const* hasSwitchToGain1,
-                    bool const* isSaturated,
-                    uint32_t const offsetForHashes);
-
 }}
 
 #endif // RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationCommonKernels
