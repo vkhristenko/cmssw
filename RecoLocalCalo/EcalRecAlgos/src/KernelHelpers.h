@@ -157,6 +157,76 @@ struct MapSymM<T, Stride, Eigen::RowMajor> {
     }
 };
 
+template
+<
+    typename T,
+    int Stride,
+    int Order = Eigen::ColMajor
+>
+struct MapSymMWithCheck {
+    using type = T;
+    using base_type = typename std::remove_const<type>::type;
+
+    // TODO: replace with shifting after verifying correctness
+    static constexpr auto total = Stride * (Stride + 1) / 2;
+    T* data;
+    __forceinline__ __device__
+    MapSymMWithCheck(T* data) : data{data} {}
+
+    __forceinline__ __device__
+    T const& operator()(int const r, int const c) const {
+        // swap row and col if row < col
+        auto const row = std::max(r, c);
+        auto const col = std::min(r, c);
+        auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
+        auto const index = total - tmp + row - col;
+        return data[index];
+    }
+    
+    template<typename U = T>
+    __forceinline__ __device__
+    typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
+    operator()(int const r, int const c) {
+        // swap row and col if row < col
+        auto const row = std::max(r, c);
+        auto const col = std::min(r, c);
+        auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
+        auto const index = total - tmp + row - col;
+        return data[index];
+    }
+};
+
+template<typename T, int Stride>
+struct MapSymMWithCheck<T, Stride, Eigen::RowMajor> {
+    using type = T;
+    using base_type = typename std::remove_const<type>::type;
+
+    static constexpr auto total = Stride * (Stride + 1) / 2;
+    T* data;
+    __forceinline__ __device__
+    MapSymMWithCheck(T* data) : data{data} {}
+
+    __forceinline__ __device__
+    T const& operator()(int const r, int const c) const {
+        // swap row and col if row < col
+        auto const row = std::max(r, c);
+        auto const col = std::min(r, c);
+        auto const index = row * (row + 1) / 2 + col;
+        return data[index];
+    }
+
+    template<typename U = T>
+    __forceinline__ __device__
+    typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
+    operator()(int const r, int const c) {
+        // swap row and col if row < col
+        auto const row = std::max(r, c);
+        auto const col = std::min(r, c);
+        auto const index = row * (row + 1) / 2 + col;
+        return data[index];
+    }
+};
+
 template<typename T, int N>
 struct ForwardSubstitutionUnrolled {
     template<typename M1, typename M2, typename M3>

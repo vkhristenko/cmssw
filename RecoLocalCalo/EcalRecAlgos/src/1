@@ -357,7 +357,8 @@ void kernel_solve_mm_mv_mults(
     {g_L + grch*nvaluesForL};
     MapMForPM<float> pulse_shape {(float*)&g_pulse_shape[hashedId]};
     MapV<ConstDataType> s{g_s[grch].data()};
-    MapSymM<DataType, nsamples, Eigen::ColMajor> AtA
+    // FIXME: we should use symmetric matrix in here
+    MapM<DataType, nsamples, Eigen::ColMajor> AtA
     {g_AtA + grch * nvaluesForAtA};
     MapV<DataType> Atb{g_Atb + grch * nsamples};
 
@@ -406,7 +407,7 @@ void kernel_solve_mm_mv_mults(
         ata_i_j += shrAtmp(i, ty) * shrAtmp(i, tx);
     }
 
-    // store back to global. note AtA is symmetric only L is stored
+    // store back to global
     if (ty>=tx)
         AtA(ty, tx) = ata_i_j;
     if (ty == 0) {
@@ -442,7 +443,6 @@ void kernel_fnnls(
     constexpr unsigned int max_iterations = 500;
     constexpr auto nsamples = SampleVector::RowsAtCompileTime;
     constexpr auto nvaluesForL = MapSymM<DataType, nsamples>::total;
-    constexpr auto nvaluesForAtA = nvaluesForL;
 
     // indices
     auto const vch = threadIdx.x + blockIdx.x * blockDim.x;
@@ -460,8 +460,7 @@ void kernel_fnnls(
     }
 
     // map global mem
-    MapSymMWithCheck<ConstDataType, nsamples, Eigen::ColMajor> 
-    AtA{g_AtA + nvaluesForAtA*rch};
+    MapM<ConstDataType, nsamples, Eigen::RowMajor> AtA{g_AtA + nsamples*nsamples*rch};
     MapSymM<DataType, nsamples, Eigen::RowMajor> L{g_L + nvaluesForL*rch};
     MapV<ConstDataType> Atb{g_Atb + nsamples*rch};
     MapV<DataType> x{xs[rch].data()};
@@ -811,9 +810,9 @@ void minimization_procedure(
     // once results are valid
 
     for (int iteration=0; iteration<50; ++iteration) {
-        //std::cout << "iteration = " << iteration 
-        //          << "  nchannels = " << nchannels
-        //          << std::endl;
+        std::cout << "iteration = " << iteration 
+                  << "  nchannels = " << nchannels
+                  << std::endl;
 
         //
         dim3 const ts1{nsamples, nsamples, nchannels>10 ? 10 : nchannels};

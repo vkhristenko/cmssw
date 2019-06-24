@@ -187,7 +187,7 @@ struct EventDataForScratchGPU {
         cudaCheck( cudaMalloc((void**)&decompMatrixFnnls,
             size * 55 * sizeof(SampleVector::Scalar)) );
         cudaCheck( cudaMalloc((void**)&AtA,
-            size * 100 * sizeof(SampleVector::Scalar)) );
+            size * 55 * sizeof(SampleVector::Scalar)) );
         cudaCheck( cudaMalloc((void**)&Atb,
             size * 10 * sizeof(SampleVector::Scalar)) );
         cudaCheck( cudaMalloc((void**)&samplesMapping,

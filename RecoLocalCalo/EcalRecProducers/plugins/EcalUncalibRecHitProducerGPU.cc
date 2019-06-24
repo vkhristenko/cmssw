@@ -401,7 +401,6 @@ void EcalUncalibRecHitProducerGPU::produce(
         // rec hits objects were not originally member variables
         transferToHost(*ebRecHits_, *eeRecHits_, ctx.stream());
         
-        // TODO
         // for now just sync on the host when transferring back products
         cudaStreamSynchronize(ctx.stream().id());
     }

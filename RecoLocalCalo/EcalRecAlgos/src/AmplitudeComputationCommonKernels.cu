@@ -20,7 +20,6 @@ namespace ecal { namespace multifit {
 ///
 /// assume kernel launch configuration is 
 /// (MAXSAMPLES * nchannels, blocks)
-/// TODO: is there a point to split this kernel further to separate reduction
 /// 
 // FIXME: add __restrict__
 __global__
@@ -63,7 +62,6 @@ void kernel_prep_1d_and_initialize(
 
     if (ch < nchannels) {
         // array of 10 x channels per block
-        // TODO: any other way of doing simple reduction
         // assume bool is 1 byte, should be quite safe
         extern __shared__ char shared_mem[];
         bool* shr_hasSwitchToGain6 = reinterpret_cast<bool*>(
