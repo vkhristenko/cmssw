@@ -290,7 +290,6 @@ void kernel_newiter_update_covariance_compute_cholesky(
 /// launch ctx:
 /// 10 x 10 x nchannels per block
 // FIXME: add __restrict__ whenever is needed
-// TODO: add boundaries checking for threads
 __global__
 void kernel_solve_mm_mv_mults(
         EcalPulseShape const* g_pulse_shape,
@@ -418,7 +417,6 @@ void kernel_solve_mm_mv_mults(
 /// launch ctx:
 /// 1 thread per channel
 // TODO: add __restrict__ 
-// TODO: add logic to conform to the existing impl
 __global__
 void kernel_fnnls(
         SampleVector::Scalar const* g_AtA,
@@ -564,7 +562,8 @@ void kernel_fnnls(
           bool hasNegative = false;
           // TODO: how to go around instabilities in cholesky+solvesr?
           // 1) there are situations where cholesky decomposition + solvers yield nans
-          // 2) there are situations, in particularly for the Cholesky decom,
+          //   nans are treated by checking for them and breaking out
+          // 2) there are situations, in particularly for the Cholesky decomp,
           //   when computing L_i_i = std::sqrt(M_ii - Sum) is non-deterministic
           //   and not stable. This is different from plain nans as there is a result
           //   value that appears to be normal, but differes from cpu 

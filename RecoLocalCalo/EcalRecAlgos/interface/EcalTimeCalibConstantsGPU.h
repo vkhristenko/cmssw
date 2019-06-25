@@ -27,7 +27,6 @@ public:
     // get device pointers
     Product const& getProduct(cuda::stream_t<>&) const;
 
-    // TODO: do this centrally
     // get offset for hashes. equals number of barrel items
     uint32_t getOffset() const { return valuesEB_.size(); }
 

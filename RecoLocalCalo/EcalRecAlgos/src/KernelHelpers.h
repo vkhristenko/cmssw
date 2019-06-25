@@ -105,7 +105,6 @@ struct MapSymM {
     using type = T;
     using base_type = typename std::remove_const<type>::type;
 
-    // TODO: replace with shifting after verifying correctness
     static constexpr auto total = Stride * (Stride + 1) / 2;
     T* data;
     __forceinline__ __device__
@@ -113,7 +112,6 @@ struct MapSymM {
 
     __forceinline__ __device__
     T const& operator()(int const row, int const col) const {
-        // TODO: replace with shifting
         auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
         auto const index = total - tmp + row - col;
         return data[index];
@@ -123,7 +121,6 @@ struct MapSymM {
     __forceinline__ __device__
     typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
     operator()(int const row, int const col) {
-        // TODO: replace with shifting
         auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
         auto const index = total - tmp + row - col;
         return data[index];
@@ -142,7 +139,6 @@ struct MapSymM<T, Stride, Eigen::RowMajor> {
 
     __forceinline__ __device__
     T const& operator()(int const row, int const col) const {
-        // TODO: replace with shifting 
         auto const index = row * (row + 1) / 2 + col;
         return data[index];
     }
@@ -151,7 +147,6 @@ struct MapSymM<T, Stride, Eigen::RowMajor> {
     __forceinline__ __device__
     typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
     operator()(int const row, int const col) {
-        // TODO: replace with shifting
         auto const index = row * (row + 1) / 2 + col;
         return data[index];
     }
@@ -167,7 +162,6 @@ struct MapSymMWithCheck {
     using type = T;
     using base_type = typename std::remove_const<type>::type;
 
-    // TODO: replace with shifting after verifying correctness
     static constexpr auto total = Stride * (Stride + 1) / 2;
     T* data;
     __forceinline__ __device__

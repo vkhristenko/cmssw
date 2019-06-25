@@ -42,8 +42,6 @@ void kernel_time_compute_nullhypot(SampleVector::Scalar const* sample_values,
     int ch = tx / nsamples;
     int nchannels_per_block = blockDim.x / nsamples;
 
-    // TODO: make sure that this branch plays nicely with __syncthreads inside
-    // can there be a deadlock even if the thread is inactive
     if (ch < nchannels) {
         // 
         int sample = tx % nsamples;
@@ -55,8 +53,6 @@ void kernel_time_compute_nullhypot(SampleVector::Scalar const* sample_values,
             s_sum0 + nchannels_per_block*nsamples);
         SampleVector::Scalar* s_sumA = s_sum1 + nchannels_per_block*nsamples;
         SampleVector::Scalar* s_sumAA = s_sumA + nchannels_per_block*nsamples;
-
-        // TODO make sure no div by 0
         auto const inv_error = useless_sample_values[tx] 
             ? 0.0 
             : 1.0 / (sample_value_errors[tx] * sample_value_errors[tx]);
@@ -120,8 +116,6 @@ constexpr float fast_logf(float x) { return unsafe_logf<7>(x); }
 // launch ctx parameters are 
 // 45 threads per channel, X channels per block, Y blocks
 // 45 comes from: 10 samples for i <- 0 to 9 and for j <- i+1 to 9
-// TODO: it might be much beter to use 32 threads per channel instead of 45
-// to simplify the synchronization
 //
 __global__
 void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
@@ -163,7 +157,6 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
     int const nchannels_per_block = blockDim.x / nthreads_per_channel;
     
     // rmeove inactive threads
-    // TODO: need to understand if this is 100% safe in presence of syncthreads
     if (ch >= nchannels) return;
 
     auto const did = DetId{dids[ch]};
@@ -263,7 +256,6 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
         auto const err1 = rtmp * rtmp * (relErr2_i + relErr2_j);
         auto err2 = sample_value_errors[tx_j]*
             (sample_values[tx_i] - sample_values[tx_j])*(invampl_j*invampl_j);
-        // TODO non-divergent branch for a block if each block has 1 channel
         // otherwise non-divergent for groups of 45 threads
         // at this point, pedestal_nums[ch] can be either 0, 1 or 2
         if (pedestal_nums[ch]==2)
@@ -358,7 +350,6 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
             SampleVector::Scalar sumff = 0;
             int const itmin = std::max(-1, static_cast<int>(std::floor(tmax - alphabeta)));
             auto loffset = (static_cast<ScalarType>(itmin) - tmax) * invalphabeta;
-            // TODO: data dependence 
             for (int it = itmin+1; it<nsamples; it++) {
                 loffset += invalphabeta;
                 if (useless_sample_values[ch_start + it])
@@ -377,7 +368,6 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
             auto const sum0 = sum0sNullHypot[ch];
             chi2 = sumAA;
             ScalarType amp = 0;
-            // TODO: sum0 can not be 0 below, need to introduce the check upfront
             if (sumff > 0) {
                 chi2 = sumAA - sumAf * (sumAf / sumff);
                 amp = sumAf / sumff;
@@ -402,7 +392,6 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
     __syncthreads();
 
     // find min chi2 - quite crude for now
-    // TODO validate/check
     char iter = nthreads_per_channel / 2 + nthreads_per_channel % 2;
     bool oddElements = nthreads_per_channel % 2;
 #pragma unroll
@@ -437,8 +426,6 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
 #endif
 
         // store into shared mem and run reduction
-        // TODO: check if cooperative groups would be better
-        // TODO: check if shuffling intrinsics are better
         shr_time_wgt[threadIdx.x] = inverseSigmaSquared;
         shr_time_max[threadIdx.x] = tmax * inverseSigmaSquared;
     } else {
@@ -508,8 +495,6 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
 
 /// launch ctx parameters are 
 /// 10 threads per channel, N channels per block, Y blocks
-/// TODO: do we need to keep the state around or can be removed?!
-//#define DEBUG_FINDAMPLCHI2_AND_FINISH
 __global__
 void kernel_time_compute_findamplchi2_and_finish(
         SampleVector::Scalar const* sample_values,
@@ -558,8 +543,6 @@ void kernel_time_compute_findamplchi2_and_finish(
         : amplitudeFitParametersEE;
 
 
-    // TODO is that better than storing into global and launching another kernel
-    // for the first 10 threads
     if (state == TimeComputationState::NotFinished) {
         auto const alpha = amplitudeFitParameters[0];
         auto const beta = amplitudeFitParameters[1];
@@ -922,7 +905,6 @@ void kernel_time_computation_init(uint16_t const* digis,
             : offsetForHashes + hashedIndexEE(did.rawId());
 
         // set pedestal
-        // TODO this branch is non-divergent for a group of 10 threads
         if (gainId0 == 1 && use_sample(sample_mask, 0)) {
             pedestal = static_cast<SampleVector::Scalar>(adc0);
             num=1;
@@ -944,9 +926,6 @@ void kernel_time_computation_init(uint16_t const* digis,
 
         bool bad = false;
         SampleVector::Scalar sample_value, sample_value_error;
-        // TODO divergent branch
-        // TODO: piece below is general both for amplitudes and timing
-        // potentially there is a way to reduce the amount of code...
         if (!use_sample(sample_mask, sample)) {
             bad = true;
             sample_value = 0;
@@ -969,7 +948,6 @@ void kernel_time_computation_init(uint16_t const* digis,
             bad = true;
         }
 
-        // TODO: make sure we save things correctly when sample is useless
         auto const useless_sample = (sample_value_error <= 0) | bad;
         useless_sample_values[tx] = useless_sample;
         sample_values[tx] = sample_value;
@@ -1186,8 +1164,6 @@ void kernel_time_correction_and_finalize(
     g_jitterError[gtx] = jitterError;
 
     // set the flag
-    // TODO: replace with something more efficient (if required), 
-    // for now just to make it work
     if (amplitude > amplitudeThreshold * rms_x12) {
         auto threshP = outOfTimeThreshG12p;
         auto threshM = outOfTimeThreshG12m;

@@ -31,8 +31,6 @@ void kernel_time_compute_nullhypot(SampleVector::Scalar const* sample_values,
 // launch ctx parameters are 
 // 45 threads per channel, X channels per block, Y blocks
 // 45 comes from: 10 samples for i <- 0 to 9 and for j <- i+1 to 9
-// TODO: it might be much beter to use 32 threads per channel instead of 45
-// to simplify the synchronization
 //
 __global__
 void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
@@ -61,8 +59,6 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
 
 /// launch ctx parameters are 
 /// 10 threads per channel, N channels per block, Y blocks
-/// TODO: do we need to keep the state around or can be removed?!
-//#define DEBUG_FINDAMPLCHI2_AND_FINISH
 __global__
 void kernel_time_compute_findamplchi2_and_finish(
         SampleVector::Scalar const* sample_values,
@@ -104,7 +100,6 @@ void kernel_time_compute_ampl(SampleVector::Scalar const* sample_values,
                               SampleVector::Scalar *g_amplitudeMax,
                               int const nchannels);
 
-//#define ECAL_RECO_CUDA_TC_INIT_DEBUG
 __global__
 void kernel_time_computation_init(uint16_t const* digis,
                                   uint32_t const* dids,
@@ -129,10 +124,8 @@ void kernel_time_computation_init(uint16_t const* digis,
 ///
 /// launch context parameters: 1 thread per channel
 ///
-//#define DEBUG_TIME_CORRECTION
 __global__
 void kernel_time_correction_and_finalize(
-//        SampleVector::Scalar const* g_amplitude,
         ::ecal::reco::StorageScalarType const* g_amplitude,
         uint16_t const* digis,
         uint32_t const* dids,

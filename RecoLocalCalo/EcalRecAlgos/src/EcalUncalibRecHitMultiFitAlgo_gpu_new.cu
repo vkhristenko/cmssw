@@ -133,8 +133,7 @@ void entryPoint(
     if (configParameters.shouldRunTimingComputation) {
         
         //
-        // TODO: this guy can run concurrently with other kernels,
-        // there is no dependence on the order of execution
+        // TODO: could run concurrently with minimization  
         //
         unsigned int threads_time_init = threads_1d;
         unsigned int blocks_time_init = blocks_1d;
@@ -164,9 +163,6 @@ void entryPoint(
         cudaCheck(cudaGetLastError());
 
         // 
-        // TODO: small kernel only for EB. It needs to be checked if 
-        /// fusing such small kernels is beneficial in here
-        //
         // we are running only over EB digis
         // therefore we need to create threads/blocks only for that
         unsigned int const threadsFixMGPA = threads_1d;
