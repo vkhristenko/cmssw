@@ -25,6 +25,7 @@ struct Histos {
     TH1D *hAmplitudesAbsDiffEB, *hAmplitudesAbsDiffEE;
     TH1D *hChi2AbsDiffEB, *hChi2AbsDiffEE;
     TH1I *hAmplBitsEB, *hAmplBitsEE;
+    TH1I *hChi2BitsEB, *hChi2BitsEE;
 };
 
 struct Stats {
@@ -73,12 +74,16 @@ void accumulate(
                 uint32_t mask = 1 << ibit;
                 if ((amp_xor & mask) != 0x0)
                     histos.hAmplBitsEB->Fill(ibit);
+                if ((chi2_xor & mask) != 0x0)
+                    histos.hChi2BitsEB->Fill(ibit);
             }
         } else {
             for (int ibit=0; ibit<32; ibit++) {
                 uint32_t mask = 1 << ibit;
                 if ((amp_xor & mask) != 0x0)
                     histos.hAmplBitsEE->Fill(ibit);
+                if ((chi2_xor & mask) != 0x0)
+                    histos.hChi2BitsEE->Fill(ibit);
             }
         }
 
@@ -160,6 +165,8 @@ int main(int argc, char *argv[]) {
 
     histos.hAmplBitsEB = new TH1I("AmplBitsEB", "AmplBitsEB", 32, 0, 32);
     histos.hAmplBitsEE = new TH1I("AmplBitsEE", "AmplBitsEE", 32, 0, 32);
+    histos.hChi2BitsEB = new TH1I("Chi2BitsEB", "Chi2BitsEB", 32, 0, 32);
+    histos.hChi2BitsEE = new TH1I("Chi2BitsEE", "Chi2BitsEE", 32, 0, 32);
     
     int nbins_absdiff = 100;
     histos.hAmplitudesAbsDiffEB = new TH1D("hAmplitudesAbsDiffEB", 
@@ -230,10 +237,14 @@ int main(int argc, char *argv[]) {
         << "--- num discrs (amp or chi2) = " << stats.ndiscrs << std::endl
         << "--- percentage of discrs (num discrs / nchannels) = " << static_cast<double>(stats.ndiscrs) / static_cast<double>(nchannelsTotal) << std::endl
         << "--- num of discrs with abs diff >= 1% = " << stats.n1pdiscrs << std::endl
-        << "--- num of bit diffs  = "
+        << "--- num of bit diffs for ampl = "
         << histos.hAmplBitsEB->GetEntries() + histos.hAmplBitsEE->GetEntries() << std::endl
-        << "--- percentage of bits discrs = "
-        << static_cast<double>(histos.hAmplBitsEB->GetEntries() + histos.hAmplBitsEE->GetEntries()) / static_cast<double>(32 * nchannelsTotal) << std::endl;
+        << "--- percentage of bits discrs for ampl = "
+        << static_cast<double>(histos.hAmplBitsEB->GetEntries() + histos.hAmplBitsEE->GetEntries()) / static_cast<double>(32 * nchannelsTotal) << std::endl
+        << "--- num of bit diffs for chi2 = "
+        << histos.hChi2BitsEB->GetEntries() + histos.hChi2BitsEE->GetEntries() << std::endl
+        << "--- percentage of bits discrs for chi2 = "
+        << static_cast<double>(histos.hChi2BitsEB->GetEntries() + histos.hChi2BitsEE->GetEntries()) / static_cast<double>(32 * nchannelsTotal) << std::endl;
 
     rf.Close();
     rfout.Write();
