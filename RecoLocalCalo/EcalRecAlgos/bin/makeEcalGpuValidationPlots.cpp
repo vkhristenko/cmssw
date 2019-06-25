@@ -45,6 +45,11 @@ int main(int argc, char *argv[]) {
     auto hSOIAmplitudesEBCPU = new TH1D("hSOIAmplitudesEBCPU", "hSOIAmplitudesEBCPU", nbins, 0, last);
     auto hSOIAmplitudesEECPU = new TH1D("hSOIAmplitudesEECPU", "hSOIAmplitudesEECPU", nbins, 0, last);
 
+    auto hAmplBitsEB = new TH1I("hAmplBitsEB", "hAmplBitsEB", 32, -0.5, 31.5);
+    auto hAmplBitsEE = new TH1I("hAmplBitsEE", "hAmplBitsEE", 32, -0.5, 31.5);
+    auto hChi2BitsEB = new TH1I("hChi2BitsEB", "hChi2BitsEB", 32, -0.5, 31.5);
+    auto hChi2BitsEE = new TH1I("hChi2BitsEE", "hChi2BitsEE", 32, -0.5, 31.5);
+
     auto hChi2EBGPU = new TH1D("hChi2EBGPU", "hChi2EBGPU", nbins_chi2, 0, last_chi2);
     auto hChi2EEGPU = new TH1D("hChi2EEGPU", "hChi2EEGPU", nbins_chi2, 0, last_chi2);
     auto hChi2EBCPU = new TH1D("hChi2EBCPU", "hChi2EBCPU", nbins_chi2, 0, last_chi2);
@@ -99,6 +104,28 @@ int main(int argc, char *argv[]) {
             auto const soi_amp_cpu = wcpuEB->bareProduct()[i].amplitude();
             auto const chi2_gpu = wgpuEB->bareProduct().chi2[i];
             auto const chi2_cpu = wcpuEB->bareProduct()[i].chi2();
+            auto const* amp_bits_gpu = reinterpret_cast<uint32_t const*>(
+                reinterpret_cast<char const*>(&soi_amp_gpu));
+            auto const* amp_bits_cpu = reinterpret_cast<uint32_t const*>(
+                reinterpret_cast<char const*>(&soi_amp_cpu));
+            auto const* chi2_bits_gpu = reinterpret_cast<uint32_t const*>(
+                reinterpret_cast<char const*>(&chi2_gpu));
+            auto const* chi2_bits_cpu = reinterpret_cast<uint32_t const*>(
+                reinterpret_cast<char const*>(&chi2_cpu));
+            auto const amp_xor =
+                *amp_bits_gpu ^
+                *amp_bits_cpu;
+            auto const chi2_xor =
+                *chi2_bits_gpu ^
+                *chi2_bits_cpu;
+            // propagate bits diff
+            for (int ibit=0; ibit<32; ibit++) {
+                uint32_t mask = 1 << ibit;
+                if ((amp_xor & mask) != 0x0)
+                    hAmplBitsEB->Fill(ibit);
+                if ((chi2_xor & mask) != 0x0)
+                    hChi2BitsEB->Fill(ibit);
+            }
 
             hSOIAmplitudesEBGPU->Fill(soi_amp_gpu);
             hSOIAmplitudesEBCPU->Fill(soi_amp_cpu);
@@ -124,6 +151,28 @@ int main(int argc, char *argv[]) {
             auto const soi_amp_cpu = wcpuEE->bareProduct()[i].amplitude();
             auto const chi2_gpu = wgpuEE->bareProduct().chi2[i];
             auto const chi2_cpu = wcpuEE->bareProduct()[i].chi2();
+            auto const* amp_bits_gpu = reinterpret_cast<uint32_t const*>(
+                reinterpret_cast<char const*>(&soi_amp_gpu));
+            auto const* amp_bits_cpu = reinterpret_cast<uint32_t const*>(
+                reinterpret_cast<char const*>(&soi_amp_cpu));
+            auto const* chi2_bits_gpu = reinterpret_cast<uint32_t const*>(
+                reinterpret_cast<char const*>(&chi2_gpu));
+            auto const* chi2_bits_cpu = reinterpret_cast<uint32_t const*>(
+                reinterpret_cast<char const*>(&chi2_cpu));
+            auto const amp_xor =
+                *amp_bits_gpu ^
+                *amp_bits_cpu;
+            auto const chi2_xor =
+                *chi2_bits_gpu ^
+                *chi2_bits_cpu;
+            // propagate bits diff
+            for (int ibit=0; ibit<32; ibit++) {
+                uint32_t mask = 1 << ibit;
+                if ((amp_xor & mask) != 0x0)
+                    hAmplBitsEE->Fill(ibit);
+                if ((chi2_xor & mask) != 0x0)
+                    hChi2BitsEE->Fill(ibit);
+            }
 
             hSOIAmplitudesEEGPU->Fill(soi_amp_gpu);
             hSOIAmplitudesEECPU->Fill(soi_amp_cpu);
@@ -147,7 +196,7 @@ int main(int argc, char *argv[]) {
 
     {
       TCanvas c("plots", "plots", 4200, 6200);
-      c.Divide(2, 3);
+      c.Divide(2, 4);
 
       c.cd(1);
       gPad->SetLogy();
@@ -173,6 +222,23 @@ int main(int argc, char *argv[]) {
       hSOIAmplitudesEBdeltavsCPU->Draw("COLZ");
       c.cd(6);
       hSOIAmplitudesEEdeltavsCPU->Draw("COLZ");
+      c.cd(7);
+      gPad->SetLogy();
+      hAmplBitsEB->SetLineColor(kBlue);
+      hAmplBitsEB->SetLineWidth(1.);
+
+      for (int i=0; i<32; i++)
+          hAmplBitsEB->GetXaxis()->SetBinLabel(i+1, 
+            (std::string("bit ") + std::to_string(i)).c_str());
+      hAmplBitsEB->Draw();
+      c.cd(8);
+      gPad->SetLogy();
+      hAmplBitsEE->SetLineColor(kBlue);
+      hAmplBitsEE->SetLineWidth(1.);
+      for (int i=0; i<32; i++)
+          hAmplBitsEE->GetXaxis()->SetBinLabel(i+1, 
+            (std::string("bit ") + std::to_string(i)).c_str());
+      hAmplBitsEE->Draw();
 
       c.SaveAs("ecal-amplitudes.pdf");
 
@@ -200,6 +266,23 @@ int main(int argc, char *argv[]) {
       hChi2EBdeltavsCPU->Draw("COLZ");
       c.cd(6);
       hChi2EEdeltavsCPU->Draw("COLZ");
+      c.cd(7);
+      gPad->SetLogy();
+      hChi2BitsEB->SetLineColor(kBlue);
+      hChi2BitsEB->SetLineWidth(1.);
+
+      for (int i=0; i<32; i++)
+          hChi2BitsEB->GetXaxis()->SetBinLabel(i+1, 
+            (std::string("bit ") + std::to_string(i)).c_str());
+      hChi2BitsEB->Draw();
+      c.cd(8);
+      gPad->SetLogy();
+      hChi2BitsEE->SetLineColor(kBlue);
+      hChi2BitsEE->SetLineWidth(1.);
+      for (int i=0; i<32; i++)
+          hChi2BitsEE->GetXaxis()->SetBinLabel(i+1, 
+            (std::string("bit ") + std::to_string(i)).c_str());
+      hChi2BitsEE->Draw();
 
       c.SaveAs("ecal-chi2.pdf");
     }
