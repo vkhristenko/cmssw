@@ -1425,7 +1425,7 @@ void minimization_procedure_fused(
     cudaCheck( cudaGetLastError() );
 }
 
-void minimization_procedure(
+void minimization_procedure_splitted_host_launch(
         EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
         EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
         ConditionsProducts const& conditions,

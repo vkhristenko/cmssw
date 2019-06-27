@@ -126,9 +126,34 @@ void entryPoint(
     cudaCheck(cudaGetLastError());
 
     // run minimization kernels
+    switch (configParameters.version) {
+    case KernelsVersion::SplittedHostLaunch:
+        minimization_procedure_splitted_host_launch(
+            eventInputCPU, eventInputGPU, eventOutputGPU,
+            scratch, conditions, configParameters, cudaStream, offsetForHashes);
+        break;
+    case KernelsVersion::SplittedDeviceLaunch:
+        // TODO
+        break;
+    case KernelsVersion::Fused:
+        minimization_procedure_splitted_host_launch(
+            eventInputCPU, eventInputGPU, eventOutputGPU,
+            scratch, conditions, configParameters, cudaStream, offsetForHashes);
+        break;
+    case KernelsVersion::HybridHostLaunch:
+        // TODO
+        break;
+    case KernelsVersion::HybridDeviceLaunch:
+        // TODO
+        break;
+    default:
+        ;
+    }
+    /*
     minimization_procedure(
         eventInputCPU, eventInputGPU, eventOutputGPU,
         scratch, conditions, configParameters, cudaStream, offsetForHashes);
+        */
 
     if (configParameters.shouldRunTimingComputation) {
         

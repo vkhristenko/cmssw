@@ -133,6 +133,7 @@ void EcalUncalibRecHitProducerGPU::fillDescriptions(
     desc.add<std::vector<uint32_t>>("kernelMinimizeThreads", {32, 1, 1});
     // ---- default false or true? It was set to true, but at HLT it is false
     desc.add<bool>("shouldRunTimingComputation", false);
+    desc.add<uint32_t>("kernelsVersion", 0);
     std::string label = "ecalUncalibRecHitProducerGPU";
     confDesc.add(label, desc);
 }
@@ -195,6 +196,9 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(
     // switch to run timing computation kernels
     configParameters_.shouldRunTimingComputation = 
         ps.getParameter<bool>("shouldRunTimingComputation");
+
+    configParameters_.version = ecal::multifit::KernelsVersion{
+        ps.getParameter<uint32_t>("kernelsVersion")};
 
     // minimize kernel launch conf
     auto threadsMinimize = ps.getParameter<std::vector<uint32_t>>("kernelMinimizeThreads");

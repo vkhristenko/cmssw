@@ -72,6 +72,18 @@ struct EventInputDataGPU {
     }
 };
 
+enum class KernelsVersion : uint32_t {
+    // kernels are completely splitted and launched/sync from the host
+    SplittedHostLaunch = 0,
+    // kernels are completely splitted, a grid of (1,1) is launched
+    // and a single gpu thread will do launch/sync of consequitive kernels
+    SplittedDeviceLaunch = 1,
+    // fused minimization
+    Fused = 2,
+    HybridHostLaunch = 3,
+    HybridDeviceLaunch = 4
+};
+
 // parameters have a fixed type
 // Can we go by with single precision
 struct ConfigurationParameters {
@@ -100,6 +112,7 @@ struct ConfigurationParameters {
     std::array<uint32_t, 3> kernelMinimizeThreads;
 
     bool shouldRunTimingComputation;
+    KernelsVersion version;
 };
 
 struct EventOutputDataGPU final : public ::ecal::UncalibratedRecHit<::ecal::Tag::ptr> 
