@@ -152,6 +152,7 @@ struct EventDataForScratchGPU {
     SampleVector::Scalar *decompMatrixMainLoop = nullptr, *decompMatrixFnnls=nullptr;
     SampleVector::Scalar *AtA=nullptr, *Atb=nullptr;
     char *samplesMapping=nullptr, *npassive=nullptr;
+    ::ecal::reco::StorageScalarType *chi2_prev=nullptr;
 
     bool *hasSwitchToGain6=nullptr,
          *hasSwitchToGain1=nullptr,
@@ -194,6 +195,8 @@ struct EventDataForScratchGPU {
             size * 10 * sizeof(char)) );
         cudaCheck( cudaMalloc((void**)&npassive,
             size * sizeof(char)) );
+        cudaCheck( cudaMalloc((void**)&chi2_prev,
+            size * sizeof(::ecal::reco::StorageScalarType)) );
 
         cudaCheck( cudaMalloc((void**)&hasSwitchToGain6,
             size * sizeof(bool)) );
@@ -253,6 +256,7 @@ struct EventDataForScratchGPU {
         cudaCheck( cudaFree(Atb) );
         cudaCheck( cudaFree(samplesMapping) );
         cudaCheck( cudaFree(npassive) );
+        cudaCheck( cudaFree(chi2_prev) );
 
         cudaCheck( cudaFree(hasSwitchToGain6) );
         cudaCheck( cudaFree(hasSwitchToGain1) );

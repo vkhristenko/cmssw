@@ -210,7 +210,8 @@ void kernel_newiter_update_covariance_compute_cholesky(
 
     // preload some values
     //auto noiseValue = noise_value;
-    shrLSums(ty, tx) = 0;
+    if (ty>=tx)
+        shrLSums(ty, tx) = 0;
 
     // compute the updated total covariance matrix
     #pragma unroll
@@ -414,9 +415,586 @@ void kernel_solve_mm_mv_mults(
     }
 }
 
+// must have single channel per block
+// cause __syncthreads will deadlock threads for other channel...
+__global__
+void kernel_minimize_fused(
+        EcalPulseCovariance const* g_PulseCovariance,
+        EcalPulseShape const* g_pulse_shape,
+        SampleVector *g_x,
+        SampleVector const* g_s,
+        char const* g_mapping,
+        char const* g_npassive,
+        ::ecal::reco::StorageScalarType *energies,
+        ::ecal::reco::StorageScalarType *g_chi2,
+        uint32_t const* v2ridmapping,
+        uint32_t *dids,
+        SampleGainVector const* gainNoise,
+        float const* rms_x12,
+        float const* rms_x6,
+        float const* rms_x1,
+        float const* gain12Over6,
+        float const* gain6Over1,
+        double const* G12SamplesCorrelationEB,
+        double const* G6SamplesCorrelationEB,
+        double const* G1SamplesCorrelationEB,
+        double const* G12SamplesCorrelationEE,
+        double const* G6SamplesCorrelationEE,
+        double const* G1SamplesCorrelationEE,
+        bool const* hasSwitchToGain6,
+        bool const* hasSwitchToGain1,
+        bool const* isSaturated,
+        uint32_t const offsetForHashes,
+        uint32_t const startingIteration,
+        uint32_t const nchannels) {
+    // constants / type aliases
+    using DataType = SampleVector::Scalar;
+    using ConstDataType = DataType const;
+    constexpr double eps = 1e-11;
+    constexpr unsigned int max_iterations = 500;
+    constexpr auto nsamples = SampleVector::RowsAtCompileTime;
+    constexpr auto nvaluesForL = MapSymM<DataType, nsamples>::total;
+    constexpr auto nvaluesForAtA = nvaluesForL;
+    constexpr auto nvaluesForPulseShape=EcalPulseShape::TEMPLATESAMPLES;
+    constexpr bool simplifiedNoiseModelForGainSwitch = true;
+    constexpr float addPedestalUncertainty = 0.f;
+    constexpr bool dynamicPedestal = false;
+    
+    // indices
+    auto const tx = threadIdx.x;
+    auto const ty = threadIdx.y;
+    auto const gvch = blockIdx.x;
+    if (gvch >= nchannels) return;
+    auto const grch = v2ridmapping[gvch];
+
+    // non-divergent branch!
+    // only for the zero iteration...
+    if (startingIteration == 0) {
+        // we need to filter out channels that either
+        // - have values that are precomputed
+        // - noise matrix is 0
+        if (grch==idIsInvalidMask)
+            return;
+    }
+   
+    // conditions
+    auto const did = DetId{dids[grch]};
+    auto const isBarrel = did.subdetId() == EcalBarrel;
+    auto const hashedId = isBarrel
+        ? hashedIndexEB(did.rawId())
+        : offsetForHashes + hashedIndexEE(did.rawId());
+    bool tmp0 = hasSwitchToGain6[grch];
+    bool tmp1 = hasSwitchToGain1[grch];
+    auto const* G12SamplesCorrelation = isBarrel
+        ? G12SamplesCorrelationEB
+        : G12SamplesCorrelationEE;
+    auto const* G6SamplesCorrelation = isBarrel
+        ? G6SamplesCorrelationEB
+        : G6SamplesCorrelationEE;
+    auto const* G1SamplesCorrelation = isBarrel
+        ? G1SamplesCorrelationEB
+        : G1SamplesCorrelationEE;
+    bool tmp2 = isSaturated[grch];
+    bool hasGainSwitch = tmp0 || tmp1 || tmp2;
+    auto const vidx = ecal::abs<int>(ty - tx);
+   
+    // compute Noise Covariance Matrix
+    // non-divergent branch for all threads per cnannel
+    float noiseValue = 0;
+    if (hasGainSwitch) {
+        // non-divergent branch - all threads per block
+        if (simplifiedNoiseModelForGainSwitch) {
+            int isample_max = 5; // according to cpu defs
+            int gainidx = gainNoise[grch][isample_max];
+
+            // non-divergent branches
+            if (gainidx==0)
+                noiseValue = rms_x12[hashedId]*rms_x12[hashedId]
+                    * G12SamplesCorrelation[vidx];
+            if (gainidx==1) 
+                noiseValue = gain12Over6[hashedId]*gain12Over6[hashedId] 
+                    * rms_x6[hashedId]*rms_x6[hashedId]
+                    * G6SamplesCorrelation[vidx];
+            if (gainidx==2)
+                noiseValue = gain12Over6[hashedId]*gain12Over6[hashedId]
+                    * gain6Over1[hashedId]*gain6Over1[hashedId] 
+                    * rms_x1[hashedId]*rms_x1[hashedId]
+                    * G1SamplesCorrelation[vidx];
+            if (!dynamicPedestal && addPedestalUncertainty>0.f)
+                noiseValue += addPedestalUncertainty*addPedestalUncertainty;
+        } else {
+            int gainidx=0;
+            char mask = gainidx;
+            int pedestal = gainNoise[grch][ty] == mask ? 1 : 0;
+            noiseValue += /* gainratio is 1*/ rms_x12[hashedId]*rms_x12[hashedId]
+                * pedestal* G12SamplesCorrelation[vidx];
+            // non-divergent branch
+            if (!dynamicPedestal && addPedestalUncertainty>0.f) {
+                noiseValue += /* gainratio is 1 */
+                    addPedestalUncertainty*addPedestalUncertainty*pedestal;
+            }
+
+            //
+            gainidx=1;
+            mask = gainidx;
+            pedestal = gainNoise[grch][ty] == mask ? 1 : 0;
+            noiseValue += gain12Over6[hashedId]*gain12Over6[hashedId]
+                *rms_x6[hashedId]*rms_x6[hashedId]*pedestal
+                * G6SamplesCorrelation[vidx];
+            // non-divergent branch
+            if (!dynamicPedestal && addPedestalUncertainty>0.f) {
+                noiseValue += gain12Over6[hashedId]*gain12Over6[hashedId]
+                    *addPedestalUncertainty*addPedestalUncertainty
+                    *pedestal;
+            }
+            
+            //
+            gainidx=2;
+            mask = gainidx;
+            pedestal = gainNoise[grch][ty] == mask ? 1 : 0;
+            float tmp = gain6Over1[hashedId] * gain12Over6[hashedId];
+            noiseValue+= tmp*tmp * rms_x1[hashedId]*rms_x1[hashedId]
+                *pedestal* G1SamplesCorrelation[vidx];
+            // non-divergent branch
+            if (!dynamicPedestal && addPedestalUncertainty>0.f) {
+                noiseValue += tmp*tmp * addPedestalUncertainty*addPedestalUncertainty
+                    * pedestal;
+            }
+        }
+    } else {
+        auto rms = rms_x12[hashedId];
+        noiseValue = rms*rms * G12SamplesCorrelation[vidx];
+        if (!dynamicPedestal && addPedestalUncertainty>0.f) {
+            //----  add fully correlated component to noise 
+            // covariance to inflate pedestal uncertainty
+            noiseValue += addPedestalUncertainty*addPedestalUncertainty;
+        }
+    }
+
+    // configure shared memory for what can not be reused between iterations
+    __shared__ DataType __shrs[nsamples];
+    __shared__ DataType __shrx[nsamples];
+    __shared__ float __shrP[nvaluesForPulseShape]; 
+    __shared__ DataType shr_current_chi2;
+    __shared__ bool shrFinished;
+    __shared__ char __shrmapping[nsamples];
+
+    __shared__ DataType __shrL[nvaluesForL];
+    __shared__ DataType __shrAtmp[nsamples*nsamples];
+    __shared__ DataType __shrbtmp[nsamples];
+    __shared__ DataType __shrAtA[nvaluesForAtA];
+    __shared__ DataType __shrAtb[nsamples];
+
+    // configure shared memory for what can be reused - scratch
+    DataType *__shrLSums = __shrAtmp;
+    DataType *__shrCovarianceDiagValues = __shrbtmp;
+    DataType *__shrLtmp = __shrAtmp;
+    DataType *__shrstmp = __shrbtmp;
+    DataType *__shrtmp = __shrAtmp + nvaluesForL;
+    DataType *__shrv = __shrAtmp;
+   
+    // map global mem
+    MapM<float const, nvaluesForPulseShape, Eigen::RowMajor> PulseCovariance
+    {reinterpret_cast<float const*>(g_PulseCovariance + hashedId)};
+    MapMForPM<float> pulse_shape{(float*)&g_pulse_shape[hashedId]};
+    MapV<ConstDataType> s{g_s[grch].data()};
+    MapV<DataType> x{g_x[grch].data()};
+    MapV<char const> mapping{g_mapping + grch*nsamples};
+    
+    // map allocated and to be reused shared mem
+    MapV<DataType> shrCovarianceDiagValues{__shrCovarianceDiagValues};
+    MapSymM<DataType, nsamples, Eigen::RowMajor> shrL{__shrL};
+    MapSymM<DataType, nsamples> shrLSums{__shrLSums};
+    MapV<DataType> shrx{__shrx};
+    MapV<DataType> shrs{__shrs};
+    MapV<char> shrmapping{__shrmapping};
+    MapMForPM<float> shrP{__shrP};
+    
+    MapM<DataType, nsamples, Eigen::RowMajor> shrAtmp{__shrAtmp};
+    MapV<DataType> shrbtmp{__shrbtmp};
+    MapSymM<DataType, nsamples, Eigen::ColMajor> shrAtA{__shrAtA};
+    MapV<DataType> shrAtb{__shrAtb};
+        
+    MapSymMWithCheck<ConstDataType, nsamples, Eigen::ColMajor> 
+    shrAtAWithCheck{shrAtA.data};
+    MapV<DataType> shrstmp{__shrstmp};
+    MapV<DataType> shrv{__shrv};
+    MapV<DataType> shrtmp{__shrtmp};
+    MapSymM<DataType, nsamples, Eigen::RowMajor> shrLtmp{__shrLtmp};
+    
+    // initialization
+    // pull from global or init to 0 depending on config
+    if (ty==0 && tx==0) {
+        shrFinished = false;
+        shr_current_chi2 = startingIteration==0 ? 0 : g_chi2[grch];
+    }
+
+    // mov pulse shape from global to shared
+    if (ty == 1)
+        shrP.data[tx] = pulse_shape.data[tx];
+    if (ty == 2 && tx<2)
+        shrP.data[10 + tx] = pulse_shape.data[10 + tx];
+
+    // initialize amplitudes
+    // if we are running minimization fully from scratch, set 0s
+    // if we are continueing, load/store from global mem to shared
+    if (ty==4)
+        shrx(tx) = startingIteration==0 ? 0 : x(tx) ;
+    if (ty == 3)
+        shrs(tx) = s(tx);
+    if (ty==5) 
+        shrmapping(tx) = startingIteration ? tx : mapping(tx);
+    __syncthreads();
+
+    // init number of passive values in the set
+    auto nPassive = startingIteration==0 ? 0 : g_npassive[grch];
+
+    // main outer loop
+    auto iteration = startingIteration;
+    for (; iteration<50; ++iteration) {
+        // compute the updated total covariance matrix
+        #pragma unroll
+        for (int ipulse=0; ipulse<nsamples; ipulse++) {
+            auto const amplitude = shrx(ipulse);
+            if (amplitude == 0)
+                continue;
+
+            // note, we do not permute results anymore!
+            // therefore straightforward mapping
+            auto const bx = ipulse - 5;
+            auto const first_sample_t = std::max(0, bx + 3);
+            if (!(tx >= first_sample_t && ty >= first_sample_t))
+                continue;
+            
+            // note: we are no longer using 19 x 19 pulse covariance matrix,
+            // just what conditions provide directly
+            auto const offset = -3 - bx;
+            auto const amp_sq = amplitude * amplitude;
+            auto const nsample_pulse = nsamples - first_sample_t;
+
+            // update matrix eleement
+            noiseValue += amp_sq * PulseCovariance(ty + offset, tx + offset);
+        }
+
+        // we need to store to shared mem diagonal values
+        if (ty == tx)
+            shrCovarianceDiagValues(tx) = noiseValue;
+        if (ty>=tx)
+            shrLSums(ty, tx) = 0;
+        __syncthreads();
+
+        //
+        // cholesky decomposition of 10 x 10
+        // noiseValue is the (i, j) element of a matrix to decompose
+        //
+
+        // column 0
+        // compute L(ty, 0) for ty >= 1
+        // note, important we get m_j_j = m(tx) -> we need same value for 
+        // all values of a given column
+        auto const m_j_j = shrCovarianceDiagValues(tx);
+        auto const m_i_j = noiseValue;
+        if (tx == 0 && ty == 0)
+            shrL(0, 0) = std::sqrt(m_j_j);
+        else if (tx==0 && ty >=1)
+            shrL(ty, 0) = noiseValue / std::sqrt(m_j_j);
+        __syncthreads();
+
+        // TODO verify that hte loop is unrolled
+        #pragma unroll
+        for (int column=1; column<nsamples; ++column) {
+            if (tx==column && ty>=column) {
+                // compute L(j, j) = sqrt(M(j, j) - Sum[k](L(j, k) * L(j, k)))
+                auto const sumsq = shrLSums(column, column) + 
+                    shrL(column, column-1) * shrL(column, column-1);
+                auto const l_j_j = std::sqrt(m_j_j - sumsq);
+                if (ty == column)
+                    shrL(column, column) = l_j_j;
+                else {
+                    auto const sumsq_i_j = shrLSums(ty, column) + 
+                        shrL(ty, column-1) * shrL(column, column-1);
+                    auto const tmp = m_i_j - sumsq_i_j;
+                    auto const l_i_column = tmp / l_j_j;
+                    shrL(ty, column) = l_i_column;
+                }
+            }
+
+            if (tx>column && ty>=tx)
+                shrLSums(ty, tx) += shrL(ty, column-1) * shrL(tx, column-1);
+            __syncthreads();
+        }
+
+        // shrL contains main loop Cholesky Decomp
+        // shrLSums can be reused from this point
+        // shrCovarianceDiagValues can be reused from this point
+
+        // run forward substitution
+        // use 10 thraeds for matrix and 1 thread vector
+        // TODO: would it be better with more threads + synching???
+        if (ty==0) {
+            ForwardSubstitutionUnrolled<DataType, nsamples>::compute(
+                shrL, shrP, shrAtmp, tx);
+        } else if (ty==1 && tx == 1) {
+            ForwardSubstitutionUnrolled<DataType, nsamples>::compute(
+                shrL, shrs, shrbtmp);
+        }
+        __syncthreads();
+
+        // matrix matrix and matrix vector mult
+        // shrAtmp is matrix A
+        // shrbtmp is vector b
+        DataType ata_i_j = 0;
+        #pragma unroll
+        for (int i=0; i<nsamples; ++i) {
+            auto const A_i_ty = shrAtmp(i, ty);
+            ata_i_j += shrAtmp(i, ty) * shrAtmp(i, tx);
+        }
+
+        // store back to global. note AtA is symmetric only L is stored
+        if (ty>=tx)
+            shrAtA(ty, tx) = ata_i_j;
+        if (ty == 0) {
+            DataType sum = 0;
+            #pragma unroll
+            for (int i=0; i<nsamples; i++)
+                sum += shrAtmp(i, tx) * shrbtmp(i);
+
+            // store back to global
+            shrAtb(tx) = sum;
+        }
+        __syncthreads();
+
+        //
+        // perform fnnls
+        // 
+
+        // TODO: can we use more than 1 thread in here!?
+        if (tx==0 && ty==0) {
+            // used to break from the loop
+            unsigned int w_max_idx_prev = 0;
+            DataType w_max_prev = 0;
+            constexpr double eps = 1e-11;
+            auto eps_to_use = eps;
+
+            // main loop
+            for (int iter = 0; iter < max_iterations; ++iter) {
+                if (iter>0 || nPassive==0) {
+                    const auto nActive = nsamples - nPassive;
+
+                    if(!nActive)
+                      break;
+
+                    //  
+                    unsigned int w_max_idx = -1;
+                    auto max_w {static_cast<DataType>(-1)};
+                    for (unsigned int i=nsamples-nActive; i<nsamples; i++) {
+                        auto sum_per_row{static_cast<DataType>(0)};
+                        auto const real_i = shrmapping(i);
+                        auto const atb = shrAtb(real_i);
+                        #pragma unroll
+                        for (unsigned int k=0; k<nsamples; ++k)
+                            // note, we do not need to look up k in the mapping
+                            // both AtA and x have swaps applied -> therefore dot product will 
+                            // not change per row
+                            sum_per_row += shrAtAWithCheck(real_i, k) * shrx(k);
+
+                        // compute gradient value and check if it is greater than max
+                        auto const wvalue = atb - sum_per_row;
+                        if (max_w < wvalue) {
+                            max_w = wvalue;
+                            w_max_idx = i;
+                        }
+                    }
+
+                    // check for convergence
+                    if (max_w < eps_to_use || 
+                        (w_max_idx==w_max_idx_prev && max_w==w_max_prev))
+                      break;
+
+                    // update
+                    w_max_prev = max_w;
+                    w_max_idx_prev = w_max_idx;
+
+                    // swap samples to maintain passive vs active set
+                    Eigen::numext::swap(
+                            shrmapping(nPassive), 
+                            shrmapping(w_max_idx));
+                    ++nPassive;
+                }
+
+                // inner loop
+                while (nPassive > 0) {
+                  switch (nPassive) {
+                  case 1:
+                      FusedCholeskySolver<DataType, 1>::compute(
+                        shrAtAWithCheck, shrAtb, shrstmp, shrmapping);
+                      break;
+                  case 2:
+                      FusedCholeskySolver<DataType, 2>::compute(
+                        shrAtAWithCheck, shrAtb, shrstmp, shrmapping);
+                      break;
+                  case 3:
+                      FusedCholeskySolver<DataType, 3>::compute(
+                        shrAtAWithCheck, shrAtb, shrstmp, shrmapping);
+                      break;
+                  case 4:
+                      FusedCholeskyForwardSubstUnrolled<DataType, 4>::compute(
+                        shrAtAWithCheck, shrAtb, shrLtmp, shrtmp, shrmapping);
+                      BackwardSubstitutionUnrolled<DataType, 4>::compute(
+                        shrLtmp, shrtmp, shrstmp);
+                      break;
+                  case 5:
+                      FusedCholeskyForwardSubstUnrolled<DataType, 5>::compute(
+                        shrAtAWithCheck, shrAtb, shrLtmp, shrtmp, shrmapping);
+                      BackwardSubstitutionUnrolled<DataType, 5>::compute(
+                        shrLtmp, shrtmp, shrstmp);
+                      break;
+                  case 6:
+                      FusedCholeskyForwardSubstUnrolled<DataType, 6>::compute(
+                        shrAtAWithCheck, shrAtb, shrLtmp, shrtmp, shrmapping);
+                      BackwardSubstitutionUnrolled<DataType, 6>::compute(
+                        shrLtmp, shrtmp, shrstmp);
+                      break;
+                  case 7:
+                      FusedCholeskyForwardSubstUnrolled<DataType, 7>::compute(
+                        shrAtAWithCheck, shrAtb, shrLtmp, shrtmp, shrmapping);
+                      BackwardSubstitutionUnrolled<DataType, 7>::compute(
+                        shrLtmp, shrtmp, shrstmp);
+                      break;
+                  case 8:
+                      FusedCholeskyForwardSubstUnrolled<DataType, 8>::compute(
+                        shrAtAWithCheck, shrAtb, shrLtmp, shrtmp, shrmapping);
+                      BackwardSubstitutionUnrolled<DataType, 8>::compute(
+                        shrLtmp, shrtmp, shrstmp);
+                      break;
+                  default:
+                      FusedCholeskyForwardSubst<DataType>::compute(
+                        shrAtAWithCheck, shrAtb, shrLtmp, shrtmp, shrmapping, nPassive);
+                      BackwardSubstitution<DataType>::compute(
+                        shrLtmp, shrtmp, shrstmp, nPassive);
+                  }
+                
+                  bool hasNegative = false;
+                  // TODO: how to go around instabilities in cholesky+solvesr?
+                  // 1) there are situations where cholesky decomposition + solvers yield nans
+                  //   nans are treated by checking for them and breaking out
+                  // 2) there are situations, in particularly for the Cholesky decomp,
+                  //   when computing L_i_i = std::sqrt(M_ii - Sum) is non-deterministic
+                  //   and not stable. This is different from plain nans as there is a result
+                  //   value that appears to be normal, but differes from cpu 
+                  bool hasNans = false;
+                  for (int ii=0; ii<nPassive; ++ii) {
+                      auto const s_ii = shrstmp(ii);
+                      hasNegative |= s_ii <= 0;
+                      hasNans |= isnan(s_ii);
+                  }
+                  if (hasNans)
+                      break;
+                  if (!hasNegative) {
+                      for (int i=0; i<nPassive; ++i) {
+                          // note, s contains passive/active set layout
+                          // and x contains unpermuted final values in their repective pos
+                          auto const real_i = shrmapping(i);
+                          shrx(real_i) = shrstmp(i);
+                      }
+                      break;
+                  }
+
+                  auto alpha = std::numeric_limits<DataType>::max();
+                  char alpha_idx=0, real_alpha_idx=0;
+
+                  for (auto i = 0; i < nPassive; ++i) {
+                    auto const s_i = shrstmp(i);
+                    if (s_i <= 0.) {
+                      auto const real_i = shrmapping(i);
+                      auto const x_i = shrx(real_i);
+                      auto const ratio = x_i / (x_i - s_i);
+                      if (ratio < alpha) {
+                        alpha = ratio;
+                        alpha_idx = i;
+                        real_alpha_idx = real_i;
+                      }
+                    }
+                  }
+
+                  for (int ii=0; ii<nPassive; ++ii) {
+                    auto const real_i = shrmapping(ii);
+                    auto const x_ii = shrx(real_i);
+                    shrx(real_i) += alpha * (shrstmp(ii) - x_ii);
+                  }
+                  shrx(real_alpha_idx) = 0;
+                  --nPassive;
+
+                  Eigen::numext::swap(
+                        shrmapping(nPassive), 
+                        shrmapping(alpha_idx));
+                }
+
+                // this is as it was in cpu version
+                // note: iter was incremented first and then the check was done
+                if ((iter+1) % 16 == 0)
+                    eps_to_use *= 2;
+            }
+        }
+        __syncthreads();
+
+        //
+        // compute chi2
+        //
+        if (ty==0) {
+            DataType sum{0};
+            auto const s_sample = shrs(tx);
+            #pragma unroll
+            for (int i=0; i<nsamples; ++i)
+                sum += shrP(tx, i) * shrx(i);
+            auto const v_sample = sum - s_sample;
+            shrv(tx) = v_sample;
+        }
+        __syncthreads();
+
+        // use single thread in here for now
+        // FIXME: should we add?
+        if (ty==0 && tx==0) {
+            // f/b subst solver
+            ForwardSubstitutionUnrolled<DataType, nsamples>::compute(
+                shrL, shrv, shrtmp);
+
+            // sum will be the chi2 
+            DataType chi2_new{0};
+            auto const chi2_old =  shr_current_chi2;
+            #pragma unroll
+            for (int i=0; i<nsamples; i++)
+                chi2_new += shrtmp(i)*shrtmp(i);
+            shr_current_chi2 = chi2_new;
+            auto const chi2_diff = chi2_new - chi2_old;
+
+            // if this channel finished - set the flag
+            if (ecal::abs(chi2_diff) < 1e-3) {
+                shrFinished=true;
+            }
+        }
+        __syncthreads();
+
+        // manage state for all threads per channel
+        // note, non-divergent branch per block 
+        // all threads per channel will follow or not
+        if (shrFinished) {
+            // store to global once finished minimization
+            if (ty==0)
+                x(tx) = shrx(tx);
+            if (ty==1 && tx==0)
+                g_chi2[grch] = shr_current_chi2;
+            if (ty==1 && tx==1)
+                energies[grch] = shrx(5); // TODO remove hardcoded values
+            return;
+        }
+    }
+}
+
 /// launch ctx:
 /// 1 thread per channel
 // TODO: add __restrict__ 
+// TODO: do we need shared mem in here?
 __global__
 void kernel_fnnls(
         SampleVector::Scalar const* g_AtA,
@@ -569,8 +1147,9 @@ void kernel_fnnls(
           //   value that appears to be normal, but differes from cpu 
           bool hasNans = false;
           for (int ii=0; ii<nPassive; ++ii) {
-              hasNegative |= s(ii) <= 0;
-              hasNans |= isnan(s(ii));
+              auto const s_ii = s(ii);
+              hasNegative |= s_ii <= 0;
+              hasNans |= isnan(s_ii);
           }
           if (hasNans)
               break;
@@ -588,10 +1167,11 @@ void kernel_fnnls(
           char alpha_idx=0, real_alpha_idx=0;
 
           for (auto i = 0; i < nPassive; ++i) {
-            if (s(i) <= 0.) {
+            auto const s_i = s(i);
+            if (s_i <= 0.) {
               auto const real_i = mapping(i);
               auto const x_i = x(real_i);
-              auto const ratio = x_i / (x_i - s(i));
+              auto const ratio = x_i / (x_i - s_i);
               if (ratio < alpha) {
                 alpha = ratio;
                 alpha_idx = i;
@@ -633,6 +1213,7 @@ void kernel_compute_chi2(
         ::ecal::reco::StorageScalarType *energies,
         SampleVector const* g_s,
         ::ecal::reco::StorageScalarType* g_chi2,
+        ::ecal::reco::StorageScalarType* g_chi2_prev,
         uint32_t const* input_v2ridmapping,
         uint32_t *output_v2ridmapping,
         uint32_t *dids,
@@ -739,6 +1320,20 @@ void kernel_compute_chi2(
         // state management logic
         // if this ch needs to continue, inc the counter atomically
         if (ecal::abs(chi2_diff) >= 1e-3) {
+            // FIXME: remove hardcodded values
+            if (iteration>=9) {
+                auto const chi2_prev = g_chi2_prev[grch];
+                // TODO debugging
+                printf("chid = %d chi2_new = %f chi2_old = %f chi2_prev = %f\n",
+                    grch, chi2_new, chi2_old, chi2_prev);
+                for (int i=0; i<10;i ++)
+                    printf("x(%d) = %f\n", i, x(i));
+                // if there is a rotation of chi2 values stop here
+                //if (ecal::abs(chi2_new - chi2_prev) / chi2_prev < 1e-3)
+                //    return;
+            }
+
+            g_chi2_prev[grch] = chi2_old;
             auto const pos = atomicAdd(pChannelsLeft, 1);
             output_v2ridmapping[pos] = grch;
         }
@@ -781,6 +1376,55 @@ void kernel_minimization_launcher() {
 }
 */
 
+void minimization_procedure_fused(
+        EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
+        EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
+        ConditionsProducts const& conditions,
+        ConfigurationParameters const& configParameters,
+        cuda::stream_t<>& cudaStream,
+        unsigned int offsetForHashes) {
+    // constants
+    unsigned int totalChannels = eventInputCPU.ebDigis.size() 
+        + eventInputCPU.eeDigis.size();
+    constexpr auto nsamples = SampleVector::RowsAtCompileTime;
+    using DataType = SampleVector::Scalar;
+
+    // launch 
+    dim3 const ts{nsamples, nsamples, 1};
+    uint32_t const bs = totalChannels;
+    kernel_minimize_fused<<<bs, ts, 0, cudaStream.id()>>>(
+        conditions.pulseCovariances.values,
+        conditions.pulseShapes.values,
+        (SampleVector*)eventOutputGPU.amplitudesAll,
+        scratch.samples,
+        scratch.samplesMapping,
+        scratch.npassive,
+        eventOutputGPU.amplitude,
+        eventOutputGPU.chi2,
+        scratch.v2rmapping_1,
+        eventInputGPU.ids,
+        scratch.gainsNoise,
+        conditions.pedestals.rms_x12,
+        conditions.pedestals.rms_x6,
+        conditions.pedestals.rms_x1,
+        conditions.gainRatios.gain12Over6,
+        conditions.gainRatios.gain6Over1,
+        conditions.samplesCorrelation.EBG12SamplesCorrelation,
+        conditions.samplesCorrelation.EBG6SamplesCorrelation,
+        conditions.samplesCorrelation.EBG1SamplesCorrelation,
+        conditions.samplesCorrelation.EEG12SamplesCorrelation,
+        conditions.samplesCorrelation.EEG6SamplesCorrelation,
+        conditions.samplesCorrelation.EEG1SamplesCorrelation,
+        scratch.hasSwitchToGain6,
+        scratch.hasSwitchToGain1,
+        scratch.isSaturated,
+        offsetForHashes,
+        0,
+        totalChannels
+    );
+    cudaCheck( cudaGetLastError() );
+}
+
 void minimization_procedure(
         EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
         EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
@@ -796,11 +1440,10 @@ void minimization_procedure(
 
     // FIXME: all the constants below need to be propagated properly
     // once results are valid
-
     for (int iteration=0; iteration<50; ++iteration) {
-        //std::cout << "iteration = " << iteration 
-        //          << "  nchannels = " << nchannels
-        //          << std::endl;
+        std::cout << "iteration = " << iteration 
+                  << "  nchannels = " << nchannels
+                  << std::endl;
 
         //
         dim3 const ts1{nsamples, nsamples, nchannels>10 ? 10 : nchannels};
@@ -887,6 +1530,7 @@ void minimization_procedure(
             eventOutputGPU.amplitude,
             scratch.samples,
             eventOutputGPU.chi2,
+            scratch.chi2_prev,
             iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
             iteration%2==0 ? scratch.v2rmapping_2 : scratch.v2rmapping_1,
             eventInputGPU.ids,

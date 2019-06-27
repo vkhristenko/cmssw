@@ -11,6 +11,14 @@ class EcalUncalibratedRecHit;
 
 namespace ecal { namespace multifit {
 
+void minimization_procedure_fused(
+        EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
+        EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
+        ConditionsProducts const& conditions,
+        ConfigurationParameters const& configParameters,
+        cuda::stream_t<>& cudaStream,
+        unsigned int const offsetForHashes);
+
 void minimization_procedure(
         EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
         EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
@@ -18,6 +26,7 @@ void minimization_procedure(
         ConfigurationParameters const& configParameters,
         cuda::stream_t<>& cudaStream,
         unsigned int const offsetForHashes);
+
 }}
 
 #endif // RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernelsV1
