@@ -128,6 +128,7 @@ void entryPoint(
     // run minimization kernels
     switch (configParameters.version) {
     case KernelsVersion::SplittedHostLaunch:
+        std::cout << "running splitted host launch version\n";
         minimization_procedure_splitted_host_launch(
             eventInputCPU, eventInputGPU, eventOutputGPU,
             scratch, conditions, configParameters, cudaStream, offsetForHashes);
@@ -136,12 +137,16 @@ void entryPoint(
         // TODO
         break;
     case KernelsVersion::Fused:
-        minimization_procedure_splitted_host_launch(
+        std::cout << "running fused version\n";
+        minimization_procedure_fused(
             eventInputCPU, eventInputGPU, eventOutputGPU,
             scratch, conditions, configParameters, cudaStream, offsetForHashes);
         break;
     case KernelsVersion::HybridHostLaunch:
-        // TODO
+        std::cout << "running hybrid host launch version\n";
+        minimization_procedure_hybrid_host_launch(
+            eventInputCPU, eventInputGPU, eventOutputGPU,
+            scratch, conditions, configParameters, cudaStream, offsetForHashes);
         break;
     case KernelsVersion::HybridDeviceLaunch:
         // TODO

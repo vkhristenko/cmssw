@@ -391,6 +391,15 @@ void kernel_solve_mm_mv_mults(
     }
     __syncthreads();
 
+    /*
+    if (grch == 5) {
+        if (ty==0 && tx==0) {
+            for (int i=0; i<10; i++)
+                for (int j=0; j<=i; j++)
+                    printf("L(%d, %d) = %f\n", i, j, shrL(i, j));
+        }
+    }*/
+
     // matrix matrix and matrix vector mult
     // shrAtmp is matrix A
     // shrbtmp is vector b
@@ -592,6 +601,13 @@ void kernel_minimize_fused(
     DataType *__shrstmp = __shrbtmp;
     DataType *__shrtmp = __shrAtmp + nvaluesForL;
     DataType *__shrv = __shrAtmp;
+
+    // TODO debuggin
+    /*
+    int ch_to_test = 5;
+    if (grch==ch_to_test && ty==0 && tx==0) 
+        printf("starting iteration is %d\n", startingIteration);
+        */
    
     // map global mem
     MapM<float const, nvaluesForPulseShape, Eigen::RowMajor> PulseCovariance
@@ -643,7 +659,7 @@ void kernel_minimize_fused(
     if (ty == 3)
         shrs(tx) = s(tx);
     if (ty==5) 
-        shrmapping(tx) = startingIteration ? tx : mapping(tx);
+        shrmapping(tx) = startingIteration==0 ? tx : mapping(tx);
     __syncthreads();
 
     // init number of passive values in the set
@@ -652,6 +668,24 @@ void kernel_minimize_fused(
     // main outer loop
     auto iteration = startingIteration;
     for (; iteration<50; ++iteration) {
+        /*
+        // TODO: debugging
+        if (grch == ch_to_test) {
+            if (ty==0 && tx==0) {
+                printf("iteration = %d\n", iteration);
+                for (int i=0; i<10; i++)
+                    printf("s(%d) = %f\n", i, shrs(i));
+                for (int i=0; i<10; i++)
+                    for (int j=0; j<10; j++)
+                        printf("P(%d, %d) = %f\n", i, j, shrP(i, j));
+            }
+        }
+        __syncthreads();
+        */
+
+        // retrieve precomputed noiseValue 
+        auto noise_value = noiseValue;
+
         // compute the updated total covariance matrix
         #pragma unroll
         for (int ipulse=0; ipulse<nsamples; ipulse++) {
@@ -673,19 +707,19 @@ void kernel_minimize_fused(
             auto const nsample_pulse = nsamples - first_sample_t;
 
             // update matrix eleement
-            noiseValue += amp_sq * PulseCovariance(ty + offset, tx + offset);
+            noise_value += amp_sq * PulseCovariance(ty + offset, tx + offset);
         }
 
         // we need to store to shared mem diagonal values
         if (ty == tx)
-            shrCovarianceDiagValues(tx) = noiseValue;
+            shrCovarianceDiagValues(tx) = noise_value;
         if (ty>=tx)
             shrLSums(ty, tx) = 0;
         __syncthreads();
 
         //
         // cholesky decomposition of 10 x 10
-        // noiseValue is the (i, j) element of a matrix to decompose
+        // noise_value is the (i, j) element of a matrix to decompose
         //
 
         // column 0
@@ -693,11 +727,11 @@ void kernel_minimize_fused(
         // note, important we get m_j_j = m(tx) -> we need same value for 
         // all values of a given column
         auto const m_j_j = shrCovarianceDiagValues(tx);
-        auto const m_i_j = noiseValue;
+        auto const m_i_j = noise_value;
         if (tx == 0 && ty == 0)
             shrL(0, 0) = std::sqrt(m_j_j);
         else if (tx==0 && ty >=1)
-            shrL(ty, 0) = noiseValue / std::sqrt(m_j_j);
+            shrL(ty, 0) = noise_value / std::sqrt(m_j_j);
         __syncthreads();
 
         // TODO verify that hte loop is unrolled
@@ -723,6 +757,16 @@ void kernel_minimize_fused(
                 shrLSums(ty, tx) += shrL(ty, column-1) * shrL(tx, column-1);
             __syncthreads();
         }
+
+        // TODO: debugging
+        /*
+        if (grch==ch_to_test && ty==0 && tx==0) {
+            for (int i=0; i<10; i++)
+                for (int j=0; j<=i; j++)
+                printf("L(%d, %d) = %f\n", i, j, shrL(i, j));
+        }
+        __syncthreads();
+        */
 
         // shrL contains main loop Cholesky Decomp
         // shrLSums can be reused from this point
@@ -764,6 +808,18 @@ void kernel_minimize_fused(
         }
         __syncthreads();
 
+        // TODO: debugging
+        /*
+        if (grch==ch_to_test) {
+            printf("AtA(%d, %d) = %f\n", ty, tx, shrAtA(ty, tx));
+            if (ty==0)
+                printf("Atb(%d) = %f\n", tx, shrAtb(tx));
+            if (ty==0)
+                printf("s(%d) = %f\n", tx, shrs(tx));
+        }
+        __syncthreads();
+        */
+
         //
         // perform fnnls
         // 
@@ -775,6 +831,17 @@ void kernel_minimize_fused(
             DataType w_max_prev = 0;
             constexpr double eps = 1e-11;
             auto eps_to_use = eps;
+
+            /*
+            if (grch==ch_to_test) {
+                for (int i=0; i<10; i++)
+                    for (int j=0; j<=i; j++)
+                        printf("AtA(%d, %d) = %f\n", i, j, shrAtA(i, j));
+                for (int i=0; i<10; i++)
+                    printf("Atb(%d) = %f\n", i, shrAtb(i));
+                for (int i=0; i<10; i++)
+                    printf("x(%d) = %f\n", i, shrx(i));
+            }*/
 
             // main loop
             for (int iter = 0; iter < max_iterations; ++iter) {
@@ -935,6 +1002,13 @@ void kernel_minimize_fused(
                 if ((iter+1) % 16 == 0)
                     eps_to_use *= 2;
             }
+
+            /*
+            // TODO: debugging
+            if (grch == ch_to_test)
+                for (int i=0; i<10; i++)
+                    printf("x(%d) = %f\n", i, shrx(i));
+                    */
         }
         __syncthreads();
 
@@ -968,6 +1042,16 @@ void kernel_minimize_fused(
             shr_current_chi2 = chi2_new;
             auto const chi2_diff = chi2_new - chi2_old;
 
+            /*
+            // TODO debugging
+            if (grch == ch_to_test) {
+                printf("chi2_new = %f chi2_old = %f\n",
+                    chi2_new, chi2_old);
+                for (int i=0; i<10; i++)
+                    printf("x(%d) = %f\n", i, shrx(i));
+            }
+            */
+
             // if this channel finished - set the flag
             if (ecal::abs(chi2_diff) < 1e-3) {
                 shrFinished=true;
@@ -978,17 +1062,17 @@ void kernel_minimize_fused(
         // manage state for all threads per channel
         // note, non-divergent branch per block 
         // all threads per channel will follow or not
-        if (shrFinished) {
-            // store to global once finished minimization
-            if (ty==0)
-                x(tx) = shrx(tx);
-            if (ty==1 && tx==0)
-                g_chi2[grch] = shr_current_chi2;
-            if (ty==1 && tx==1)
-                energies[grch] = shrx(5); // TODO remove hardcoded values
-            return;
-        }
+        if (shrFinished)
+            break;
     }
+
+    // store to global once finished minimization
+    if (ty==0)
+        x(tx) = shrx(tx);
+    if (ty==1 && tx==0)
+        g_chi2[grch] = shr_current_chi2;
+    if (ty==1 && tx==1)
+        energies[grch] = shrx(5); // TODO remove hardcoded values
 }
 
 /// launch ctx:
@@ -1045,6 +1129,19 @@ void kernel_fnnls(
     unsigned int w_max_idx_prev = 0;
     DataType w_max_prev = 0;
     double eps_to_use = eps;
+
+    /*
+    // TODO debugging
+    if (rch == 5) {
+        for (int i=0; i<10; i++)
+            for (int j=0; j<=i; j++)
+                printf("AtA(%d, %d) = %f\n", i, j, AtA(i, j));
+        for (int i=0; i<10; i++)
+            printf("Atb(%d) = %f\n", i, Atb(i));
+        for (int i=0; i<10; i++)
+            printf("x(%d) = %f\n", i, x(i));
+    }
+    */
 
     // main loop
     for (int iter = 0; iter < max_iterations; ++iter) {
@@ -1199,6 +1296,12 @@ void kernel_fnnls(
             eps_to_use *= 2;
     }
 
+    /*
+    if (rch == 5) {
+        for (int i=0; i<10; i++)
+            printf("x(%d) = %f\n", i, x(i));
+    }*/
+
     // store back to global
     g_npassive[rch] = nPassive;
 }
@@ -1317,10 +1420,25 @@ void kernel_compute_chi2(
         g_chi2[grch] = chi2_new;
         auto const chi2_diff = chi2_new - chi2_old;
 
+        /*
+        if (grch == 5) {
+            printf("chi2_new = %f chi2_old = %f\n",
+                chi2_new, chi2_old);
+            for(int i=0; i<10; i++)
+                printf("x(%d) = %f\n", i, x(i));
+            for (int i=0; i<10; i++)
+                printf("s(%d) = %f\n", i, s(i));
+            for(int i=0; i<10; i++)
+                for (int j=0; j<10; j++)
+                    printf("P(%d, %d) = %f\n", i, j, shrP(i, j));
+        }
+        */
+
         // state management logic
         // if this ch needs to continue, inc the counter atomically
         if (ecal::abs(chi2_diff) >= 1e-3) {
             // FIXME: remove hardcodded values
+            /*
             if (iteration>=9) {
                 auto const chi2_prev = g_chi2_prev[grch];
                 // TODO debugging
@@ -1331,7 +1449,7 @@ void kernel_compute_chi2(
                 // if there is a rotation of chi2 values stop here
                 //if (ecal::abs(chi2_new - chi2_prev) / chi2_prev < 1e-3)
                 //    return;
-            }
+            }*/
 
             g_chi2_prev[grch] = chi2_old;
             auto const pos = atomicAdd(pChannelsLeft, 1);
@@ -1419,10 +1537,176 @@ void minimization_procedure_fused(
         scratch.hasSwitchToGain1,
         scratch.isSaturated,
         offsetForHashes,
-        0,
+        0u,
         totalChannels
     );
     cudaCheck( cudaGetLastError() );
+}
+
+void minimization_procedure_hybrid_host_launch(
+        EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
+        EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
+        ConditionsProducts const& conditions,
+        ConfigurationParameters const& configParameters,
+        cuda::stream_t<>& cudaStream,
+        unsigned int offsetForHashes) {
+    unsigned int totalChannels = eventInputCPU.ebDigis.size() 
+        + eventInputCPU.eeDigis.size();
+    uint32_t nchannels = totalChannels;
+    constexpr auto nsamples = SampleVector::RowsAtCompileTime;
+    using DataType = SampleVector::Scalar;
+
+    // FIXME: all the constants below need to be propagated properly
+    // once results are valid
+    for (int iteration=0; iteration<50; ++iteration) {
+        std::cout << "iteration = " << iteration 
+                  << "  nchannels = " << nchannels
+                  << std::endl;
+
+        // TODO: 
+        // 1) allow to configure from python
+        // 2) find the proper condition for this 
+        if (iteration>=7 && nchannels<=8) {
+            dim3 const ts{nsamples, nsamples, 1};
+            uint32_t const bs = nchannels;
+            kernel_minimize_fused<<<bs, ts, 0, cudaStream.id()>>>(
+                conditions.pulseCovariances.values,
+                conditions.pulseShapes.values,
+                (SampleVector*)eventOutputGPU.amplitudesAll,
+                scratch.samples,
+                scratch.samplesMapping,
+                scratch.npassive,
+                eventOutputGPU.amplitude,
+                eventOutputGPU.chi2,
+                scratch.v2rmapping_1,
+                eventInputGPU.ids,
+                scratch.gainsNoise,
+                conditions.pedestals.rms_x12,
+                conditions.pedestals.rms_x6,
+                conditions.pedestals.rms_x1,
+                conditions.gainRatios.gain12Over6,
+                conditions.gainRatios.gain6Over1,
+                conditions.samplesCorrelation.EBG12SamplesCorrelation,
+                conditions.samplesCorrelation.EBG6SamplesCorrelation,
+                conditions.samplesCorrelation.EBG1SamplesCorrelation,
+                conditions.samplesCorrelation.EEG12SamplesCorrelation,
+                conditions.samplesCorrelation.EEG6SamplesCorrelation,
+                conditions.samplesCorrelation.EEG1SamplesCorrelation,
+                scratch.hasSwitchToGain6,
+                scratch.hasSwitchToGain1,
+                scratch.isSaturated,
+                offsetForHashes,
+                iteration,
+                nchannels
+            );
+            cudaCheck( cudaGetLastError() );
+            return;
+        }
+
+        //
+        dim3 const ts1{nsamples, nsamples, nchannels>10 ? 10 : nchannels};
+        uint32_t const bs1 = nchannels>10
+            ? (nchannels + 10 - 1) / 10
+            : 1;
+        uint32_t const shrBytes1 = 10 * (sizeof(DataType)*(55 + 55 + 10));
+        kernel_newiter_update_covariance_compute_cholesky<<<bs1, ts1, shrBytes1, cudaStream.id()>>>(
+            conditions.pulseCovariances.values,
+            (SampleVector const*)eventOutputGPU.amplitudesAll,
+            scratch.decompMatrixMainLoop,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
+            eventInputGPU.ids,
+            scratch.pChannelsCounter,
+            scratch.gainsNoise,
+            conditions.pedestals.rms_x12,
+            conditions.pedestals.rms_x6,
+            conditions.pedestals.rms_x1,
+            conditions.gainRatios.gain12Over6,
+            conditions.gainRatios.gain6Over1,
+            conditions.samplesCorrelation.EBG12SamplesCorrelation,
+            conditions.samplesCorrelation.EBG6SamplesCorrelation,
+            conditions.samplesCorrelation.EBG1SamplesCorrelation,
+            conditions.samplesCorrelation.EEG12SamplesCorrelation,
+            conditions.samplesCorrelation.EEG6SamplesCorrelation,
+            conditions.samplesCorrelation.EEG1SamplesCorrelation,
+            scratch.hasSwitchToGain6,
+            scratch.hasSwitchToGain1,
+            scratch.isSaturated,
+            offsetForHashes,
+            iteration,
+            nchannels);
+        cudaCheck( cudaGetLastError() );
+
+        //
+        auto const ts2 = ts1;
+        auto const bs2 = bs1;
+        uint32_t const shrBytes2 = 10 * (sizeof(DataType)*(55 + 10 + 100 + 10) + 
+            sizeof(float)*EcalPulseShape::TEMPLATESAMPLES);
+        kernel_solve_mm_mv_mults<<<bs2, ts2, shrBytes2, cudaStream.id()>>>(
+            conditions.pulseShapes.values,
+            scratch.decompMatrixMainLoop,
+            scratch.samples,
+            scratch.AtA,
+            scratch.Atb,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
+            eventInputGPU.ids,
+            offsetForHashes,
+            iteration,
+            nchannels);
+        cudaCheck( cudaGetLastError() );
+
+        //
+        // FIXME: rename kernelMinimizeThreads
+        uint32_t ts3 = nchannels>configParameters.kernelMinimizeThreads[0]
+            ? configParameters.kernelMinimizeThreads[0]
+            : nchannels;
+        uint32_t bs3 = nchannels>ts3
+            ? (nchannels + ts3 - 1) / ts3
+            : 1;
+        kernel_fnnls<<<bs3, ts3, 0, cudaStream.id()>>>(
+            scratch.AtA,
+            scratch.Atb,
+            scratch.decompMatrixFnnls,
+            (SampleVector*)eventOutputGPU.amplitudesAll,
+            scratch.samplesMapping,
+            scratch.npassive,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
+            nchannels,
+            iteration);
+        cudaCheck( cudaGetLastError() );
+
+        //
+        uint32_t const ts4 = nchannels>32 ? 10*32 : nchannels*10;
+        uint32_t const bs4 = nchannels>ts4
+            ? (nchannels*10 + ts4 - 1) / ts4
+            : 1;
+        uint32_t const shrBytes4 = 32 * (sizeof(DataType)*(55 + 10 + 10)
+            + sizeof(float)*EcalPulseShape::TEMPLATESAMPLES);
+        kernel_compute_chi2<<<bs4, ts4, shrBytes4, cudaStream.id()>>>(
+            scratch.decompMatrixMainLoop,
+            conditions.pulseShapes.values,
+            (SampleVector const*)eventOutputGPU.amplitudesAll,
+            eventOutputGPU.amplitude,
+            scratch.samples,
+            eventOutputGPU.chi2,
+            scratch.chi2_prev,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
+            iteration%2==0 ? scratch.v2rmapping_2 : scratch.v2rmapping_1,
+            eventInputGPU.ids,
+            offsetForHashes,
+            scratch.pChannelsCounter,
+            nchannels,
+            iteration);
+        cudaCheck( cudaGetLastError() );
+
+        // 
+        cudaCheck( cudaMemcpyAsync(&nchannels, scratch.pChannelsCounter, 
+            sizeof(uint32_t), cudaMemcpyDeviceToHost, cudaStream.id()) );
+        cudaCheck( cudaStreamSynchronize(cudaStream.id()) );
+        
+        // 
+        if (nchannels == 0)
+            return;
+    }
 }
 
 void minimization_procedure_splitted_host_launch(
