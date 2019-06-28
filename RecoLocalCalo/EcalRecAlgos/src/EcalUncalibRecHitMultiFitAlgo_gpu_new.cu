@@ -134,7 +134,10 @@ void entryPoint(
             scratch, conditions, configParameters, cudaStream, offsetForHashes);
         break;
     case KernelsVersion::SplittedDeviceLaunch:
-        // TODO
+        std::cout << "running splitted device launch version\n";
+        minimization_procedure_splitted_device_launch(
+            eventInputCPU, eventInputGPU, eventOutputGPU,
+            scratch, conditions, configParameters, cudaStream, offsetForHashes);
         break;
     case KernelsVersion::Fused:
         std::cout << "running fused version\n";
