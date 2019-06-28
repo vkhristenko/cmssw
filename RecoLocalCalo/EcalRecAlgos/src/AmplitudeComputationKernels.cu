@@ -1666,7 +1666,7 @@ void kernel_minimization_procedure_hybrid_device_launch(
         // TODO: 
         // 1) allow to configure from python
         // 2) find the proper condition for this 
-        if (iteration>=7 && nchannels<=8) {
+        if (iteration>=3 && nchannels<=32) {
             dim3 const ts{nsamples, nsamples, 1};
             uint32_t const bs = nchannels;
             kernel_minimize_fused<<<bs, ts>>>(
@@ -1878,7 +1878,7 @@ void minimization_procedure_hybrid_host_launch(
         // TODO: 
         // 1) allow to configure from python
         // 2) find the proper condition for this 
-        if (iteration>=7 && nchannels<=8) {
+        if (iteration>=3 && nchannels<=32) {
             dim3 const ts{nsamples, nsamples, 1};
             uint32_t const bs = nchannels;
             kernel_minimize_fused<<<bs, ts, 0, cudaStream.id()>>>(
@@ -2146,6 +2146,244 @@ void minimization_procedure_splitted_host_launch(
             return;
     }
 }
+
+/*
+void minimization_procedure_limitsplitted_host_launch_with_device_hybrid_launch(
+        EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
+        EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
+        ConditionsProducts const& conditions,
+        ConfigurationParameters const& configParameters,
+        cuda::stream_t<>& cudaStream,
+        unsigned int offsetForHashes) {
+    unsigned int totalChannels = eventInputCPU.ebDigis.size() 
+        + eventInputCPU.eeDigis.size();
+    uint32_t nchannels = totalChannels;
+    constexpr auto nsamples = SampleVector::RowsAtCompileTime;
+    constexpr int maxIterations = 3;
+    using DataType = SampleVector::Scalar;
+
+    // FIXME: all the constants below need to be propagated properly
+    // once results are vali
+    // TODO: properly select and configure number of iterations to do on cpu
+    // 3 is cause typically most of the channels (> 90 %) finish within 3 iters
+    for (int iteration=0; iteration<maxIterations; ++iteration) {
+        std::cout << "iteration = " << iteration 
+                  << "  nchannels = " << nchannels
+                  << std::endl;
+
+        //
+        dim3 const ts1{nsamples, nsamples, nchannels>10 ? 10 : nchannels};
+        uint32_t const bs1 = nchannels>10
+            ? (nchannels + 10 - 1) / 10
+            : 1;
+        uint32_t const shrBytes1 = 10 * (sizeof(DataType)*(55 + 55 + 10));
+        kernel_newiter_update_covariance_compute_cholesky<<<bs1, ts1, shrBytes1, cudaStream.id()>>>(
+            conditions.pulseCovariances.values,
+            (SampleVector const*)eventOutputGPU.amplitudesAll,
+            scratch.decompMatrixMainLoop,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
+            eventInputGPU.ids,
+            scratch.pChannelsCounter,
+            scratch.gainsNoise,
+            conditions.pedestals.rms_x12,
+            conditions.pedestals.rms_x6,
+            conditions.pedestals.rms_x1,
+            conditions.gainRatios.gain12Over6,
+            conditions.gainRatios.gain6Over1,
+            conditions.samplesCorrelation.EBG12SamplesCorrelation,
+            conditions.samplesCorrelation.EBG6SamplesCorrelation,
+            conditions.samplesCorrelation.EBG1SamplesCorrelation,
+            conditions.samplesCorrelation.EEG12SamplesCorrelation,
+            conditions.samplesCorrelation.EEG6SamplesCorrelation,
+            conditions.samplesCorrelation.EEG1SamplesCorrelation,
+            scratch.hasSwitchToGain6,
+            scratch.hasSwitchToGain1,
+            scratch.isSaturated,
+            offsetForHashes,
+            iteration,
+            nchannels);
+        cudaCheck( cudaGetLastError() );
+
+        //
+        auto const ts2 = ts1;
+        auto const bs2 = bs1;
+        uint32_t const shrBytes2 = 10 * (sizeof(DataType)*(55 + 10 + 100 + 10) + 
+            sizeof(float)*EcalPulseShape::TEMPLATESAMPLES);
+        kernel_solve_mm_mv_mults<<<bs2, ts2, shrBytes2, cudaStream.id()>>>(
+            conditions.pulseShapes.values,
+            scratch.decompMatrixMainLoop,
+            scratch.samples,
+            scratch.AtA,
+            scratch.Atb,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
+            eventInputGPU.ids,
+            offsetForHashes,
+            iteration,
+            nchannels);
+        cudaCheck( cudaGetLastError() );
+
+        //
+        // FIXME: rename kernelMinimizeThreads
+        uint32_t ts3 = nchannels>configParameters.kernelMinimizeThreads[0]
+            ? configParameters.kernelMinimizeThreads[0]
+            : nchannels;
+        uint32_t bs3 = nchannels>ts3
+            ? (nchannels + ts3 - 1) / ts3
+            : 1;
+        kernel_fnnls<<<bs3, ts3, 0, cudaStream.id()>>>(
+            scratch.AtA,
+            scratch.Atb,
+            scratch.decompMatrixFnnls,
+            (SampleVector*)eventOutputGPU.amplitudesAll,
+            scratch.samplesMapping,
+            scratch.npassive,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
+            nchannels,
+            iteration);
+        cudaCheck( cudaGetLastError() );
+
+        //
+        uint32_t const ts4 = nchannels>32 ? 10*32 : nchannels*10;
+        uint32_t const bs4 = nchannels>ts4
+            ? (nchannels*10 + ts4 - 1) / ts4
+            : 1;
+        uint32_t const shrBytes4 = 32 * (sizeof(DataType)*(55 + 10 + 10)
+            + sizeof(float)*EcalPulseShape::TEMPLATESAMPLES);
+        kernel_compute_chi2<<<bs4, ts4, shrBytes4, cudaStream.id()>>>(
+            scratch.decompMatrixMainLoop,
+            conditions.pulseShapes.values,
+            (SampleVector const*)eventOutputGPU.amplitudesAll,
+            eventOutputGPU.amplitude,
+            scratch.samples,
+            eventOutputGPU.chi2,
+            scratch.chi2_prev,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
+            iteration%2==0 ? scratch.v2rmapping_2 : scratch.v2rmapping_1,
+            eventInputGPU.ids,
+            offsetForHashes,
+            scratch.pChannelsCounter,
+            nchannels,
+            iteration);
+        cudaCheck( cudaGetLastError() );
+
+        // 
+        cudaCheck( cudaMemcpyAsync(&nchannels, scratch.pChannelsCounter, 
+            sizeof(uint32_t), cudaMemcpyDeviceToHost, cudaStream.id()) );
+        cudaCheck( cudaStreamSynchronize(cudaStream.id()) );
+        
+        // 
+        if (nchannels == 0)
+            return;
+    }
+    
+    {
+        auto iteration = maxIterations;
+        // TODO: debugging
+        std::cout << "enqueue iteration = " << iteration 
+                  << "  nchannels = " << nchannels
+                  << std::endl;
+
+        //
+        dim3 const ts1{nsamples, nsamples, nchannels>10 ? 10 : nchannels};
+        uint32_t const bs1 = nchannels>10
+            ? (nchannels + 10 - 1) / 10
+            : 1;
+        uint32_t const shrBytes1 = 10 * (sizeof(DataType)*(55 + 55 + 10));
+        kernel_newiter_update_covariance_compute_cholesky<<<bs1, ts1, shrBytes1, cudaStream.id()>>>(
+            conditions.pulseCovariances.values,
+            (SampleVector const*)eventOutputGPU.amplitudesAll,
+            scratch.decompMatrixMainLoop,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
+            eventInputGPU.ids,
+            scratch.pChannelsCounter,
+            scratch.gainsNoise,
+            conditions.pedestals.rms_x12,
+            conditions.pedestals.rms_x6,
+            conditions.pedestals.rms_x1,
+            conditions.gainRatios.gain12Over6,
+            conditions.gainRatios.gain6Over1,
+            conditions.samplesCorrelation.EBG12SamplesCorrelation,
+            conditions.samplesCorrelation.EBG6SamplesCorrelation,
+            conditions.samplesCorrelation.EBG1SamplesCorrelation,
+            conditions.samplesCorrelation.EEG12SamplesCorrelation,
+            conditions.samplesCorrelation.EEG6SamplesCorrelation,
+            conditions.samplesCorrelation.EEG1SamplesCorrelation,
+            scratch.hasSwitchToGain6,
+            scratch.hasSwitchToGain1,
+            scratch.isSaturated,
+            offsetForHashes,
+            iteration,
+            nchannels);
+        cudaCheck( cudaGetLastError() );
+
+        //
+        auto const ts2 = ts1;
+        auto const bs2 = bs1;
+        uint32_t const shrBytes2 = 10 * (sizeof(DataType)*(55 + 10 + 100 + 10) + 
+            sizeof(float)*EcalPulseShape::TEMPLATESAMPLES);
+        kernel_solve_mm_mv_mults<<<bs2, ts2, shrBytes2, cudaStream.id()>>>(
+            conditions.pulseShapes.values,
+            scratch.decompMatrixMainLoop,
+            scratch.samples,
+            scratch.AtA,
+            scratch.Atb,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
+            eventInputGPU.ids,
+            offsetForHashes,
+            iteration,
+            nchannels);
+        cudaCheck( cudaGetLastError() );
+
+        //
+        // FIXME: rename kernelMinimizeThreads
+        uint32_t ts3 = nchannels>configParameters.kernelMinimizeThreads[0]
+            ? configParameters.kernelMinimizeThreads[0]
+            : nchannels;
+        uint32_t bs3 = nchannels>ts3
+            ? (nchannels + ts3 - 1) / ts3
+            : 1;
+        kernel_fnnls<<<bs3, ts3, 0, cudaStream.id()>>>(
+            scratch.AtA,
+            scratch.Atb,
+            scratch.decompMatrixFnnls,
+            (SampleVector*)eventOutputGPU.amplitudesAll,
+            scratch.samplesMapping,
+            scratch.npassive,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
+            nchannels,
+            iteration);
+        cudaCheck( cudaGetLastError() );
+
+        //
+        uint32_t const ts4 = nchannels>32 ? 10*32 : nchannels*10;
+        uint32_t const bs4 = nchannels>ts4
+            ? (nchannels*10 + ts4 - 1) / ts4
+            : 1;
+        uint32_t const shrBytes4 = 32 * (sizeof(DataType)*(55 + 10 + 10)
+            + sizeof(float)*EcalPulseShape::TEMPLATESAMPLES);
+        kernel_compute_chi2<<<bs4, ts4, shrBytes4, cudaStream.id()>>>(
+            scratch.decompMatrixMainLoop,
+            conditions.pulseShapes.values,
+            (SampleVector const*)eventOutputGPU.amplitudesAll,
+            eventOutputGPU.amplitude,
+            scratch.samples,
+            eventOutputGPU.chi2,
+            scratch.chi2_prev,
+            iteration%2==0 ? scratch.v2rmapping_1 : scratch.v2rmapping_2,
+            iteration%2==0 ? scratch.v2rmapping_2 : scratch.v2rmapping_1,
+            eventInputGPU.ids,
+            offsetForHashes,
+            scratch.pChannelsCounter,
+            nchannels,
+            iteration);
+        cudaCheck( cudaGetLastError() );
+
+        // 
+        kernel
+        cudaCheck( cudaGetLastError() );
+    }
+}
+*/
 
 void minimization_procedure_hybrid_device_launch(
         EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
