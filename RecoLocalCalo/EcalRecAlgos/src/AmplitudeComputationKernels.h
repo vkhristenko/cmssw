@@ -43,6 +43,14 @@ void minimization_procedure_hybrid_host_launch(
         cuda::stream_t<>& cudaStream,
         unsigned int const offsetForHashes);
 
+void minimization_procedure_hybrid_device_launch(
+        EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
+        EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
+        ConditionsProducts const& conditions,
+        ConfigurationParameters const& configParameters,
+        cuda::stream_t<>& cudaStream,
+        unsigned int const offsetForHashes);
+
 }}
 
 #endif // RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernelsV1

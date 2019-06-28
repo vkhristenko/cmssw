@@ -152,7 +152,10 @@ void entryPoint(
             scratch, conditions, configParameters, cudaStream, offsetForHashes);
         break;
     case KernelsVersion::HybridDeviceLaunch:
-        // TODO
+        std::cout << "running hybrid device launch version\n";
+        minimization_procedure_hybrid_device_launch(
+            eventInputCPU, eventInputGPU, eventOutputGPU,
+            scratch, conditions, configParameters, cudaStream, offsetForHashes);
         break;
     default:
         ;

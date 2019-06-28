@@ -549,4 +549,21 @@ struct FusedCholeskyForwardSubstUnrolled {
 
 }}
 
+__forceinline__ __device__
+bool cudaCheckFromDevice_(
+        char const* file, int const line, 
+        char const* cmd, cudaError_t result) {
+    if (result == cudaSuccess)
+        return true;
+
+    char const* error = cudaGetErrorName(result);
+    char const* msg = cudaGetErrorString(result);
+    printf("\n%s, line %d:\ncudaCheckFromDevice(%s);\n%s: %s\n",
+        file, line, cmd, error, msg);
+    assert(0);
+    return false;
+}
+
+#define cudaCheckFromDevice(ARG) (cudaCheckFromDevice_(__FILE__, __LINE__, #ARG, (ARG)))
+
 #endif // RecoLocalCalo_EcalRecAlgos_src_KernelHelpers_h

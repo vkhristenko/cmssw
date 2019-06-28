@@ -437,7 +437,7 @@ void kernel_minimize_fused(
         ::ecal::reco::StorageScalarType *energies,
         ::ecal::reco::StorageScalarType *g_chi2,
         uint32_t const* v2ridmapping,
-        uint32_t *dids,
+        uint32_t const*dids,
         SampleGainVector const* gainNoise,
         float const* rms_x12,
         float const* rms_x6,
@@ -1540,7 +1540,7 @@ void kernel_minimization_procedure_splitted_device_launch(
             offsetForHashes,
             iteration,
             nchannels);
-//        cudaCheck( cudaGetLastError() );
+        cudaCheckFromDevice( cudaGetLastError() );
 
         //
         auto const ts2 = ts1;
@@ -1558,7 +1558,7 @@ void kernel_minimization_procedure_splitted_device_launch(
             offsetForHashes,
             iteration,
             nchannels);
-//        cudaCheck( cudaGetLastError() );
+        cudaCheckFromDevice( cudaGetLastError() );
 
         //
         // FIXME: rename kernelMinimizeThreads
@@ -1578,7 +1578,7 @@ void kernel_minimization_procedure_splitted_device_launch(
             iteration%2==0 ? scratch_v2rmapping_1 : scratch_v2rmapping_2,
             nchannels,
             iteration);
-//        cudaCheck( cudaGetLastError() );
+        cudaCheckFromDevice( cudaGetLastError() );
 
         //
         uint32_t const ts4 = nchannels>32 ? 10*32 : nchannels*10;
@@ -1602,16 +1602,204 @@ void kernel_minimization_procedure_splitted_device_launch(
             scratch_pChannelsCounter,
             nchannels,
             iteration);
-//        cudaCheck( cudaGetLastError() );
+        cudaCheckFromDevice( cudaGetLastError() );
 
-        // 
-        //cudaCheck( cudaMemcpyAsync(&nchannels, scratch.pChannelsCounter, 
-        //    sizeof(uint32_t), cudaMemcpyDeviceToHost, cudaStream.id()) );
-//        cudaCheck( cudaStreamSynchronize(cudaStream.id()) );
+        //  sync and check #channels
+        cudaCheckFromDevice( cudaDeviceSynchronize() );
+        nchannels = (*scratch_pChannelsCounter);
+        if (nchannels == 0)
+            return;
+    }
+}
 
-        cudaDeviceSynchronize();
+__global__
+void kernel_minimization_procedure_hybrid_device_launch(
+        EcalPulseCovariance const* conditions_pulseCovariances_values,
+        SampleVector::Scalar *eventOutputGPU_amplitudesAll,
+        SampleVector::Scalar *scratch_decompMatrixMainLoop,
+        uint32_t *scratch_v2rmapping_1,
+        uint32_t *scratch_v2rmapping_2,
+        uint32_t const* eventInputGPU_ids,
+        uint32_t *scratch_pChannelsCounter,
+        SampleGainVector *scratch_gainsNoise,
+        float const* conditions_pedestals_rms_x12,
+        float const* conditions_pedestals_rms_x6,
+        float const* conditions_pedestals_rms_x1,
+        float const* conditions_gainRatios_gain12Over6,
+        float const* conditions_gainRatios_gain6Over1,
+        double const* conditions_samplesCorrelation_EBG12SamplesCorrelation,
+        double const* conditions_samplesCorrelation_EBG6SamplesCorrelation,
+        double const* conditions_samplesCorrelation_EBG1SamplesCorrelation,
+        double const* conditions_samplesCorrelation_EEG12SamplesCorrelation,
+        double const* conditions_samplesCorrelation_EEG6SamplesCorrelation,
+        double const* conditions_samplesCorrelation_EEG1SamplesCorrelation,
+        bool *scratch_hasSwitchToGain6,
+        bool *scratch_hasSwitchToGain1,
+        bool *scratch_isSaturated,
+        EcalPulseShape const* conditions_pulseShapes_values,
+        SampleVector *scratch_samples,
+        SampleVector::Scalar *scratch_AtA,
+        SampleVector::Scalar *scratch_Atb,
+        SampleVector::Scalar *scratch_decompMatrixFnnls,
+        char *scratch_samplesMapping,
+        char *scratch_npassive,
+        ::ecal::reco::StorageScalarType* eventOutputGPU_amplitude,
+        ::ecal::reco::StorageScalarType* eventOutputGPU_chi2,
+        ::ecal::reco::StorageScalarType* scratch_chi2_prev,
+        uint32_t const configParameters_kernelMinimizeThreads_0,
+        uint32_t const offsetForHashes,
+        uint32_t const ebDigis_size,
+        uint32_t const eeDigis_size) {
+    if (threadIdx.x>0)
+        return;
+
+    uint32_t const totalChannels = ebDigis_size + eeDigis_size;
+    uint32_t nchannels = totalChannels;
+    constexpr auto nsamples = SampleVector::RowsAtCompileTime;
+    using DataType = SampleVector::Scalar;
+
+    // FIXME: propogate all the constants to the python config
+    for (int iteration=0; iteration<50; ++iteration) {
+        // TODO: debugging
+        //printf("iteration = %d nchannels = %d\n", iteration, nchannels);
         
-        // 
+        // TODO: 
+        // 1) allow to configure from python
+        // 2) find the proper condition for this 
+        if (iteration>=7 && nchannels<=8) {
+            dim3 const ts{nsamples, nsamples, 1};
+            uint32_t const bs = nchannels;
+            kernel_minimize_fused<<<bs, ts>>>(
+                conditions_pulseCovariances_values,
+                conditions_pulseShapes_values,
+                (SampleVector*)eventOutputGPU_amplitudesAll,
+                scratch_samples,
+                scratch_samplesMapping,
+                scratch_npassive,
+                eventOutputGPU_amplitude,
+                eventOutputGPU_chi2,
+                scratch_v2rmapping_1,
+                eventInputGPU_ids,
+                scratch_gainsNoise,
+                conditions_pedestals_rms_x12,
+                conditions_pedestals_rms_x6,
+                conditions_pedestals_rms_x1,
+                conditions_gainRatios_gain12Over6,
+                conditions_gainRatios_gain6Over1,
+                conditions_samplesCorrelation_EBG12SamplesCorrelation,
+                conditions_samplesCorrelation_EBG6SamplesCorrelation,
+                conditions_samplesCorrelation_EBG1SamplesCorrelation,
+                conditions_samplesCorrelation_EEG12SamplesCorrelation,
+                conditions_samplesCorrelation_EEG6SamplesCorrelation,
+                conditions_samplesCorrelation_EEG1SamplesCorrelation,
+                scratch_hasSwitchToGain6,
+                scratch_hasSwitchToGain1,
+                scratch_isSaturated,
+                offsetForHashes,
+                iteration,
+                nchannels
+            );
+            cudaCheckFromDevice( cudaGetLastError() );
+            return;
+        }
+
+        //
+        dim3 const ts1{nsamples, nsamples, nchannels>10 ? 10 : nchannels};
+        uint32_t const bs1 = nchannels>10
+            ? (nchannels + 10 - 1) / 10
+            : 1;
+        uint32_t const shrBytes1 = 10 * (sizeof(DataType)*(55 + 55 + 10));
+        kernel_newiter_update_covariance_compute_cholesky<<<bs1, ts1, shrBytes1>>>(
+            conditions_pulseCovariances_values,
+            (SampleVector const*)eventOutputGPU_amplitudesAll,
+            scratch_decompMatrixMainLoop,
+            iteration%2==0 ? scratch_v2rmapping_1 : scratch_v2rmapping_2,
+            eventInputGPU_ids,
+            scratch_pChannelsCounter,
+            scratch_gainsNoise,
+            conditions_pedestals_rms_x12,
+            conditions_pedestals_rms_x6,
+            conditions_pedestals_rms_x1,
+            conditions_gainRatios_gain12Over6,
+            conditions_gainRatios_gain6Over1,
+            conditions_samplesCorrelation_EBG12SamplesCorrelation,
+            conditions_samplesCorrelation_EBG6SamplesCorrelation,
+            conditions_samplesCorrelation_EBG1SamplesCorrelation,
+            conditions_samplesCorrelation_EEG12SamplesCorrelation,
+            conditions_samplesCorrelation_EEG6SamplesCorrelation,
+            conditions_samplesCorrelation_EEG1SamplesCorrelation,
+            scratch_hasSwitchToGain6,
+            scratch_hasSwitchToGain1,
+            scratch_isSaturated,
+            offsetForHashes,
+            iteration,
+            nchannels);
+        cudaCheckFromDevice( cudaGetLastError() );
+
+        //
+        auto const ts2 = ts1;
+        auto const bs2 = bs1;
+        uint32_t const shrBytes2 = 10 * (sizeof(DataType)*(55 + 10 + 100 + 10) + 
+            sizeof(float)*EcalPulseShape::TEMPLATESAMPLES);
+        kernel_solve_mm_mv_mults<<<bs2, ts2, shrBytes2>>>(
+            conditions_pulseShapes_values,
+            scratch_decompMatrixMainLoop,
+            scratch_samples,
+            scratch_AtA,
+            scratch_Atb,
+            iteration%2==0 ? scratch_v2rmapping_1 : scratch_v2rmapping_2,
+            eventInputGPU_ids,
+            offsetForHashes,
+            iteration,
+            nchannels);
+        cudaCheckFromDevice( cudaGetLastError() );
+
+        //
+        // FIXME: rename kernelMinimizeThreads
+        uint32_t ts3 = nchannels>configParameters_kernelMinimizeThreads_0
+            ? configParameters_kernelMinimizeThreads_0
+            : nchannels;
+        uint32_t bs3 = nchannels>ts3
+            ? (nchannels + ts3 - 1) / ts3
+            : 1;
+        kernel_fnnls<<<bs3, ts3, 0>>>(
+            scratch_AtA,
+            scratch_Atb,
+            scratch_decompMatrixFnnls,
+            (SampleVector*)eventOutputGPU_amplitudesAll,
+            scratch_samplesMapping,
+            scratch_npassive,
+            iteration%2==0 ? scratch_v2rmapping_1 : scratch_v2rmapping_2,
+            nchannels,
+            iteration);
+        cudaCheckFromDevice( cudaGetLastError() );
+
+        //
+        uint32_t const ts4 = nchannels>32 ? 10*32 : nchannels*10;
+        uint32_t const bs4 = nchannels>ts4
+            ? (nchannels*10 + ts4 - 1) / ts4
+            : 1;
+        uint32_t const shrBytes4 = 32 * (sizeof(DataType)*(55 + 10 + 10)
+            + sizeof(float)*EcalPulseShape::TEMPLATESAMPLES);
+        kernel_compute_chi2<<<bs4, ts4, shrBytes4>>>(
+            scratch_decompMatrixMainLoop,
+            conditions_pulseShapes_values,
+            (SampleVector const*)eventOutputGPU_amplitudesAll,
+            eventOutputGPU_amplitude,
+            scratch_samples,
+            eventOutputGPU_chi2,
+            scratch_chi2_prev,
+            iteration%2==0 ? scratch_v2rmapping_1 : scratch_v2rmapping_2,
+            iteration%2==0 ? scratch_v2rmapping_2 : scratch_v2rmapping_1,
+            eventInputGPU_ids,
+            offsetForHashes,
+            scratch_pChannelsCounter,
+            nchannels,
+            iteration);
+        cudaCheckFromDevice( cudaGetLastError() );
+
+        //  sync and check #channels
+        cudaCheckFromDevice( cudaDeviceSynchronize() );
         nchannels = (*scratch_pChannelsCounter);
         if (nchannels == 0)
             return;
@@ -1957,6 +2145,54 @@ void minimization_procedure_splitted_host_launch(
         if (nchannels == 0)
             return;
     }
+}
+
+void minimization_procedure_hybrid_device_launch(
+        EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
+        EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
+        ConditionsProducts const& conditions,
+        ConfigurationParameters const& configParameters,
+        cuda::stream_t<>& cudaStream,
+        unsigned int offsetForHashes) {
+    kernel_minimization_procedure_hybrid_device_launch<<<1,1,0,cudaStream.id()>>>(
+        conditions.pulseCovariances.values,
+        eventOutputGPU.amplitudesAll,
+        scratch.decompMatrixMainLoop,
+        scratch.v2rmapping_1,
+        scratch.v2rmapping_2,
+        eventInputGPU.ids,
+        scratch.pChannelsCounter,
+        scratch.gainsNoise,
+        conditions.pedestals.rms_x12,
+        conditions.pedestals.rms_x6,
+        conditions.pedestals.rms_x1,
+        conditions.gainRatios.gain12Over6,
+        conditions.gainRatios.gain6Over1,
+        conditions.samplesCorrelation.EBG12SamplesCorrelation,
+        conditions.samplesCorrelation.EBG6SamplesCorrelation,
+        conditions.samplesCorrelation.EBG1SamplesCorrelation,
+        conditions.samplesCorrelation.EEG12SamplesCorrelation,
+        conditions.samplesCorrelation.EEG6SamplesCorrelation,
+        conditions.samplesCorrelation.EEG1SamplesCorrelation,
+        scratch.hasSwitchToGain6,
+        scratch.hasSwitchToGain1,
+        scratch.isSaturated,
+        conditions.pulseShapes.values,
+        scratch.samples,
+        scratch.AtA,
+        scratch.Atb,
+        scratch.decompMatrixFnnls,
+        scratch.samplesMapping,
+        scratch.npassive,
+        eventOutputGPU.amplitude,
+        eventOutputGPU.chi2,
+        scratch.chi2_prev,
+        configParameters.kernelMinimizeThreads[0],
+        offsetForHashes,
+        eventInputCPU.ebDigis.size(),
+        eventInputCPU.eeDigis.size()
+    );
+    cudaCheck( cudaGetLastError() );
 }
 
 void minimization_procedure_splitted_device_launch(
