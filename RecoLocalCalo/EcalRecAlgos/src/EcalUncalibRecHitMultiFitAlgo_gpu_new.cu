@@ -18,7 +18,7 @@
 #include "cuda.h"
 
 #include "AmplitudeComputationCommonKernels.h"
-#include "AmplitudeComputationKernelsV1.h"
+#include "AmplitudeComputationKernels.h"
 #include "TimeComputationKernels.h"
 
 //#define DEBUG
@@ -36,10 +36,10 @@ void entryPoint(
     using digis_type = std::vector<uint16_t>;
     using dids_type = std::vector<uint32_t>;
     // accodring to the cpu setup  //----> hardcoded
-    bool const gainSwitchUseMaxSampleEB = true;
+    bool const gainSwitchUseMaxSampleEB = true; 
     // accodring to the cpu setup  //----> hardcoded
-    bool const gainSwitchUseMaxSampleEE = false;
-    
+    bool const gainSwitchUseMaxSampleEE = false; 
+
     uint32_t const offsetForHashes = conditions.offsetForHashes;
     unsigned int totalChannels = eventInputCPU.ebDigis.size() 
         + eventInputCPU.eeDigis.size();
@@ -116,54 +116,60 @@ void entryPoint(
         eventOutputGPU.chi2,
         eventOutputGPU.pedestal,
         eventOutputGPU.flags,
-        scratch.acState,
-        scratch.activeBXs,
+        scratch.v2rmapping_1,
+        scratch.npassive,
+        scratch.samplesMapping,
         offsetForHashes,
         gainSwitchUseMaxSampleEB,
         gainSwitchUseMaxSampleEE,
         totalChannels);
     cudaCheck(cudaGetLastError());
 
-    //
-    // 2d preparation kernel
-    //
-    int blocks_2d = totalChannels;
-    dim3 threads_2d{10, 10};
-    kernel_prep_2d<<<blocks_2d, threads_2d, 0, cudaStream.id()>>>(
-        conditions.pulseCovariances.values, 
-        scratch.pulse_covariances,
-        scratch.gainsNoise,
-        eventInputGPU.ids,
-        conditions.pedestals.rms_x12,
-        conditions.pedestals.rms_x6,
-        conditions.pedestals.rms_x1,
-        conditions.gainRatios.gain12Over6,
-        conditions.gainRatios.gain6Over1,
-        conditions.samplesCorrelation.EBG12SamplesCorrelation,
-        conditions.samplesCorrelation.EBG6SamplesCorrelation,
-        conditions.samplesCorrelation.EBG1SamplesCorrelation,
-        conditions.samplesCorrelation.EEG12SamplesCorrelation,
-        conditions.samplesCorrelation.EEG6SamplesCorrelation,
-        conditions.samplesCorrelation.EEG1SamplesCorrelation,
-        scratch.noisecov,
-        scratch.pulse_matrix,
-        conditions.pulseShapes.values,
-        scratch.hasSwitchToGain6,
-        scratch.hasSwitchToGain1,
-        scratch.isSaturated,
-        offsetForHashes);
-    cudaCheck(cudaGetLastError());
-    
     // run minimization kernels
-    v1::minimization_procedure(
+    switch (configParameters.version) {
+    case KernelsVersion::SplittedHostLaunch:
+        std::cout << "running splitted host launch version\n";
+        minimization_procedure_splitted_host_launch(
+            eventInputCPU, eventInputGPU, eventOutputGPU,
+            scratch, conditions, configParameters, cudaStream, offsetForHashes);
+        break;
+    case KernelsVersion::SplittedDeviceLaunch:
+        std::cout << "running splitted device launch version\n";
+        minimization_procedure_splitted_device_launch(
+            eventInputCPU, eventInputGPU, eventOutputGPU,
+            scratch, conditions, configParameters, cudaStream, offsetForHashes);
+        break;
+    case KernelsVersion::Fused:
+        std::cout << "running fused version\n";
+        minimization_procedure_fused(
+            eventInputCPU, eventInputGPU, eventOutputGPU,
+            scratch, conditions, configParameters, cudaStream, offsetForHashes);
+        break;
+    case KernelsVersion::HybridHostLaunch:
+        std::cout << "running hybrid host launch version\n";
+        minimization_procedure_hybrid_host_launch(
+            eventInputCPU, eventInputGPU, eventOutputGPU,
+            scratch, conditions, configParameters, cudaStream, offsetForHashes);
+        break;
+    case KernelsVersion::HybridDeviceLaunch:
+        std::cout << "running hybrid device launch version\n";
+        minimization_procedure_hybrid_device_launch(
+            eventInputCPU, eventInputGPU, eventOutputGPU,
+            scratch, conditions, configParameters, cudaStream, offsetForHashes);
+        break;
+    default:
+        ;
+    }
+    /*
+    minimization_procedure(
         eventInputCPU, eventInputGPU, eventOutputGPU,
-        scratch, conditions, configParameters, cudaStream);
+        scratch, conditions, configParameters, cudaStream, offsetForHashes);
+        */
 
     if (configParameters.shouldRunTimingComputation) {
         
         //
-        // TODO: this guy can run concurrently with other kernels,
-        // there is no dependence on the order of execution
+        // TODO: could run concurrently with minimization  
         //
         unsigned int threads_time_init = threads_1d;
         unsigned int blocks_time_init = blocks_1d;
@@ -193,9 +199,6 @@ void entryPoint(
         cudaCheck(cudaGetLastError());
 
         // 
-        // TODO: small kernel only for EB. It needs to be checked if 
-        /// fusing such small kernels is beneficial in here
-        //
         // we are running only over EB digis
         // therefore we need to create threads/blocks only for that
         unsigned int const threadsFixMGPA = threads_1d;
