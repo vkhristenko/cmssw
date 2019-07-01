@@ -128,31 +128,41 @@ void entryPoint(
     // run minimization kernels
     switch (configParameters.version) {
     case KernelsVersion::SplittedHostLaunch:
+#ifdef ECAL_MULTIFIT_ENABLE_DEBUG_PRINTING
         std::cout << "running splitted host launch version\n";
+#endif
         minimization_procedure_splitted_host_launch(
             eventInputCPU, eventInputGPU, eventOutputGPU,
             scratch, conditions, configParameters, cudaStream, offsetForHashes);
         break;
     case KernelsVersion::SplittedDeviceLaunch:
+#ifdef ECAL_MULTIFIT_ENABLE_DEBUG_PRINTING 
         std::cout << "running splitted device launch version\n";
+#endif
         minimization_procedure_splitted_device_launch(
             eventInputCPU, eventInputGPU, eventOutputGPU,
             scratch, conditions, configParameters, cudaStream, offsetForHashes);
         break;
     case KernelsVersion::Fused:
+#ifdef ECAL_MULTIFIT_ENABLE_DEBUG_PRINTING
         std::cout << "running fused version\n";
+#endif
         minimization_procedure_fused(
             eventInputCPU, eventInputGPU, eventOutputGPU,
             scratch, conditions, configParameters, cudaStream, offsetForHashes);
         break;
     case KernelsVersion::HybridHostLaunch:
+#ifdef ECAL_MULTIFIT_ENABLE_DEBUG_PRINTING
         std::cout << "running hybrid host launch version\n";
+#endif
         minimization_procedure_hybrid_host_launch(
             eventInputCPU, eventInputGPU, eventOutputGPU,
             scratch, conditions, configParameters, cudaStream, offsetForHashes);
         break;
     case KernelsVersion::HybridDeviceLaunch:
+#ifdef ECAL_MULTIFIT_ENABLE_DEBUG_PRINTING
         std::cout << "running hybrid device launch version\n";
+#endif
         minimization_procedure_hybrid_device_launch(
             eventInputCPU, eventInputGPU, eventOutputGPU,
             scratch, conditions, configParameters, cudaStream, offsetForHashes);

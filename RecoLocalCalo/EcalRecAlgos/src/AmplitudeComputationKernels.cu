@@ -1506,8 +1506,9 @@ void kernel_minimization_procedure_splitted_device_launch(
 
     // FIXME: propogate all the constants to the python config
     for (int iteration=0; iteration<50; ++iteration) {
-        // TODO: debugging
-        //printf("iteration = %d nchannels = %d\n", iteration, nchannels);
+#ifdef ECAL_MULTIFIT_ENABLE_DEBUG_PRINTING
+        printf("iteration = %d nchannels = %d\n", iteration, nchannels);
+#endif
 
         //
         dim3 const ts1{nsamples, nsamples, nchannels>10 ? 10 : nchannels};
@@ -1660,8 +1661,9 @@ void kernel_minimization_procedure_hybrid_device_launch(
 
     // FIXME: propogate all the constants to the python config
     for (int iteration=0; iteration<50; ++iteration) {
-        // TODO: debugging
-        //printf("iteration = %d nchannels = %d\n", iteration, nchannels);
+#ifdef ECAL_MULTIFIT_ENABLE_DEBUG_PRINTING
+        printf("iteration = %d nchannels = %d\n", iteration, nchannels);
+#endif
         
         // TODO: 
         // 1) allow to configure from python
@@ -1871,9 +1873,11 @@ void minimization_procedure_hybrid_host_launch(
     // FIXME: all the constants below need to be propagated properly
     // once results are valid
     for (int iteration=0; iteration<50; ++iteration) {
+#ifdef ECAL_MULTIFIT_ENABLE_DEBUG_PRINTING
         std::cout << "iteration = " << iteration 
                   << "  nchannels = " << nchannels
                   << std::endl;
+#endif
 
         // TODO: 
         // 1) allow to configure from python
@@ -2036,10 +2040,12 @@ void minimization_procedure_splitted_host_launch(
 
     // FIXME: all the constants below need to be propagated properly
     // once results are valid
+#ifdef ECAL_MULTIFIT_ENABLE_DEBUG_PRINTING
     for (int iteration=0; iteration<50; ++iteration) {
         std::cout << "iteration = " << iteration 
                   << "  nchannels = " << nchannels
                   << std::endl;
+#endif
 
         //
         dim3 const ts1{nsamples, nsamples, nchannels>10 ? 10 : nchannels};
