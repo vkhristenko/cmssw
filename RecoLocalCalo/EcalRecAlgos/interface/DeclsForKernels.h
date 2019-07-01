@@ -72,6 +72,18 @@ struct EventInputDataGPU {
     }
 };
 
+enum class KernelsVersion : uint32_t {
+    // kernels are completely splitted and launched/sync from the host
+    SplittedHostLaunch = 0,
+    // kernels are completely splitted, a grid of (1,1) is launched
+    // and a single gpu thread will do launch/sync of consequitive kernels
+    SplittedDeviceLaunch = 1,
+    // fused minimization
+    Fused = 2,
+    HybridHostLaunch = 3,
+    HybridDeviceLaunch = 4
+};
+
 // parameters have a fixed type
 // Can we go by with single precision
 struct ConfigurationParameters {
@@ -100,6 +112,7 @@ struct ConfigurationParameters {
     std::array<uint32_t, 3> kernelMinimizeThreads;
 
     bool shouldRunTimingComputation;
+    KernelsVersion version;
 };
 
 struct EventOutputDataGPU final : public ::ecal::UncalibratedRecHit<::ecal::Tag::ptr> 
@@ -145,11 +158,14 @@ struct EventDataForScratchGPU {
     SampleVector *samples = nullptr;
     SampleGainVector *gainsNoise = nullptr;
 
-    SampleMatrix* noisecov = nullptr;
-    PulseMatrixType *pulse_matrix = nullptr;
-    FullSampleMatrix* pulse_covariances = nullptr;
-    BXVectorType *activeBXs = nullptr;
-    char *acState = nullptr;
+    uint32_t *v2rmapping_1=nullptr;
+    uint32_t *v2rmapping_2=nullptr;
+    uint32_t *pChannelsCounter = nullptr;
+
+    SampleVector::Scalar *decompMatrixMainLoop = nullptr, *decompMatrixFnnls=nullptr;
+    SampleVector::Scalar *AtA=nullptr, *Atb=nullptr;
+    char *samplesMapping=nullptr, *npassive=nullptr;
+    ::ecal::reco::StorageScalarType *chi2_prev=nullptr;
 
     bool *hasSwitchToGain6=nullptr,
          *hasSwitchToGain1=nullptr,
@@ -173,16 +189,27 @@ struct EventDataForScratchGPU {
         cudaCheck( cudaMalloc((void**)&gainsNoise,
             size * sizeof(SampleGainVector)) );
 
-        cudaCheck( cudaMalloc((void**)&pulse_covariances,
-            size * sizeof(FullSampleMatrix)) );
-        cudaCheck( cudaMalloc((void**)&noisecov,
-            size * sizeof(SampleMatrix)) );
-        cudaCheck( cudaMalloc((void**)&pulse_matrix,
-            size * sizeof(PulseMatrixType)) );
-        cudaCheck( cudaMalloc((void**)&activeBXs,
-            size * sizeof(BXVectorType)) );
-        cudaCheck( cudaMalloc((void**)&acState,
+        cudaCheck( cudaMalloc((void**)&v2rmapping_1,
+            size * sizeof(uint32_t)) );
+        cudaCheck( cudaMalloc((void**)&v2rmapping_2,
+            size * sizeof(uint32_t)) );
+        cudaCheck( cudaMalloc((void**)&pChannelsCounter,
+            sizeof(uint32_t)) );
+        // FIXME: replace 55 with MapSymM::total
+        cudaCheck( cudaMalloc((void**)&decompMatrixMainLoop,
+            size * 55 * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&decompMatrixFnnls,
+            size * 55 * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&AtA,
+            size * 55 * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&Atb,
+            size * 10 * sizeof(SampleVector::Scalar)) );
+        cudaCheck( cudaMalloc((void**)&samplesMapping,
+            size * 10 * sizeof(char)) );
+        cudaCheck( cudaMalloc((void**)&npassive,
             size * sizeof(char)) );
+        cudaCheck( cudaMalloc((void**)&chi2_prev,
+            size * sizeof(::ecal::reco::StorageScalarType)) );
 
         cudaCheck( cudaMalloc((void**)&hasSwitchToGain6,
             size * sizeof(bool)) );
@@ -232,11 +259,17 @@ struct EventDataForScratchGPU {
         cudaCheck( cudaFree(samples) );
         cudaCheck( cudaFree(gainsNoise) );
 
-        cudaCheck( cudaFree(pulse_covariances) );
-        cudaCheck( cudaFree(noisecov) );
-        cudaCheck( cudaFree(pulse_matrix) );
-        cudaCheck( cudaFree(activeBXs) );
-        cudaCheck( cudaFree(acState) );
+        cudaCheck( cudaFree(v2rmapping_1) );
+        cudaCheck( cudaFree(v2rmapping_2) );
+        cudaCheck( cudaFree(pChannelsCounter) );
+
+        cudaCheck( cudaFree(decompMatrixMainLoop) );
+        cudaCheck( cudaFree(decompMatrixFnnls) );
+        cudaCheck( cudaFree(AtA) );
+        cudaCheck( cudaFree(Atb) );
+        cudaCheck( cudaFree(samplesMapping) );
+        cudaCheck( cudaFree(npassive) );
+        cudaCheck( cudaFree(chi2_prev) );
 
         cudaCheck( cudaFree(hasSwitchToGain6) );
         cudaCheck( cudaFree(hasSwitchToGain1) );
