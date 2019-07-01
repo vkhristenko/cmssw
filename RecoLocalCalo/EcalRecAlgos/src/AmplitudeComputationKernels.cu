@@ -2040,8 +2040,8 @@ void minimization_procedure_splitted_host_launch(
 
     // FIXME: all the constants below need to be propagated properly
     // once results are valid
-#ifdef ECAL_MULTIFIT_ENABLE_DEBUG_PRINTING
     for (int iteration=0; iteration<50; ++iteration) {
+#ifdef ECAL_MULTIFIT_ENABLE_DEBUG_PRINTING
         std::cout << "iteration = " << iteration 
                   << "  nchannels = " << nchannels
                   << std::endl;
