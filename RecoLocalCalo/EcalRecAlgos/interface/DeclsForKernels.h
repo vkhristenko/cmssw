@@ -78,9 +78,21 @@ enum class KernelsVersion : uint32_t {
     // kernels are completely splitted, a grid of (1,1) is launched
     // and a single gpu thread will do launch/sync of consequitive kernels
     SplittedDeviceLaunch = 1,
-    // fused minimization
+    // fused minimization, 10 x 10 threads per block.
+    // 1 channel per block
     Fused = 2,
+    // Reasoning:
+    // 1) after iteration 0 and 1, there are < 10% channels left
+    // 2) after iteration 2, there are always < 1% channels left
+    // 3) instead of continueing spinning (launch+sync) the cpu, 
+    //   launch fused minimization
+    // Kernels are splitted, as in SplittedHostLaunch version
+    // after iteration 3 (TODO: should be configurable) laucnh fused version
+    // to continue minimization. there should be small number of blocks needed (resources! consumed)
     HybridHostLaunch = 3,
+    // similar to SplittedDeviceLaunch for launching, (1, 1) gpu grid controls
+    // minimization. Hybrid - Runs fused minimization starting from iteration N
+    // TODO: right now N is fixed at 4
     HybridDeviceLaunch = 4
 };
 
