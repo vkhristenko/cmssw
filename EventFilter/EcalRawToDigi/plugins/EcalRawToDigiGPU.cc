@@ -16,6 +16,9 @@
 
 #include <DataFormats/FEDRawData/interface/FEDRawDataCollection.h>
 
+#include "EventFilter/EcalRawToDigi/interface/DeclsForKernels.h"
+#include "EventFilter/EcalRawToDigi/interface/UnpackGPU.h"
+
 class EcalRawToDigiGPU
     : public edm::stream::EDProducer<edm::ExternalWork>
 {
@@ -36,6 +39,9 @@ private:
     CUDAContextState cudaState_;
 
     std::vector<int> fedsToUnpack_;
+
+    ecal::raw::InputDataCPU inputCPU_;
+    ecal::raw::InputDataGPU inputGPU_;
 };
 
 void EcalRawToDigiGPU::fillDescriptions(
@@ -57,9 +63,13 @@ EcalRawToDigiGPU::EcalRawToDigiGPU(
     : rawDataToken_{consumes<FEDRawDataCollection>(ps.getParameter<edm::InputTag>(
         "InputLabel"))}
     , fedsToUnpack_{ps.getParameter<std::vector<int>>("FEDs")}
-{}
+{
+    inputCPU_.allocate();
+    inputGPU_.allocate();
+}
 
 EcalRawToDigiGPU::~EcalRawToDigiGPU() {
+    inputGPU_.deallocate();
 }
 
 void EcalRawToDigiGPU::acquire(
@@ -80,13 +90,39 @@ void EcalRawToDigiGPU::acquire(
     event.getByToken(rawDataToken_, rawDataHandle);
 
     // iterate over feds
+    // TODO: another idea
+    //   - loop over all feds to unpack and enqueue cuda memcpy 
+    //   - accumulate the sizes
+    //   - after the loop launch cuda memcpy for sizes
+    //   - enqueue the kernel
+    uint32_t currentCummOffset = 0;
+    uint32_t counter = 0;
     for (auto const& fed : fedsToUnpack_) {
         //std::cout << "fed: " << fed << std::endl;
         auto const& data = rawDataHandle->FEDData(fed);
         auto const nbytes = data.size();
 
-        printf("fed = %d nbytes = %lu\n", fed, nbytes);
+        // FIXME: for debuggin
+        //printf("fed = %d nbytes = %lu\n", fed, nbytes);
+
+        // skip empty feds
+        if (nbytes < ecal::raw::empty_event_size)
+            continue;
+
+        // copy raw data into plain buffer
+        std::memcpy(inputCPU_.data.data() + currentCummOffset, data.data(), nbytes);
+        // set the offset in bytes from the start
+        inputCPU_.offsets[counter] = currentCummOffset;
+        inputCPU_.feds[counter] = fed;
+
+        // this is the current offset into the vector
+        currentCummOffset += nbytes;
+        ++counter;
     }
+
+    ecal::raw::entryPoint(
+        inputCPU_, inputGPU_, ctx.stream(), 
+        counter, currentCummOffset);
 
     // FIXME: remove debugging
     auto end = std::chrono::high_resolution_clock::now(); 
