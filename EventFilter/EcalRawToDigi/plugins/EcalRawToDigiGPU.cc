@@ -16,6 +16,10 @@
 
 #include <DataFormats/FEDRawData/interface/FEDRawDataCollection.h>
 
+#include "CondFormats/DataRecord/interface/EcalMappingElectronicsRcd.h"
+
+#include "EventFilter/EcalRawToDigi/interface/ElectronicsMappingGPU.h"
+
 #include "EventFilter/EcalRawToDigi/interface/DeclsForKernels.h"
 #include "EventFilter/EcalRawToDigi/interface/UnpackGPU.h"
 
@@ -85,6 +89,14 @@ void EcalRawToDigiGPU::acquire(
     // raii
     CUDAScopedContextAcquire ctx{event.streamID(), std::move(holder), cudaState_};
 
+    // conditions
+    edm::ESHandle<ecal::raw::ElectronicsMappingGPU> eMappingHandle;
+    setup.get<EcalMappingElectronicsRcd>().get(eMappingHandle);
+    auto const& eMappingProduct = eMappingHandle->getProduct(ctx.stream());
+
+    // bundle up conditions
+    ecal::raw::ConditionsProducts conditions{eMappingProduct};
+
     // event data
     edm::Handle<FEDRawDataCollection> rawDataHandle;
     event.getByToken(rawDataToken_, rawDataHandle);
@@ -121,7 +133,7 @@ void EcalRawToDigiGPU::acquire(
     }
 
     ecal::raw::entryPoint(
-        inputCPU_, inputGPU_, ctx.stream(), 
+        inputCPU_, inputGPU_, conditions, ctx.stream(), 
         counter, currentCummOffset);
 
     // FIXME: remove debugging

@@ -8,6 +8,8 @@
 
 #include "EventFilter/EcalRawToDigi/interface/DCCRawDataDefinitions.h"
 
+#include "EventFilter/EcalRawToDigi/interface/ElectronicsMappingGPU.h"
+
 namespace ecal { namespace raw {
 
 constexpr auto empty_event_size = EMPTYEVENTSIZE;
@@ -48,6 +50,10 @@ struct InputDataGPU {
             cudaCheck( cudaFree(feds) );
         }
     }
+};
+
+struct ConditionsProducts {
+    ElectronicsMappingGPU::Product const& eMappingProduct;
 };
 
 }}

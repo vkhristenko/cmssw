@@ -47,6 +47,7 @@ void kernel_unpack_test(
 void entryPoint(
         InputDataCPU const& inputCPU, 
         InputDataGPU& inputGPU,
+        ConditionsProducts const& conditions,
         cuda::stream_t<>& cudaStream,
         uint32_t const nfedsWithData,
         uint32_t const nbytesTotal) {
