@@ -14,6 +14,7 @@ ElectronicsMappingGPU::ElectronicsMappingGPU(EcalMappingElectronics const& mappi
 {   
 
     // fill in eb
+    // TODO: EB vector is actually empty
     auto const& barrelValues = mapping.barrelItems();
     for (unsigned int i=0; i<barrelValues.size(); i++) {
         EcalElectronicsId eid{barrelValues[i].electronicsid};

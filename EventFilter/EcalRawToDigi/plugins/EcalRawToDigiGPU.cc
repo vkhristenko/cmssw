@@ -15,6 +15,7 @@
 // algorithm specific
 
 #include <DataFormats/FEDRawData/interface/FEDRawDataCollection.h>
+#include <DataFormats/EcalDigi/interface/EcalDigiCollections.h>
 
 #include "CondFormats/DataRecord/interface/EcalMappingElectronicsRcd.h"
 
@@ -39,13 +40,19 @@ private:
 
 private:
     edm::EDGetTokenT<FEDRawDataCollection> rawDataToken_;
+    std::string digisLabelEB_, digisLabelEE_;
 
     CUDAContextState cudaState_;
 
     std::vector<int> fedsToUnpack_;
 
+    ecal::raw::ConfigurationParameters config_;
+    // FIXME move this to use raii
     ecal::raw::InputDataCPU inputCPU_;
     ecal::raw::InputDataGPU inputGPU_;
+    ecal::raw::OutputDataGPU outputGPU_;
+    ecal::raw::ScratchDataGPU scratchGPU_;
+    ecal::raw::OutputDataCPU outputCPU_;
 };
 
 void EcalRawToDigiGPU::fillDescriptions(
@@ -57,6 +64,9 @@ void EcalRawToDigiGPU::fillDescriptions(
     for (uint32_t i=0; i<54; ++i)
         feds[i] = i+601;
     desc.add<std::vector<int>>("FEDs", feds);
+    desc.add<uint32_t>("maxChannels", 20000);
+    desc.add<std::string>("digisLabelEB", "ebDigis");
+    desc.add<std::string>("digisLabelEE", "eeDigis");
 
     std::string label = "ecalRawToDigiGPU";
     confDesc.add(label, desc);
@@ -66,14 +76,26 @@ EcalRawToDigiGPU::EcalRawToDigiGPU(
         const edm::ParameterSet& ps) 
     : rawDataToken_{consumes<FEDRawDataCollection>(ps.getParameter<edm::InputTag>(
         "InputLabel"))}
+    , digisLabelEB_{ps.getParameter<std::string>("digisLabelEB")}
+    , digisLabelEE_{ps.getParameter<std::string>("digisLabelEE")}
     , fedsToUnpack_{ps.getParameter<std::vector<int>>("FEDs")}
 {
+    config_.maxChannels = ps.getParameter<uint32_t>("maxChannels");
+
     inputCPU_.allocate();
     inputGPU_.allocate();
+    outputGPU_.allocate(config_);
+    scratchGPU_.allocate(config_);
+    outputCPU_.allocate();
+
+    produces<EBDigiCollection>(digisLabelEB_);
+    produces<EEDigiCollection>(digisLabelEE_);
 }
 
 EcalRawToDigiGPU::~EcalRawToDigiGPU() {
     inputGPU_.deallocate();
+    outputGPU_.deallocate(config_);
+    scratchGPU_.deallocate(config_);
 }
 
 void EcalRawToDigiGPU::acquire(
@@ -133,8 +155,8 @@ void EcalRawToDigiGPU::acquire(
     }
 
     ecal::raw::entryPoint(
-        inputCPU_, inputGPU_, conditions, ctx.stream(), 
-        counter, currentCummOffset);
+        inputCPU_, inputGPU_, outputGPU_, scratchGPU_, outputCPU_,
+        conditions, ctx.stream(), counter, currentCummOffset);
 
     // FIXME: remove debugging
     auto end = std::chrono::high_resolution_clock::now(); 
@@ -148,6 +170,57 @@ void EcalRawToDigiGPU::produce(
 {
     //DurationMeasurer<std::chrono::milliseconds> timer{std::string{"produce duration"}};
     CUDAScopedContextProduce ctx{cudaState_};
+
+    // FIXME: debugging
+    printf("nchannels eb = %u nchannels ee = %u\n",
+        outputCPU_.nchannels[0], outputCPU_.nchannels[1]);
+
+    // transfer collections back / sync / put into edm::event 
+    // FIXME: these transfers are not async
+    auto const nchannelsEB = outputCPU_.nchannels[0];
+    auto const nchannelsEE = outputCPU_.nchannels[1];
+    std::vector<uint16_t> samplesEB(nchannelsEB), samplesEE(nchannelsEE);
+    std::vector<uint32_t> idsEB(nchannelsEB), idsEE(nchannelsEE);
+    cudaCheck( cudaMemcpyAsync(samplesEB.data(),
+                               outputGPU_.samplesEB,
+                               samplesEB.size() * sizeof(uint16_t),
+                               cudaMemcpyDeviceToHost,
+                               ctx.stream().id()) );
+    cudaCheck( cudaMemcpyAsync(samplesEE.data(),
+                               outputGPU_.samplesEE,
+                               samplesEE.size() * sizeof(uint16_t),
+                               cudaMemcpyDeviceToHost,
+                               ctx.stream().id()) );
+    cudaCheck( cudaMemcpyAsync(idsEB.data(),
+                               outputGPU_.idsEB,
+                               idsEB.size() * sizeof(uint32_t),
+                               cudaMemcpyDeviceToHost,
+                               ctx.stream().id()) );
+    cudaCheck( cudaMemcpyAsync(idsEE.data(),
+                               outputGPU_.idsEE,
+                               idsEE.size() * sizeof(uint32_t),
+                               cudaMemcpyDeviceToHost,
+                               ctx.stream().id()) );
+
+    auto digisEB = std::make_unique<EBDigiCollection>();
+    auto digisEE = std::make_unique<EEDigiCollection>();
+    cudaCheck( cudaStreamSynchronize(ctx.stream().id()) );
+
+    // FIXME: workaround, otherwise can't find the method cause
+    // there are no "using edm::DataFrameContainer::swap" -> pr to cms-sw repo
+    edm::DataFrameContainer ebDigisTmp, eeDigisTmp;
+    ebDigisTmp.swap(idsEB, samplesEB);
+    eeDigisTmp.swap(idsEE, samplesEE);
+
+    EBDigiCollection* ptrEB = (EBDigiCollection*)(&ebDigisTmp);
+    EEDigiCollection* ptrEE = (EEDigiCollection*)(&eeDigisTmp);
+
+    digisEB->swap(*ptrEB);
+    digisEE->swap(*ptrEE);
+//    digisEB->swap(idsEB, samplesEB);
+//    digisEE->swap(idsEE, samplesEE);
+    event.put(std::move(digisEB), digisLabelEB_);
+    event.put(std::move(digisEE), digisLabelEE_);
 }
 
 DEFINE_FWK_MODULE(EcalRawToDigiGPU);

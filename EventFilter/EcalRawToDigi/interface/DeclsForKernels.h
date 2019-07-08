@@ -29,6 +29,63 @@ struct InputDataCPU {
     }
 };
 
+struct ConfigurationParameters {
+    uint32_t maxChannels;
+};
+
+struct OutputDataCPU {
+    // [0] - eb, [1] - ee
+    std::vector<uint32_t, CUDAHostAllocator<uint32_t>> nchannels; 
+    
+    void allocate() {
+        nchannels.resize(2);
+    }
+};
+
+struct OutputDataGPU {
+    uint16_t *samplesEB=nullptr, *samplesEE = nullptr;
+    uint32_t *idsEB=nullptr, *idsEE = nullptr;
+
+    // FIXME: we should be separate max channels parameter for eb and ee
+    // FIXME: replace hardcoded values
+    void allocate(ConfigurationParameters const& config) {
+        cudaCheck( cudaMalloc((void**)&samplesEB,
+            config.maxChannels * sizeof(uint16_t) * 10) );
+        cudaCheck( cudaMalloc((void**)&samplesEE,
+            config.maxChannels * sizeof(uint16_t) * 10) );
+        cudaCheck( cudaMalloc((void**)&idsEB,
+            config.maxChannels * sizeof(uint32_t)) );
+        cudaCheck( cudaMalloc((void**)&idsEE,
+            config.maxChannels * sizeof(uint32_t)) );
+    }
+
+    void deallocate(ConfigurationParameters const& config) {
+        if (samplesEB) {
+            cudaCheck( cudaFree(samplesEB) );
+            cudaCheck( cudaFree(samplesEE) );
+            cudaCheck( cudaFree(idsEB) );
+            cudaCheck( cudaFree(idsEE) );
+        }
+    }
+};
+
+struct ScratchDataGPU {
+    // [0] = EB
+    // [1] = EE
+    uint32_t *pChannelsCounter=nullptr;
+
+    void allocate(ConfigurationParameters const& config) {
+        cudaCheck( cudaMalloc((void**)&pChannelsCounter,
+            sizeof(uint32_t) * 2) );
+    }
+
+    void deallocate(ConfigurationParameters const& config) {
+        if (pChannelsCounter) {
+            cudaCheck( cudaFree(pChannelsCounter) );
+        }
+    }
+};
+
 struct InputDataGPU {
     unsigned char *data=nullptr;
     uint32_t *offsets=nullptr;

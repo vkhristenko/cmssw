@@ -9,7 +9,9 @@ namespace ecal { namespace raw {
 
 // FIXME: bundle up uint32_t values
 void entryPoint(
-        InputDataCPU const&, InputDataGPU&, ConditionsProducts const&,
+        InputDataCPU const&, InputDataGPU&, 
+        OutputDataGPU&, ScratchDataGPU&, 
+        OutputDataCPU&, ConditionsProducts const&,
         cuda::stream_t<>&, uint32_t const, uint32_t const);
 
 }}
