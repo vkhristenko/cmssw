@@ -304,10 +304,20 @@ void kernel_unpack_test(
         uint32_t nchannels = (block_length - 1) / 3;
         for (uint32_t i=0; i<nchannels; ++i) {
             // inc the channel's counter and get the pos where to store
-            auto const pos = atomicAdd(pChannelsCounter, 1);
             auto const wdata = current_tower_block[1 + i*3];
             uint8_t const stripid = wdata & 0x7;
             uint8_t const xtalid = (wdata >> 4) & 0x7;
+            ElectronicsIdGPU eid{fed2dcc(fed), ttid, stripid, xtalid};
+            auto const didraw = isBarrel 
+                ? compute_ebdetid(eid)
+                : eid2did[eid.linearIndex()];
+            // FIXME: what kind of channels are these guys
+            if (didraw == 0) 
+                continue;
+            
+            auto const pos = atomicAdd(pChannelsCounter, 1);
+
+            // get samples
             uint16_t const sample0 = (wdata >> 16) & 0x3fff;
             uint16_t const sample1 = (wdata >> 32) & 0x3fff;
             uint16_t const sample2 = (wdata >> 48) & 0x3fff;
@@ -322,11 +332,6 @@ void kernel_unpack_test(
             uint16_t const sample9 = (wdata2 >> 32) & 0x3fff;
             //printf("stripid = %u xtalid = %u\n", stripid, xtalid);
         
-            ElectronicsIdGPU eid{fed2dcc(fed), ttid, stripid, xtalid};
-            auto const didraw = isBarrel 
-                ? compute_ebdetid(eid)
-                : eid2did[eid.linearIndex()];
-
             // store to global
             ids[pos] = didraw;
             samples[pos*10] = sample0;
