@@ -346,8 +346,8 @@ void kernel_unpack_test(
             auto const wdata1 = current_tower_block[2+i*3];
             uint16_t const sample3 = wdata1 & 0x3fff;
             uint16_t const sample4 = (wdata1 >> 16) & 0x3fff;
-            uint16_t const sample5 = (wdata >> 32) & 0x3fff;
-            uint16_t const sample6 = (wdata >> 48) & 0x3fff;
+            uint16_t const sample5 = (wdata1 >> 32) & 0x3fff;
+            uint16_t const sample6 = (wdata1 >> 48) & 0x3fff;
             auto const wdata2 = current_tower_block[3+i*3];
             uint16_t const sample7 = wdata2 & 0x3fff;
             uint16_t const sample8 = (wdata2 >> 16) & 0x3fff;

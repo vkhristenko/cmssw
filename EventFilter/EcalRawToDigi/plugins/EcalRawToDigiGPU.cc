@@ -179,7 +179,7 @@ void EcalRawToDigiGPU::produce(
     // FIXME: these transfers are not async
     auto const nchannelsEB = outputCPU_.nchannels[0];
     auto const nchannelsEE = outputCPU_.nchannels[1];
-    std::vector<uint16_t> samplesEB(nchannelsEB), samplesEE(nchannelsEE);
+    std::vector<uint16_t> samplesEB(nchannelsEB*10), samplesEE(nchannelsEE*10);
     std::vector<uint32_t> idsEB(nchannelsEB), idsEE(nchannelsEE);
     cudaCheck( cudaMemcpyAsync(samplesEB.data(),
                                outputGPU_.samplesEB,
