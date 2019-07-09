@@ -208,7 +208,7 @@ void EcalRawToDigiGPU::produce(
 
     // FIXME: workaround, otherwise can't find the method cause
     // there are no "using edm::DataFrameContainer::swap" -> pr to cms-sw repo
-    edm::DataFrameContainer ebDigisTmp, eeDigisTmp;
+    edm::DataFrameContainer ebDigisTmp{10, EcalBarrel}, eeDigisTmp{10, EcalEndcap};
     ebDigisTmp.swap(idsEB, samplesEB);
     eeDigisTmp.swap(idsEE, samplesEE);
 
