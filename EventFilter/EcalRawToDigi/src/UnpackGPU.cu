@@ -48,6 +48,17 @@ int zside_for_eb(ElectronicsIdGPU const& eid) {
 }
 
 __forceinline__ __device__
+bool is_synced_towerblock(
+        uint16_t const dccbx,
+        uint16_t const bx,
+        uint16_t const dccl1,
+        uint16_t const l1) {
+    bool const bxsync = (bx==0 && dccbx==3564) || (bx==dccbx && dccbx!=3564);
+    bool const l1sync = (l1 == ((dccl1 - 1) & 0xfff));
+    return bxsync && l1sync;
+}
+
+__forceinline__ __device__
 bool right_tower_for_eb(int tower) {
     // for EB, two types of tower (LVRB top/bottom)
     if ((tower > 12 && tower < 21) || 
@@ -169,7 +180,7 @@ void kernel_unpack_test(
     //printf("\n");
     auto const fed_header = buffer[0];
     uint32_t fed_id = (fed_header >> 8) & 0xfff;
-    uint32_t bx = (fed_header >> 24) & 0xff;
+    uint32_t bx = (fed_header >> 20) & 0xfff;
     uint32_t lv1 = (fed_header >> 32) & 0xffffff;
     uint8_t trigger_type = (fed_header >> 56) & 0xf;
     uint8_t const bid_fed_header = (fed_header >> 60) & 0xf;
@@ -294,6 +305,17 @@ void kernel_unpack_test(
         uint8_t e1 = (w >> 44) & 0x1;
         uint16_t block_length = (w >> 48) & 0x1ff;
         uint16_t w_bfield_1 = (w >> 62) & 0x3;
+
+        // 
+        uint16_t const dccbx = bx & 0xfff;
+        uint16_t const dccl1 = lv1 & 0xfff;
+        //printf("dccbx = %u bxlocal = %u dccl1 = %u l1local = %u\n",
+        //    dccbx, bxlocal, dccl1, lv1local);
+        if (!is_synced_towerblock(dccbx, bxlocal, dccl1, lv1local)) {
+            current_tower_block += block_length;
+            continue;
+        }
+
         //printf("ttid = %u ntimesamples = %u\ bxlocal = %u e0 = %u w_bfield_0 = %u\n", 
         //    ttid, ntimesamples, bxlocal, e0, w_bfield_0);
         //printf("lv1local = %u e1 = %u block_length = %u w_bfield-1 = %u\n",
