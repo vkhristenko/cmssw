@@ -133,6 +133,11 @@ uint32_t compute_ebdetid(ElectronicsIdGPU const& eid) {
             : ((-ieta) << 9)) | (iphi & 0x1FF);
 }
 
+__forceinline__ __device__
+int adc(uint16_t sample) { return sample & 0xfff; }
+__forceinline__ __device__
+int gainId(uint16_t sample) { return (sample>>12) & 0x3; }
+
 __global__
 void kernel_unpack_test(
         unsigned char const* data,
@@ -337,35 +342,71 @@ void kernel_unpack_test(
             if (didraw == 0) 
                 continue;
             
-            auto const pos = atomicAdd(pChannelsCounter, 1);
-
             // get samples
-            uint16_t const sample0 = (wdata >> 16) & 0x3fff;
-            uint16_t const sample1 = (wdata >> 32) & 0x3fff;
-            uint16_t const sample2 = (wdata >> 48) & 0x3fff;
+            uint16_t sampleValues[10];
+            sampleValues[0] = (wdata >> 16) & 0x3fff;
+            sampleValues[1] = (wdata >> 32) & 0x3fff;
+            sampleValues[2] = (wdata >> 48) & 0x3fff;
             auto const wdata1 = current_tower_block[2+i*3];
-            uint16_t const sample3 = wdata1 & 0x3fff;
-            uint16_t const sample4 = (wdata1 >> 16) & 0x3fff;
-            uint16_t const sample5 = (wdata1 >> 32) & 0x3fff;
-            uint16_t const sample6 = (wdata1 >> 48) & 0x3fff;
+            sampleValues[3] = wdata1 & 0x3fff;
+            sampleValues[4] = (wdata1 >> 16) & 0x3fff;
+            sampleValues[5] = (wdata1 >> 32) & 0x3fff;
+            sampleValues[6] = (wdata1 >> 48) & 0x3fff;
             auto const wdata2 = current_tower_block[3+i*3];
-            uint16_t const sample7 = wdata2 & 0x3fff;
-            uint16_t const sample8 = (wdata2 >> 16) & 0x3fff;
-            uint16_t const sample9 = (wdata2 >> 32) & 0x3fff;
+            sampleValues[7] = wdata2 & 0x3fff;
+            sampleValues[8] = (wdata2 >> 16) & 0x3fff;
+            sampleValues[9] = (wdata2 >> 32) & 0x3fff;
             //printf("stripid = %u xtalid = %u\n", stripid, xtalid);
+            
+            // check gain
+            bool isSaturation = true;
+            short firstGainZeroSampID{-1}, firstGainZeroSampADC{-1};
+            for (uint32_t si=0; si<10; si++) {
+                if (gainId(sampleValues[si]) == 0) {
+                    firstGainZeroSampID = si;
+                    firstGainZeroSampADC = adc(sampleValues[si]);
+                    break;
+                }
+            }
+            if (firstGainZeroSampID!=-1) {
+                unsigned int plateauEnd = std::min(10u ,(unsigned int)(firstGainZeroSampID+5));
+                for (unsigned int s=firstGainZeroSampID; s<plateauEnd; s++) {
+                    if( gainId(sampleValues[s])==0 && 
+                        adc(sampleValues[s])==firstGainZeroSampADC ) {;}
+                    else { isSaturation=false;  break;}  //it's not saturation
+                }     
+                // get rid of channels which are stuck in gain0
+                if(firstGainZeroSampID<3) {isSaturation=false; }
+                if (!isSaturation)
+                    continue;
+            }
+
+            // gain switch check
+            short numGain=1;
+            bool gainSwitchError = false;
+            for (unsigned int si=1; si<10; si++) {
+                if ((gainId(sampleValues[si-1]) > gainId(sampleValues[si])) && 
+                    numGain<5) gainSwitchError=true;
+                if (gainId(sampleValues[si-1]) == gainId(sampleValues[si])) numGain++;
+                else numGain=1;
+            }
+            if (gainSwitchError)
+                continue;
+            
+            auto const pos = atomicAdd(pChannelsCounter, 1);
         
             // store to global
             ids[pos] = didraw;
-            samples[pos*10] = sample0;
-            samples[pos*10 + 1] = sample1;
-            samples[pos*10 + 2] = sample2;
-            samples[pos*10 + 3] = sample3;
-            samples[pos*10 + 4] = sample4;
-            samples[pos*10 + 5] = sample5;
-            samples[pos*10 + 6] = sample6;
-            samples[pos*10 + 7] = sample7;
-            samples[pos*10 + 8] = sample8;
-            samples[pos*10 + 9] = sample9;
+            samples[pos*10] = sampleValues[0];
+            samples[pos*10 + 1] = sampleValues[1];
+            samples[pos*10 + 2] = sampleValues[2];
+            samples[pos*10 + 3] = sampleValues[3];
+            samples[pos*10 + 4] = sampleValues[4];
+            samples[pos*10 + 5] = sampleValues[5];
+            samples[pos*10 + 6] = sampleValues[6];
+            samples[pos*10 + 7] = sampleValues[7];
+            samples[pos*10 + 8] = sampleValues[8];
+            samples[pos*10 + 9] = sampleValues[9];
         }
 
         // test electronics id
