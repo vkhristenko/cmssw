@@ -478,9 +478,6 @@ void EcalRawToDigi::produce(edm::Event& e, const edm::EventSetup& es)
   
   // Add collections to the event 
 
-    printf("nchannels eb = %d nchannels ee = %d\n",
-        productDigisEB->size(), productDigisEE->size());
-
   if(put_){
     
     if( headerUnpacking_){ 

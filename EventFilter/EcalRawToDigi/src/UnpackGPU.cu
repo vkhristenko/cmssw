@@ -379,19 +379,19 @@ void kernel_unpack_test(
                 if(firstGainZeroSampID<3) {isSaturation=false; }
                 if (!isSaturation)
                     continue;
+            } else { // there is no zero gainId sample
+                // gain switch check
+                short numGain=1;
+                bool gainSwitchError = false;
+                for (unsigned int si=1; si<10; si++) {
+                    if ((gainId(sampleValues[si-1]) > gainId(sampleValues[si])) && 
+                        numGain<5) gainSwitchError=true;
+                    if (gainId(sampleValues[si-1]) == gainId(sampleValues[si])) numGain++;
+                    else numGain=1;
+                }
+                if (gainSwitchError)
+                    continue;
             }
-
-            // gain switch check
-            short numGain=1;
-            bool gainSwitchError = false;
-            for (unsigned int si=1; si<10; si++) {
-                if ((gainId(sampleValues[si-1]) > gainId(sampleValues[si])) && 
-                    numGain<5) gainSwitchError=true;
-                if (gainId(sampleValues[si-1]) == gainId(sampleValues[si])) numGain++;
-                else numGain=1;
-            }
-            if (gainSwitchError)
-                continue;
             
             auto const pos = atomicAdd(pChannelsCounter, 1);
         
