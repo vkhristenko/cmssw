@@ -46,7 +46,7 @@ struct OutputDataGPU {
     uint16_t *samplesEB=nullptr, *samplesEE = nullptr;
     uint32_t *idsEB=nullptr, *idsEE = nullptr;
 
-    // FIXME: we should be separate max channels parameter for eb and ee
+    // FIXME: we should separate max channels parameter for eb and ee
     // FIXME: replace hardcoded values
     void allocate(ConfigurationParameters const& config) {
         cudaCheck( cudaMalloc((void**)&samplesEB,

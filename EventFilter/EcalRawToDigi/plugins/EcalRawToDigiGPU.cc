@@ -14,8 +14,9 @@
 
 // algorithm specific
 
-#include <DataFormats/FEDRawData/interface/FEDRawDataCollection.h>
-#include <DataFormats/EcalDigi/interface/EcalDigiCollections.h>
+#include "DataFormats/FEDRawData/interface/FEDRawDataCollection.h"
+#include "DataFormats/EcalDigi/interface/EcalDigiCollections.h"
+#include "CUDADataFormats/EcalDigi/interface/DigisCollection.h"
 
 #include "CondFormats/DataRecord/interface/EcalMappingElectronicsRcd.h"
 
@@ -40,7 +41,8 @@ private:
 
 private:
     edm::EDGetTokenT<FEDRawDataCollection> rawDataToken_;
-    std::string digisLabelEB_, digisLabelEE_;
+    edm::EDPutTokenT<CUDAProduct<ecal::DigisCollection>> digisEBToken_, 
+        digisEEToken_;
 
     CUDAContextState cudaState_;
 
@@ -65,8 +67,8 @@ void EcalRawToDigiGPU::fillDescriptions(
         feds[i] = i+601;
     desc.add<std::vector<int>>("FEDs", feds);
     desc.add<uint32_t>("maxChannels", 20000);
-    desc.add<std::string>("digisLabelEB", "ebDigis");
-    desc.add<std::string>("digisLabelEE", "eeDigis");
+    desc.add<std::string>("digisLabelEB", "ebDigisGPU");
+    desc.add<std::string>("digisLabelEE", "eeDigisGPU");
 
     std::string label = "ecalRawToDigiGPU";
     confDesc.add(label, desc);
@@ -76,8 +78,10 @@ EcalRawToDigiGPU::EcalRawToDigiGPU(
         const edm::ParameterSet& ps) 
     : rawDataToken_{consumes<FEDRawDataCollection>(ps.getParameter<edm::InputTag>(
         "InputLabel"))}
-    , digisLabelEB_{ps.getParameter<std::string>("digisLabelEB")}
-    , digisLabelEE_{ps.getParameter<std::string>("digisLabelEE")}
+    , digisEBToken_{produces<CUDAProduct<ecal::DigisCollection>>(
+        ps.getParameter<std::string>("digisLabelEB"))}
+    , digisEEToken_{produces<CUDAProduct<ecal::DigisCollection>>(
+        ps.getParameter<std::string>("digisLabelEE"))}
     , fedsToUnpack_{ps.getParameter<std::vector<int>>("FEDs")}
 {
     config_.maxChannels = ps.getParameter<uint32_t>("maxChannels");
@@ -87,9 +91,6 @@ EcalRawToDigiGPU::EcalRawToDigiGPU(
     outputGPU_.allocate(config_);
     scratchGPU_.allocate(config_);
     outputCPU_.allocate();
-
-    produces<EBDigiCollection>(digisLabelEB_);
-    produces<EEDigiCollection>(digisLabelEE_);
 }
 
 EcalRawToDigiGPU::~EcalRawToDigiGPU() {
@@ -176,9 +177,9 @@ void EcalRawToDigiGPU::produce(
         outputCPU_.nchannels[0], outputCPU_.nchannels[1]);
 
     // transfer collections back / sync / put into edm::event 
-    // FIXME: these transfers are not async
     auto const nchannelsEB = outputCPU_.nchannels[0];
     auto const nchannelsEE = outputCPU_.nchannels[1];
+    /*
     std::vector<uint16_t> samplesEB(nchannelsEB*10), samplesEE(nchannelsEE*10);
     std::vector<uint32_t> idsEB(nchannelsEB), idsEE(nchannelsEE);
     cudaCheck( cudaMemcpyAsync(samplesEB.data(),
@@ -215,12 +216,21 @@ void EcalRawToDigiGPU::produce(
     EBDigiCollection* ptrEB = (EBDigiCollection*)(&ebDigisTmp);
     EEDigiCollection* ptrEE = (EEDigiCollection*)(&eeDigisTmp);
 
+    ecal::DigisCollection digisEBNew;
+    ecal::DigisCollection digisEENew;
+
     digisEB->swap(*ptrEB);
     digisEE->swap(*ptrEE);
+    */
 //    digisEB->swap(idsEB, samplesEB);
 //    digisEE->swap(idsEE, samplesEE);
-    event.put(std::move(digisEB), digisLabelEB_);
-    event.put(std::move(digisEE), digisLabelEE_);
+    ecal::DigisCollection digisEB{outputGPU_.idsEB, 
+        outputGPU_.samplesEB, nchannelsEB};
+    ecal::DigisCollection digisEE{outputGPU_.idsEE,
+        outputGPU_.samplesEE, nchannelsEE};
+
+    ctx.emplace(event, digisEBToken_, std::move(digisEB));
+    ctx.emplace(event, digisEEToken_, std::move(digisEE));
 }
 
 DEFINE_FWK_MODULE(EcalRawToDigiGPU);

@@ -2,6 +2,6 @@
     <use name="root"/>
     <use name="rootgraphics"/>
     <use name="DataFormats/Common"/>
-    <use name="DataFormat/EcalDigi"/>
-    <use name="DataFormat/EcalDetId"/>
+    <use name="DataFormats/EcalDigi"/>
+    <use name="DataFormats/EcalDetId"/>
 </bin>

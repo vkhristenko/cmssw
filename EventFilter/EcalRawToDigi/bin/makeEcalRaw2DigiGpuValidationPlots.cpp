@@ -53,9 +53,9 @@ int main(int argc, char *argv[]) {
     // prep input
     TFile rfin{inFileName.c_str()};
     TTree *rt = (TTree*)rfin.Get("Events");
-    rt->SetBranchAddress("EBDigiCollection_ecalRawToDigiGPU_ebDigis_RECO.",
+    rt->SetBranchAddress("EBDigiCollection_ecalCPUDigisProducer_ebDigis_RECO.",
         &wgpuEB);
-    rt->SetBranchAddress("EEDigiCollection_ecalRawToDigiGPU_eeDigis_RECO.",
+    rt->SetBranchAddress("EEDigiCollection_ecalCPUDigisProducer_eeDigis_RECO.",
         &wgpuEE);
     rt->SetBranchAddress("EBDigiCollection_ecalDigis_ebDigis_RECO.",
         &wcpuEB);
