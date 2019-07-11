@@ -147,60 +147,6 @@ void EcalCPUDigisProducer::produce(
 
     event.put(digisOutEBToken_, std::move(digisEB));
     event.put(digisOutEEToken_, std::move(digisEE));
-
-    /*
-    std::vector<uint16_t> samplesEB(nchannelsEB*10), samplesEE(nchannelsEE*10);
-    std::vector<uint32_t> idsEB(nchannelsEB), idsEE(nchannelsEE);
-    cudaCheck( cudaMemcpyAsync(samplesEB.data(),
-                               outputGPU_.samplesEB,
-                               samplesEB.size() * sizeof(uint16_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream().id()) );
-    cudaCheck( cudaMemcpyAsync(samplesEE.data(),
-                               outputGPU_.samplesEE,
-                               samplesEE.size() * sizeof(uint16_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream().id()) );
-    cudaCheck( cudaMemcpyAsync(idsEB.data(),
-                               outputGPU_.idsEB,
-                               idsEB.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream().id()) );
-    cudaCheck( cudaMemcpyAsync(idsEE.data(),
-                               outputGPU_.idsEE,
-                               idsEE.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream().id()) );
-
-    auto digisEB = std::make_unique<EBDigiCollection>();
-    auto digisEE = std::make_unique<EEDigiCollection>();
-    cudaCheck( cudaStreamSynchronize(ctx.stream().id()) );
-
-    // FIXME: workaround, otherwise can't find the method cause
-    // there are no "using edm::DataFrameContainer::swap" -> pr to cms-sw repo
-    edm::DataFrameContainer ebDigisTmp{10, EcalBarrel}, eeDigisTmp{10, EcalEndcap};
-    ebDigisTmp.swap(idsEB, samplesEB);
-    eeDigisTmp.swap(idsEE, samplesEE);
-
-    EBDigiCollection* ptrEB = (EBDigiCollection*)(&ebDigisTmp);
-    EEDigiCollection* ptrEE = (EEDigiCollection*)(&eeDigisTmp);
-
-    ecal::DigisCollection digisEBNew;
-    ecal::DigisCollection digisEENew;
-
-    digisEB->swap(*ptrEB);
-    digisEE->swap(*ptrEE);
-    */
-//    digisEB->swap(idsEB, samplesEB);
-//    digisEE->swap(idsEE, samplesEE);
-/*    ecal::DigisCollection digisEBNew{outputGPU_.idsEB, 
-        outputGPU_.samplesEB, nchannelsEB};
-    ecal::DigisCollection digisEENew{outputGPU_.idsEE,
-        outputGPU_.samplesEE, nchannelsEE};
-
-    ctx.emplace(event, digisEBToken_, std::move(digisEBNew));
-    ctx.emplace(event, digisEEToken_, std::move(digisEENew));
-    */
 }
 
 DEFINE_FWK_MODULE(EcalCPUDigisProducer);

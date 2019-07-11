@@ -176,54 +176,10 @@ void EcalRawToDigiGPU::produce(
     printf("nchannels eb = %u nchannels ee = %u\n",
         outputCPU_.nchannels[0], outputCPU_.nchannels[1]);
 
-    // transfer collections back / sync / put into edm::event 
+    // get the number of channels 
     auto const nchannelsEB = outputCPU_.nchannels[0];
     auto const nchannelsEE = outputCPU_.nchannels[1];
-    /*
-    std::vector<uint16_t> samplesEB(nchannelsEB*10), samplesEE(nchannelsEE*10);
-    std::vector<uint32_t> idsEB(nchannelsEB), idsEE(nchannelsEE);
-    cudaCheck( cudaMemcpyAsync(samplesEB.data(),
-                               outputGPU_.samplesEB,
-                               samplesEB.size() * sizeof(uint16_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream().id()) );
-    cudaCheck( cudaMemcpyAsync(samplesEE.data(),
-                               outputGPU_.samplesEE,
-                               samplesEE.size() * sizeof(uint16_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream().id()) );
-    cudaCheck( cudaMemcpyAsync(idsEB.data(),
-                               outputGPU_.idsEB,
-                               idsEB.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream().id()) );
-    cudaCheck( cudaMemcpyAsync(idsEE.data(),
-                               outputGPU_.idsEE,
-                               idsEE.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream().id()) );
-
-    auto digisEB = std::make_unique<EBDigiCollection>();
-    auto digisEE = std::make_unique<EEDigiCollection>();
-    cudaCheck( cudaStreamSynchronize(ctx.stream().id()) );
-
-    // FIXME: workaround, otherwise can't find the method cause
-    // there are no "using edm::DataFrameContainer::swap" -> pr to cms-sw repo
-    edm::DataFrameContainer ebDigisTmp{10, EcalBarrel}, eeDigisTmp{10, EcalEndcap};
-    ebDigisTmp.swap(idsEB, samplesEB);
-    eeDigisTmp.swap(idsEE, samplesEE);
-
-    EBDigiCollection* ptrEB = (EBDigiCollection*)(&ebDigisTmp);
-    EEDigiCollection* ptrEE = (EEDigiCollection*)(&eeDigisTmp);
-
-    ecal::DigisCollection digisEBNew;
-    ecal::DigisCollection digisEENew;
-
-    digisEB->swap(*ptrEB);
-    digisEE->swap(*ptrEE);
-    */
-//    digisEB->swap(idsEB, samplesEB);
-//    digisEE->swap(idsEE, samplesEE);
+    
     ecal::DigisCollection digisEB{outputGPU_.idsEB, 
         outputGPU_.samplesEB, nchannelsEB};
     ecal::DigisCollection digisEE{outputGPU_.idsEE,
