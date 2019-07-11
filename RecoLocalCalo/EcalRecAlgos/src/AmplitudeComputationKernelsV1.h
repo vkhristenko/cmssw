@@ -14,7 +14,7 @@ namespace ecal { namespace multifit {
 namespace v1 {
 
 void minimization_procedure(
-        EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
+        EventInputDataGPU const& eventInputGPU,
         EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
         ConditionsProducts const& conditions,
         ConfigurationParameters const& configParameters,

@@ -18,6 +18,20 @@ struct ptr {};
 
 }
 
+namespace Detail {
+
+// empty base 
+template<typename T>
+struct Base {};
+
+// add number of values for ptr case
+template<>
+struct Base<::ecal::Tag::ptr> {
+    uint32_t size;
+};
+
+}
+
 template<typename T, typename L = Tag::soa>
 struct type_wrapper {
 //#ifndef ECAL_MULTIFIT_DONOT_USE_PINNED_MEM
@@ -33,7 +47,7 @@ struct type_wrapper<T, Tag::ptr> {
 };
 
 template<typename L = Tag::soa>
-struct UncalibratedRecHit {
+struct UncalibratedRecHit : public Detail::Base<L> {
     UncalibratedRecHit() = default;
     UncalibratedRecHit(const UncalibratedRecHit&) = default;
     UncalibratedRecHit& operator=(const UncalibratedRecHit&) = default;

@@ -126,7 +126,8 @@ constexpr float fast_logf(float x) { return unsafe_logf<7>(x); }
 __global__
 void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
                                    SampleVector::Scalar const* sample_value_errors,
-                                   uint32_t const* dids,
+                                   uint32_t const* dids_eb,
+                                   uint32_t const* dids_ee,
                                    bool const* useless_sample_values,
                                    char const* pedestal_nums,
                                    ConfigurationParameters::type const* amplitudeFitParametersEB,
@@ -146,7 +147,8 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
                                    ConfigurationParameters::type const timeFitLimits_firstEE,
                                    ConfigurationParameters::type const timeFitLimits_secondEB,
                                    ConfigurationParameters::type const timeFitLimits_secondEE,
-                                   int const nchannels) {
+                                   int const nchannels,
+                                   uint32_t const offsetForInputs) {
     using ScalarType = SampleVector::Scalar;
 
     // constants
@@ -161,12 +163,18 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
     int const ch_start = ch*nsamples;
     int const lch_start = lch*nthreads_per_channel;
     int const nchannels_per_block = blockDim.x / nthreads_per_channel;
+    auto const* dids = ch >= offsetForInputs
+        ? dids_ee
+        : dids_eb;
+    int const inputCh = ch >= offsetForInputs
+        ? ch - offsetForInputs
+        : ch;
     
     // rmeove inactive threads
     // TODO: need to understand if this is 100% safe in presence of syncthreads
     if (ch >= nchannels) return;
 
-    auto const did = DetId{dids[ch]};
+    auto const did = DetId{dids[inputCh]};
     auto const isBarrel = did.subdetId() == EcalBarrel;
     auto const* amplitudeFitParameters = isBarrel
         ? amplitudeFitParametersEB
@@ -514,7 +522,8 @@ __global__
 void kernel_time_compute_findamplchi2_and_finish(
         SampleVector::Scalar const* sample_values,
         SampleVector::Scalar const* sample_value_errors,
-        uint32_t const* dids,
+        uint32_t const* dids_eb,
+        uint32_t const* dids_ee,
         bool const* useless_samples,
         SampleVector::Scalar const* g_tMaxAlphaBeta,
         SampleVector::Scalar const* g_tMaxErrorAlphaBeta,
@@ -530,7 +539,8 @@ void kernel_time_compute_findamplchi2_and_finish(
         SampleVector::Scalar* g_ampMaxError,
         SampleVector::Scalar* g_timeMax,
         SampleVector::Scalar* g_timeError,
-        int const nchannels) {
+        int const nchannels,
+        uint32_t const offsetForInputs) {
     using ScalarType = SampleVector::Scalar;
 
     // constants 
@@ -541,6 +551,12 @@ void kernel_time_compute_findamplchi2_and_finish(
     int const ch = gtx / nsamples;
     int const sample = threadIdx.x % nsamples;
     int const ch_start = ch * nsamples;
+    auto const* dids = ch >= offsetForInputs
+        ? dids_ee
+        : dids_eb;
+    int const inputCh = ch >= offsetForInputs
+        ? ch - offsetForInputs
+        : ch;
 
     // configure shared mem
     // per block, we need #threads per block * 2 * sizeof(ScalarType)
@@ -552,7 +568,7 @@ void kernel_time_compute_findamplchi2_and_finish(
     if (ch >= nchannels) return;
 
     auto state = g_state[ch];
-    auto const did = DetId{dids[ch]};
+    auto const did = DetId{dids[inputCh]};
     auto const* amplitudeFitParameters = did.subdetId() == EcalBarrel
         ? amplitudeFitParametersEB
         : amplitudeFitParametersEE;
@@ -717,12 +733,14 @@ void kernel_time_compute_findamplchi2_and_finish(
 }
 
 __global__
-void kernel_time_compute_fixMGPAslew(uint16_t const* digis,
+void kernel_time_compute_fixMGPAslew(uint16_t const* digis_eb,
+                                     uint16_t const* digis_ee,
                                      SampleVector::Scalar* sample_values,
                                      SampleVector::Scalar* sample_value_errors,
                                      bool* useless_sample_values,
                                      unsigned int const sample_mask,
-                                     int const nchannels) {
+                                     int const nchannels,
+                                     uint32_t const offsetForInputs) {
     using ScalarType = SampleVector::Scalar;
 
     // constants
@@ -732,14 +750,23 @@ void kernel_time_compute_fixMGPAslew(uint16_t const* digis,
     int const gtx = threadIdx.x + blockIdx.x * blockDim.x;
     int const ch = gtx / nsamples;
     int const sample = threadIdx.x % nsamples;
+    int const inputCh = ch >= offsetForInputs
+        ? ch - offsetForInputs
+        : ch;
+    int const inputGtx = ch >= offsetForInputs
+        ? gtx - offsetForInputs*nsamples
+        : gtx;
+    auto const* digis = ch >= offsetForInputs
+        ? digis_ee
+        : digis_eb;
 
     // remove thread for sample 0, oversubscribing is easier than ....
     if (ch >= nchannels || sample==0) return;
 
     if (!use_sample(sample_mask, sample)) return;
 
-    auto const gainIdPrev = ecal::mgpa::gainId(digis[gtx-1]);
-    auto const gainIdNext = ecal::mgpa::gainId(digis[gtx]);
+    auto const gainIdPrev = ecal::mgpa::gainId(digis[inputGtx-1]);
+    auto const gainIdNext = ecal::mgpa::gainId(digis[inputGtx]);
     if (gainIdPrev>=1 && gainIdPrev<=3 &&
         gainIdNext>=1 && gainIdNext<=3 && gainIdPrev < gainIdNext) {
         sample_values[gtx-1] = 0;
@@ -866,8 +893,10 @@ void kernel_time_compute_ampl(SampleVector::Scalar const* sample_values,
 
 //#define ECAL_RECO_CUDA_TC_INIT_DEBUG
 __global__
-void kernel_time_computation_init(uint16_t const* digis,
-                                  uint32_t const* dids,
+void kernel_time_computation_init(uint16_t const* digis_eb,
+                                  uint32_t const* dids_eb,
+                                  uint16_t const* digis_ee,
+                                  uint32_t const* dids_ee,
                                   float const* rms_x12,
                                   float const* rms_x6,
                                   float const* rms_x1,
@@ -882,6 +911,7 @@ void kernel_time_computation_init(uint16_t const* digis,
                                   bool* useless_sample_values,
                                   char* pedestal_nums,
                                   uint32_t const offsetForHashes,
+                                  uint32_t const offsetForInputs,
                                   unsigned int const sample_maskEB,
                                   unsigned int const sample_maskEE,
                                   int nchannels) {
@@ -891,13 +921,26 @@ void kernel_time_computation_init(uint16_t const* digis,
     constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
 
     // indices
-    int tx = threadIdx.x + blockDim.x*blockIdx.x;
-    int ch = tx/nsamples;
+    int const tx = threadIdx.x + blockDim.x*blockIdx.x;
+    int const ch = tx/nsamples;
+    int const inputTx = ch >= offsetForInputs
+        ? tx - offsetForInputs*nsamples
+        : tx;
+    int const inputCh = ch >= offsetForInputs
+        ? ch - offsetForInputs
+        : ch;
+    auto const* digis = ch >= offsetForInputs
+        ? digis_ee
+        : digis_eb;
+    auto const* dids = ch >= offsetForInputs
+        ? dids_ee
+        : dids_eb;
 
     if (ch < nchannels) {
         // indices/inits
-        int sample = tx % nsamples;
-        int ch_start = ch*nsamples;
+        int const sample = tx % nsamples;
+        int const ch_start = ch*nsamples;
+        int const input_ch_start = inputCh*nsamples;
         SampleVector::Scalar pedestal = 0.;
         int num = 0;
 
@@ -908,11 +951,11 @@ void kernel_time_computation_init(uint16_t const* digis,
         ScalarType* shrSampleValueErrors = shrSampleValues + blockDim.x;
 
         // 0 and 1 sample values
-        auto const adc0 = ecal::mgpa::adc(digis[ch_start]);
-        auto const gainId0 = ecal::mgpa::gainId(digis[ch_start]);
-        auto const adc1 = ecal::mgpa::adc(digis[ch_start+1]);
-        auto const gainId1 = ecal::mgpa::gainId(digis[ch_start+1]);
-        auto const did = DetId{dids[ch]};
+        auto const adc0 = ecal::mgpa::adc(digis[input_ch_start]);
+        auto const gainId0 = ecal::mgpa::gainId(digis[input_ch_start]);
+        auto const adc1 = ecal::mgpa::adc(digis[input_ch_start+1]);
+        auto const gainId1 = ecal::mgpa::gainId(digis[input_ch_start+1]);
+        auto const did = DetId{dids[inputCh]};
         auto const isBarrel = did.subdetId() == EcalBarrel;
         auto const sample_mask = did.subdetId() == EcalBarrel
             ? sample_maskEB
@@ -939,8 +982,8 @@ void kernel_time_computation_init(uint16_t const* digis,
         }
 
         // ped subtracted and gain-renormalized samples.
-        auto const gainId = ecal::mgpa::gainId(digis[tx]);
-        auto const adc = ecal::mgpa::adc(digis[tx]);
+        auto const gainId = ecal::mgpa::gainId(digis[inputTx]);
+        auto const adc = ecal::mgpa::adc(digis[inputTx]);
 
         bool bad = false;
         SampleVector::Scalar sample_value, sample_value_error;
@@ -1058,8 +1101,10 @@ __global__
 void kernel_time_correction_and_finalize(
 //        SampleVector::Scalar const* g_amplitude,
         ::ecal::reco::StorageScalarType const* g_amplitude,
-        uint16_t const* digis,
-        uint32_t const* dids,
+        uint16_t const* digis_eb,
+        uint32_t const* dids_eb,
+        uint16_t const* digis_ee,
+        uint32_t const* dids_ee,
         float const* amplitudeBinsEB,
         float const* amplitudeBinsEE,
         float const* shiftBinsEB,
@@ -1090,6 +1135,7 @@ void kernel_time_correction_and_finalize(
         ConfigurationParameters::type const outOfTimeThreshG61mEB,
         ConfigurationParameters::type const outOfTimeThreshG61mEE,
         uint32_t const offsetForHashes,
+        uint32_t const offsetForInputs,
         int const nchannels) {
     using ScalarType = SampleVector::Scalar;
 
@@ -1098,11 +1144,20 @@ void kernel_time_correction_and_finalize(
 
     // indices
     int const gtx = threadIdx.x + blockIdx.x * blockDim.x;
+    int const inputGtx = gtx >= offsetForInputs
+        ? gtx - offsetForInputs
+        : gtx;
+    auto const* dids = gtx >= offsetForInputs
+        ? dids_ee
+        : dids_eb;
+    auto const& digis = gtx >= offsetForInputs
+        ? digis_ee
+        : digis_eb;
 
     // filter out outside of range threads
     if (gtx >= nchannels) return;
 
-    auto const did = DetId{dids[gtx]};
+    auto const did = DetId{dids[inputGtx]};
     auto const isBarrel = did.subdetId() == EcalBarrel;
     auto const hashedId = isBarrel
         ? hashedIndexEB(did.rawId())
@@ -1193,7 +1248,7 @@ void kernel_time_correction_and_finalize(
         auto threshM = outOfTimeThreshG12m;
         if (amplitude > 3000.) {
             for (int isample=0; isample<nsamples; isample++) {
-                int gainid = ecal::mgpa::gainId(digis[nsamples*gtx + isample]);
+                int gainid = ecal::mgpa::gainId(digis[nsamples*inputGtx + isample]);
                 if (gainid != 1) {
                     threshP = outOfTimeThreshG61p;
                     threshM = outOfTimeThreshG61m;
