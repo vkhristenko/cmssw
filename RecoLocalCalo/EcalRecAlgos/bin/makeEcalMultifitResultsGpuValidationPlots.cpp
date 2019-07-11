@@ -95,10 +95,18 @@ int main(int argc, char *argv[]) {
         auto const nee = wcpuEE->bareProduct().size();
 
         for (uint32_t i=0; i<neb; ++i) {
+            auto const did_gpu = wgpuEB->bareProduct().did[i];
             auto const soi_amp_gpu = wgpuEB->bareProduct().amplitude[i];
-            auto const soi_amp_cpu = wcpuEB->bareProduct()[i].amplitude();
+            auto const cpu_iter = wcpuEB->bareProduct().find(DetId{did_gpu});
+            if (cpu_iter == wcpuEB->bareProduct().end()) {
+                std::cerr << ie << ordinal[ie % 10] << " entry\n"
+                          << "  Did not find a DetId " << did_gpu
+                          << " in a CPU collection\n";
+                continue;
+            }
+            auto const soi_amp_cpu = cpu_iter->amplitude();
             auto const chi2_gpu = wgpuEB->bareProduct().chi2[i];
-            auto const chi2_cpu = wcpuEB->bareProduct()[i].chi2();
+            auto const chi2_cpu = cpu_iter->chi2();
 
             hSOIAmplitudesEBGPU->Fill(soi_amp_gpu);
             hSOIAmplitudesEBCPU->Fill(soi_amp_cpu);
@@ -120,10 +128,18 @@ int main(int argc, char *argv[]) {
         }
 
         for (uint32_t i=0; i<nee; ++i) {
+            auto const did_gpu = wgpuEE->bareProduct().did[i];
             auto const soi_amp_gpu = wgpuEE->bareProduct().amplitude[i];
-            auto const soi_amp_cpu = wcpuEE->bareProduct()[i].amplitude();
+            auto const cpu_iter = wcpuEE->bareProduct().find(DetId{did_gpu});
+            if (cpu_iter == wcpuEE->bareProduct().end()) {
+                std::cerr << ie << ordinal[ie % 10] << " entry\n"
+                          << "  did not find a DetId " << did_gpu
+                          << " in a CPU collection\n";
+                continue;
+            }
+            auto const soi_amp_cpu = cpu_iter->amplitude();
             auto const chi2_gpu = wgpuEE->bareProduct().chi2[i];
-            auto const chi2_cpu = wcpuEE->bareProduct()[i].chi2();
+            auto const chi2_cpu = cpu_iter->chi2();
 
             hSOIAmplitudesEEGPU->Fill(soi_amp_gpu);
             hSOIAmplitudesEECPU->Fill(soi_amp_cpu);

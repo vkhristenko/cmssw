@@ -309,7 +309,7 @@ void EcalUncalibRecHitProducerGPU::acquire(
     auto const& eeDigisProduct = event.get(digisTokenEE_);
     
     // raii
-    CUDAScopedContextAcquire ctx{ebDigisProduct, std::move(holder)};
+    CUDAScopedContextAcquire ctx{ebDigisProduct, std::move(holder), cudaState_};
 
     // get actual obj
     auto const& ebDigis = ctx.get(ebDigisProduct);
@@ -400,6 +400,16 @@ void EcalUncalibRecHitProducerGPU::produce(
 void EcalUncalibRecHitProducerGPU::transferToHost(
         RecHitType& ebRecHits, RecHitType& eeRecHits,
         cuda::stream_t<>& cudaStream) {
+    cudaCheck( cudaMemcpyAsync(ebRecHits.did.data(),
+        eventOutputDataGPU_.did,
+        ebRecHits.did.size() * sizeof(uint32_t),
+        cudaMemcpyDeviceToHost,
+        cudaStream.id()) );
+    cudaCheck( cudaMemcpyAsync(eeRecHits.did.data(),
+        eventOutputDataGPU_.did + ebRecHits.did.size(),
+        eeRecHits.did.size() * sizeof(uint32_t),
+        cudaMemcpyDeviceToHost,
+        cudaStream.id()) );
     cudaCheck( cudaMemcpyAsync(ebRecHits.amplitude.data(),
         eventOutputDataGPU_.amplitude,
         ebRecHits.amplitude.size() * sizeof(ecal::reco::StorageScalarType),

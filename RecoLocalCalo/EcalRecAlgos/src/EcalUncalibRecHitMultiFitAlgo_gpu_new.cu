@@ -120,6 +120,7 @@ void entryPoint(
         eventOutputGPU.amplitude,
         eventOutputGPU.chi2,
         eventOutputGPU.pedestal,
+        eventOutputGPU.did,
         eventOutputGPU.flags,
         scratch.acState,
         scratch.activeBXs,

@@ -45,6 +45,7 @@ void kernel_prep_1d_and_initialize(
                     ::ecal::reco::StorageScalarType* energies,
                     ::ecal::reco::StorageScalarType* chi2,
                     ::ecal::reco::StorageScalarType* g_pedestal,
+                    uint32_t *dids_out,
                     uint32_t *flags,
                     char* acState,
                     BXVectorType *bxs,
@@ -263,6 +264,7 @@ void kernel_prep_1d_and_initialize(
             chi2[ch] = 0;
             g_pedestal[ch] = 0;
             uint32_t flag = 0;
+            dids_out[ch] = did.rawId();
 
             // start of this channel in shared mem
             int const chStart = threadIdx.x - sample_max;

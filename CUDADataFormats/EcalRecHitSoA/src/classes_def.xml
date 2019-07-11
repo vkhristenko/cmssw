@@ -1,6 +1,6 @@
 <lcgdict>
     <class name="ecal::Tag::soa"/>
-    <class name="ecal::Tag::aos"/>
+    <class name="ecal::Detail::Base<ecal::Tag::soa>" />
 
     <!--
     <class name="std::vector<double, CUDAHostAllocator<double> >"/>
