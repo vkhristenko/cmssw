@@ -436,14 +436,6 @@ void entryPoint(
         cuda::stream_t<>& cudaStream,
         uint32_t const nfedsWithData,
         uint32_t const nbytesTotal) {
-    // FIXME: remove debugging
-    std::cout << "*** per event info ***\n"
-              << "nfeds with data = " << nfedsWithData
-              << " nbytesTotal = " << nbytesTotal
-              << " data bytes total = " << inputCPU.data.size() 
-              << "\n*** end ***"
-              << std::endl;
-
     // transfer
     cudaCheck( cudaMemcpyAsync(inputGPU.data,
                                inputCPU.data.data(),
