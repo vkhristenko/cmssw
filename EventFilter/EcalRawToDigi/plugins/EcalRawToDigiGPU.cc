@@ -104,11 +104,6 @@ void EcalRawToDigiGPU::acquire(
         edm::EventSetup const& setup,
         edm::WaitingTaskWithArenaHolder holder) 
 {
-    // FIXME: remove debugging
-    auto start = std::chrono::high_resolution_clock::now();
-
-    //DurationMeasurer<std::chrono::milliseconds> timer{std::string{"acquire duration"}};
-
     // raii
     CUDAScopedContextAcquire ctx{event.streamID(), std::move(holder), cudaState_};
 
@@ -137,9 +132,6 @@ void EcalRawToDigiGPU::acquire(
         auto const& data = rawDataHandle->FEDData(fed);
         auto const nbytes = data.size();
 
-        // FIXME: for debuggin
-        //printf("fed = %d nbytes = %lu\n", fed, nbytes);
-
         // skip empty feds
         if (nbytes < ecal::raw::empty_event_size)
             continue;
@@ -158,23 +150,13 @@ void EcalRawToDigiGPU::acquire(
     ecal::raw::entryPoint(
         inputCPU_, inputGPU_, outputGPU_, scratchGPU_, outputCPU_,
         conditions, ctx.stream(), counter, currentCummOffset);
-
-    // FIXME: remove debugging
-    auto end = std::chrono::high_resolution_clock::now(); 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start)    .count(); 
-    std::cout << "acquire  duration = " << duration << std::endl;
 }
 
 void EcalRawToDigiGPU::produce(
         edm::Event& event, 
         edm::EventSetup const& setup) 
 {
-    //DurationMeasurer<std::chrono::milliseconds> timer{std::string{"produce duration"}};
     CUDAScopedContextProduce ctx{cudaState_};
-
-    // FIXME: debugging
-    printf("nchannels eb = %u nchannels ee = %u\n",
-        outputCPU_.nchannels[0], outputCPU_.nchannels[1]);
 
     // get the number of channels 
     auto const nchannelsEB = outputCPU_.nchannels[0];
