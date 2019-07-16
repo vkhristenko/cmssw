@@ -22,7 +22,7 @@
 //#include "EventFilter/HcalRawToDigi/interface/ElectronicsMappingGPU.h"
 
 #include "EventFilter/HcalRawToDigi/plugins/DeclsForKernels.h"
-//#include "EventFilter/HcalRawToDigi/interface/UnpackGPU.h"
+#include "EventFilter/HcalRawToDigi/plugins/DecodeGPU.h"
 #include "DataFormats/FEDRawData/interface/FEDNumbering.h"
 
 class HcalRawToDigiGPU
@@ -50,8 +50,8 @@ private:
 
     hcal::raw::ConfigurationParameters config_;
     // FIXME move this to use raii
-    //hcal::raw::InputDataCPU inputCPU_;
-    //hcal::raw::InputDataGPU inputGPU_;
+    hcal::raw::InputDataCPU inputCPU_;
+    hcal::raw::InputDataGPU inputGPU_;
     //hcal::raw::OutputDataGPU outputGPU_;
     //hcal::raw::ScratchDataGPU scratchGPU_;
     //hcal::raw::OutputDataCPU outputCPU_;
@@ -87,9 +87,9 @@ HcalRawToDigiGPU::HcalRawToDigiGPU(
 {
     config_.maxChannels = ps.getParameter<uint32_t>("maxChannels");
 
-    /*
     inputCPU_.allocate();
     inputGPU_.allocate();
+    /*
     outputGPU_.allocate(config_);
     scratchGPU_.allocate(config_);
     outputCPU_.allocate();
@@ -97,8 +97,8 @@ HcalRawToDigiGPU::HcalRawToDigiGPU(
 }
 
 HcalRawToDigiGPU::~HcalRawToDigiGPU() {
-    /*
     inputGPU_.deallocate();
+    /*
     outputGPU_.deallocate(config_);
     scratchGPU_.deallocate(config_);
     */
@@ -135,7 +135,6 @@ void HcalRawToDigiGPU::acquire(
     uint32_t currentCummOffset = 0;
     uint32_t counter = 0;
     for (auto const& fed : fedsToUnpack_) {
-        //std::cout << "fed: " << fed << std::endl;
         auto const& data = rawDataHandle->FEDData(fed);
         auto const nbytes = data.size();
 
@@ -146,21 +145,19 @@ void HcalRawToDigiGPU::acquire(
         printf("fed = %d nbytes = %lu\n", fed, nbytes);
 
         // copy raw data into plain buffer
-        //std::memcpy(inputCPU_.data.data() + currentCummOffset, data.data(), nbytes);
+        std::memcpy(inputCPU_.data.data() + currentCummOffset, data.data(), nbytes);
         // set the offset in bytes from the start
-        //inputCPU_.offsets[counter] = currentCummOffset;
-        //inputCPU_.feds[counter] = fed;
+        inputCPU_.offsets[counter] = currentCummOffset;
+        inputCPU_.feds[counter] = fed;
 
         // this is the current offset into the vector
         currentCummOffset += nbytes;
         ++counter;
     }
 
-    /*
     hcal::raw::entryPoint(
-        inputCPU_, inputGPU_, outputGPU_, scratchGPU_, outputCPU_,
-        conditions, ctx.stream(), counter, currentCummOffset);
-    */
+        inputCPU_, inputGPU_, /*outputGPU_, scratchGPU_, outputCPU_,*/
+        /*conditions,*/ ctx.stream(), counter, currentCummOffset);
 }
 
 void HcalRawToDigiGPU::produce(
