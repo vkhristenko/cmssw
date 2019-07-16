@@ -15,6 +15,10 @@ void kernel_rawdecode_test(
         ? nBytesTotal - offset 
         : offsets[ifed+1] - offset;
 
+    // FIXME: for debugging
+    if (ifed > 0)
+        return;
+
 #ifdef HCAL_RAWDECODE_GPUDEBUG
     printf("ifed = %d fed = %d offset = %u size = %u\n", ifed, fed, offset, size);
 #endif
@@ -36,6 +40,55 @@ void kernel_rawdecode_test(
     printf("fed = %d fed_id = %u bx = %u lv1 = %u trigger_type = %u bid = %u\n",
         fed, fed_id, bx, lv1, trigger_type, bid_fed_header);
 #endif
+
+    // amc 13 header
+    auto const amc13word = buffer[1];
+    uint8_t const namc = (amc13word >> 52) & 0xf;
+    uint8_t const amc13version = (amc13word >> 60) & 0xf;
+    uint32_t const amc13OrbitNumber = (amc13word >> 4) & 0xffffffffu;
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+    printf("fed = %d namc = %u amc13version = %u amc13OrbitNumber = %u\n",
+        fed, namc, amc13version, amc13OrbitNumber);
+#endif
+
+    uint32_t amcoffset = 0;
+    for (uint8_t iamc=0u; iamc < namc; ++iamc) {
+        auto const word = buffer[2 + iamc];
+        uint16_t const amcid = word & 0xffff;
+        int const slot = (word >> 16) & 0xf;
+        int const amcBlockNumber = (word >> 20) & 0xff;
+        int const amcSize = (word >> 32) & 0xffffff;
+        bool const amcmore = ((word >> 61) & 0x1) != 0;
+        bool const amcSegmented = ((word >> 60) & 0x1) != 0;
+        bool const amcLengthOk = ((word >> 62) & 0x1) != 0;
+        bool const amcCROk = ((word >> 56) & 0x1) != 0;
+        bool const amcDataPresent = ((word >> 58) & 0x1) != 0;
+        bool const amcDataValid = ((word >> 56) & 0x1) != 0;
+        bool const amcEnabled = ((word >> 59) & 0x1) != 0;
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+        printf("fed = %d amcid = %u amcBlockNumber = %d amcSize = %d\namcmore = %d amcSegmented = %d, amcLengthOk = %d amcCROk = %d\n amcDataPresent = %d amcDataValid = %d amcEnabled = %d\n", 
+            fed, amcid, amcBlockNumber, amcSize, static_cast<int>(amcmore),
+            static_cast<int>(amcSegmented), static_cast<int>(amcLengthOk), 
+            static_cast<int>(amcCROk), static_cast<int>(amcDataPresent), 
+            static_cast<int>(amcDataValid), static_cast<int>(amcEnabled));
+#endif
+
+        // get to the payload
+        auto const* payload64 = buffer + 2 + namc + offset;
+        auto const* payload16 = reinterpret_cast<uint16_t const*>(payload64);
+        amcoffset += amcSize;
+
+        // uhtr header v1
+        uint32_t const data_length64 = (payload16[0] & 0xffff) + ((payload16[1] & 0xf) << 16);
+        uint16_t bcn = ((payload16[1] >> 4) & 0xfff);
+        uint32_t evn = (payload16[2] & 0xffff) + ((payload16[3] & 0xff) << 16);
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+        printf("");
+#endif
+    }
 }
 
 void entryPoint(
