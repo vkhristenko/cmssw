@@ -1,4 +1,5 @@
 #include "DataFormats/HcalDetId/interface/HcalElectronicsId.h"
+#include "DataFormats/HcalDetId/interface/HcalSubdetector.h"
 
 #include "EventFilter/HcalRawToDigi/plugins/DecodeGPU.h"
 
@@ -9,6 +10,14 @@ void kernel_rawdecode_test(
         unsigned char const* data,
         uint32_t const* offsets,
         int const* feds,
+        uint32_t const* eid2did,
+        uint16_t *digisQIE11HE,
+        uint32_t *idsQIE11HE,
+        uint16_t *digisQIE8HB,
+        uint32_t *idsQIE8HB,
+        uint32_t const nsamples_qie10_hf,
+        uint32_t const nsamples_qie11_he,
+        uint32_t const nsamples_qie8_hb,
         uint32_t const nBytesTotal) {
     auto const ifed = blockIdx.x;
     auto const fed = feds[ifed];
@@ -18,8 +27,8 @@ void kernel_rawdecode_test(
         : offsets[ifed+1] - offset;
 
     // FIXME: for debugging
-    if (ifed > 0)
-        return;
+    //if (ifed > 0)
+    //    return;
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
     printf("ifed = %d fed = %d offset = %u size = %u\n", ifed, fed, offset, size);
@@ -153,8 +162,11 @@ void kernel_rawdecode_test(
                 uint8_t fiber = (channelid >> 3) & 0x1f;
                 uint8_t fchannel = channelid & 0x7;
                 HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
+                auto const did = DetId{eid2did[eid.linearIndex()]};
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("erawId = %u linearIndex = %u drawid = %u\n", 
+                    eid.rawId(), eid.linearIndex(), did.rawId());
                 printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
                     flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
 #endif
@@ -166,8 +178,11 @@ void kernel_rawdecode_test(
                 uint8_t fiber = (channelid >> 3) & 0x1f;
                 uint8_t fchannel = channelid & 0x7;
                 HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
+                auto const did = DetId{eid2did[eid.linearIndex()]};
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("erawId = %u linearIndex = %u drawid\n", 
+                    eid.rawId(), eid.linearIndex(), did.rawId());
                 printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
                     flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
 #endif
@@ -179,8 +194,11 @@ void kernel_rawdecode_test(
                 uint8_t link = (channelid >> 4) & 0xf;
                 uint8_t tower = channelid & 0xf;
                 HcalElectronicsId eid{uhtrcrate, uhtrslot, link, tower, true};
+                auto const did = DetId{eid2did[eid.linearIndex()]};
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("erawId = %u linearIndex = %u drawid = %u\n", 
+                    eid.rawId(), eid.linearIndex(), did.rawId());
                 printf("flavor = %u crate = %u slot = %u channelid = %u link = %u tower = %u\n",
                     flavor, uhtrcrate, uhtrslot, channelid, link, tower);
 #endif
@@ -188,13 +206,43 @@ void kernel_rawdecode_test(
                 break;
             }
             case 5:
+            {
+                uint8_t fiber = (channelid >> 2) & 0x3f;
+                uint8_t fchannel = channelid & 0x3;
+                HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
+                auto const did = DetId{eid2did[eid.linearIndex()]};
+                auto const subdet = did.subdetId();
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
+                    eid.rawId(), eid.linearIndex(), did.rawId(),
+                    subdet == HcalBarrel);
+                printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
+                    flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
+#endif
+                break;
+            }
             case 7:
             {
                 uint8_t const fiber = (channelid >> 2) & 0x3f;
                 uint8_t const fchannel = channelid & 0x3;
                 HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
+                auto const did = DetId{eid2did[eid.linearIndex()]};
+
+                /*
+                if (eid.rawId() >= HcalElectronicsId::maxLinearIndex) {
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                    printf("*** rawid = %u has no known det id***\n",
+                        eid.rawId());
+#endif
+                    break;
+                }
+                */
+                //auto const did = DetId{eid2did[eid.rawId()]};
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("erawId = %u linearIndex = %u drawid = %u\n", 
+                    eid.rawId(), eid.linearIndex(), did.rawId());
                 printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
                     flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
 #endif
@@ -205,16 +253,9 @@ void kernel_rawdecode_test(
 #ifdef HCAL_RAWDECODE_GPUDEBUG
                 printf("flavor = %u crate = %u slot = %u channelid = %u\n",
                     flavor, uhtrcrate, uhtrslot, channelid);
-#else
+#endif
                 ;
-#endif
             }
-
-/*
-#ifdef HCAL_RAWDECODE_GPUDEBUG
-            printf("fed = %d crate = %u slot = %u flavor = %u fw_lastbit = %u channelid = %u\n", fed, uhtrcrate, uhtrslot, flavor, fw_lastbit, channelid);
-#endif
-*/
 
             ptr++;
         }
@@ -223,6 +264,8 @@ void kernel_rawdecode_test(
 
 void entryPoint(
         InputDataCPU const& inputCPU, InputDataGPU& inputGPU,
+        OutputDataGPU& outputGPU,
+        ConditionsProducts const& conditions, ConfigurationParameters const& config,
         cuda::stream_t<> &cudaStream,
         uint32_t const nfedsWithData,
         uint32_t const nbytesTotal) {
@@ -247,6 +290,14 @@ void entryPoint(
         inputGPU.data,
         inputGPU.offsets,
         inputGPU.feds,
+        conditions.eMappingProduct.eid2did,
+        outputGPU.digisQIE11HE,
+        outputGPU.idsQIE11HE,
+        outputGPU.digisQIE8HB,
+        outputGPU.idsQIE8HB,
+        config.nsamples_qie10_hf,
+        config.nsamples_qie11_he,
+        config.nsamples_qie8_hb,
         nbytesTotal);
     cudaCheck( cudaGetLastError() );
 }
