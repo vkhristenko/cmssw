@@ -1,3 +1,5 @@
+#include "DataFormats/HcalDetId/interface/HcalElectronicsId.h"
+
 #include "EventFilter/HcalRawToDigi/plugins/DecodeGPU.h"
 
 namespace hcal { namespace raw {
@@ -111,6 +113,111 @@ void kernel_rawdecode_test(
         printf("fed = %d crate = %u slot = %u presamples = %u\n>>> orbitN = %u firmFlavor = %u eventType = %u payloadFormat = %u\n",
             fed, uhtrcrate, uhtrslot, presamples, orbitN, firmFlavor, eventType, payloadFormat);
 #endif
+
+        // this should be filtering out uMNio...
+        if (payloadFormat != 1)
+            continue;
+
+        // skip uhtr header words
+        auto const channelDataSize = data_length64 - 2; // 2 uhtr header v1 words
+        auto const* channelDataBuffer64Start = payload64 + 2; // 2 uhtr header v2 wds
+        auto const* channelDataBuffer64End = channelDataBuffer64Start 
+            + channelDataSize;
+        auto const* ptr = reinterpret_cast<uint16_t const*>(channelDataBuffer64Start);
+        auto const* end = reinterpret_cast<uint16_t const*>(channelDataBuffer64End); 
+
+        // iterate thru the channel data
+        uint8_t wordsPerChannel = 0;
+        while (ptr != end) {
+            uint8_t const fw_lastbit = (ptr[0] >> 15) & 0x1;
+            if (fw_lastbit != 1) {
+                wordsPerChannel++;
+                ptr++;
+                continue;
+            } else {
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf(">>> wordsPerChannel = %u\n", wordsPerChannel);
+#endif
+
+                wordsPerChannel = 1;
+            }
+            uint8_t const flavor = (ptr[0] >> 12) & 0x7;
+            uint8_t const channelid = ptr[0] & 0xff;
+
+            switch (flavor) {
+            case 0:
+            case 1:
+            case 3:
+            {
+                uint8_t fiber = (channelid >> 3) & 0x1f;
+                uint8_t fchannel = channelid & 0x7;
+                HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
+                    flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
+#endif
+
+                break;
+            }
+            case 2:
+            {
+                uint8_t fiber = (channelid >> 3) & 0x1f;
+                uint8_t fchannel = channelid & 0x7;
+                HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
+                    flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
+#endif
+
+                break;
+            }
+            case 4:
+            {
+                uint8_t link = (channelid >> 4) & 0xf;
+                uint8_t tower = channelid & 0xf;
+                HcalElectronicsId eid{uhtrcrate, uhtrslot, link, tower, true};
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("flavor = %u crate = %u slot = %u channelid = %u link = %u tower = %u\n",
+                    flavor, uhtrcrate, uhtrslot, channelid, link, tower);
+#endif
+
+                break;
+            }
+            case 5:
+            case 7:
+            {
+                uint8_t const fiber = (channelid >> 2) & 0x3f;
+                uint8_t const fchannel = channelid & 0x3;
+                HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
+                    flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
+#endif
+
+                break;
+            }
+            default:
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("flavor = %u crate = %u slot = %u channelid = %u\n",
+                    flavor, uhtrcrate, uhtrslot, channelid);
+#else
+                ;
+#endif
+            }
+
+/*
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+            printf("fed = %d crate = %u slot = %u flavor = %u fw_lastbit = %u channelid = %u\n", fed, uhtrcrate, uhtrslot, flavor, fw_lastbit, channelid);
+#endif
+*/
+
+            ptr++;
+        }
     }
 }
 
