@@ -59,6 +59,12 @@ void kernel_rawdecode_test(
         int const slot = (word >> 16) & 0xf;
         int const amcBlockNumber = (word >> 20) & 0xff;
         int const amcSize = (word >> 32) & 0xffffff;
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+        printf("fed = %d amcid = %u slot = %d amcBlockNumber = %d amcSize = %d\n",
+            fed, amcid, slot, amcBlockNumber, amcSize);
+#endif
+
         bool const amcmore = ((word >> 61) & 0x1) != 0;
         bool const amcSegmented = ((word >> 60) & 0x1) != 0;
         bool const amcLengthOk = ((word >> 62) & 0x1) != 0;
@@ -68,25 +74,42 @@ void kernel_rawdecode_test(
         bool const amcEnabled = ((word >> 59) & 0x1) != 0;
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
-        printf("fed = %d amcid = %u amcBlockNumber = %d amcSize = %d\namcmore = %d amcSegmented = %d, amcLengthOk = %d amcCROk = %d\n amcDataPresent = %d amcDataValid = %d amcEnabled = %d\n", 
-            fed, amcid, amcBlockNumber, amcSize, static_cast<int>(amcmore),
+        printf("fed = %d amcmore = %d amcSegmented = %d, amcLengthOk = %d amcCROk = %d\n>> amcDataPresent = %d amcDataValid = %d amcEnabled = %d\n", 
+            fed, static_cast<int>(amcmore),
             static_cast<int>(amcSegmented), static_cast<int>(amcLengthOk), 
             static_cast<int>(amcCROk), static_cast<int>(amcDataPresent), 
             static_cast<int>(amcDataValid), static_cast<int>(amcEnabled));
 #endif
 
         // get to the payload
-        auto const* payload64 = buffer + 2 + namc + offset;
+        auto const* payload64 = buffer + 2 + namc + amcoffset;
         auto const* payload16 = reinterpret_cast<uint16_t const*>(payload64);
         amcoffset += amcSize;
 
-        // uhtr header v1
-        uint32_t const data_length64 = (payload16[0] & 0xffff) + ((payload16[1] & 0xf) << 16);
-        uint16_t bcn = ((payload16[1] >> 4) & 0xfff);
-        uint32_t evn = (payload16[2] & 0xffff) + ((payload16[3] & 0xff) << 16);
+        // uhtr header v1 1st 64 bits
+        auto const payload64_w0 = payload64[0];
+        uint32_t const data_length64 = payload64_w0 & 0xfffff;
+        uint16_t bcn = (payload64_w0 >> 20) & 0xfff;
+        uint32_t evn = (payload64_w0 >> 32) & 0xffffff;
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
-        printf("");
+        printf("fed = %d data_length64 = %u bcn = %u evn = %u\n",
+            fed, data_length64, bcn, evn);
+#endif
+
+        // uhtr header v1 2nd 64 bits
+        auto const payload64_w1 = payload64[1];
+        uint8_t const uhtrcrate = payload64_w1 & 0xff;
+        uint8_t const uhtrslot = (payload64_w1 >> 8) & 0xf;
+        uint8_t const presamples = (payload64_w1 >> 12) & 0xf;
+        uint16_t const orbitN = (payload64_w1 >> 16) & 0xffff;
+        uint8_t const firmFlavor = (payload64_w1 >> 32) & 0xff;
+        uint8_t const eventType = (payload64_w1 >> 40) & 0xf;
+        uint8_t const payloadFormat = (payload64_w1 >> 44) & 0xf;
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+        printf("fed = %d crate = %u slot = %u presamples = %u\n>>> orbitN = %u firmFlavor = %u eventType = %u payloadFormat = %u\n",
+            fed, uhtrcrate, uhtrslot, presamples, orbitN, firmFlavor, eventType, payloadFormat);
 #endif
     }
 }
