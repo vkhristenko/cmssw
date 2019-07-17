@@ -8,7 +8,8 @@
 namespace hcal { namespace raw {
 
 void entryPoint(
-        InputDataCPU const&, InputDataGPU&,
+        InputDataCPU const&, InputDataGPU&, OutputDataGPU&,
+        ConditionsProducts const&, ConfigurationParameters const&,
         cuda::stream_t<> &cudaStream,
         uint32_t const, uint32_t const);
 

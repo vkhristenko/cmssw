@@ -10,12 +10,14 @@ namespace hcal { namespace raw {
 // TODO: 0x3FFFFF * 4B ~= 16MB
 // tmp solution for linear mapping of eid -> did
 ElectronicsMappingGPU::ElectronicsMappingGPU(HcalElectronicsMap const& mapping) 
-    : eid2did_(HcalElectronicsId::maxLinearIndex)
+    : eid2did_(HcalElectronicsId::maxLinearIndex, 0u)
 {  
-    auto const& eids = mapping.allElectronicsIdPrecision();
+    auto const& eids = mapping.allElectronicsId();
     for (uint32_t i=0; i<eids.size(); ++i) {
         auto const& eid = eids[i];
-        eid2did_[eid.linearIndex()] = mapping.lookup(eid).rawId();
+        eid2did_[eid.linearIndex()] = eid.isTriggerChainId()
+            ? mapping.lookupTrigger(eid).rawId()
+            : mapping.lookup(eid).rawId();
     }
 }
 

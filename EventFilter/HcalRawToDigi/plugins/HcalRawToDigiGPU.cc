@@ -54,7 +54,7 @@ private:
     // FIXME move this to use raii
     hcal::raw::InputDataCPU inputCPU_;
     hcal::raw::InputDataGPU inputGPU_;
-    //hcal::raw::OutputDataGPU outputGPU_;
+    hcal::raw::OutputDataGPU outputGPU_;
     //hcal::raw::ScratchDataGPU scratchGPU_;
     //hcal::raw::OutputDataCPU outputCPU_;
 };
@@ -69,7 +69,11 @@ void HcalRawToDigiGPU::fillDescriptions(
     for (int i=0; i<nFeds; ++i)
         feds[i] = i + FEDNumbering::MINHCALuTCAFEDID;
     desc.add<std::vector<int>>("FEDs", feds);
-    desc.add<uint32_t>("maxChannels", 20000);
+    desc.add<uint32_t>("maxChannelsQIE11HE", 5000);
+    desc.add<uint32_t>("maxChannelsQIE8HB", 5000);
+    desc.add<uint32_t>("nsamples_qie10_hf", 3);
+    desc.add<uint32_t>("nsamples_qie11_he", 8);
+    desc.add<uint32_t>("nsamples_qie8_hb", 10);
 //    desc.add<std::string>("digisLabelEB", "ebDigisGPU");
 //    desc.add<std::string>("digisLabelEE", "eeDigisGPU");
 
@@ -87,12 +91,16 @@ HcalRawToDigiGPU::HcalRawToDigiGPU(
     //    ps.getParameter<std::string>("digisLabelEE"))}
     , fedsToUnpack_{ps.getParameter<std::vector<int>>("FEDs")}
 {
-    config_.maxChannels = ps.getParameter<uint32_t>("maxChannels");
+    config_.maxChannelsQIE11HE = ps.getParameter<uint32_t>("maxChannelsQIE11HE");
+    config_.maxChannelsQIE8HB = ps.getParameter<uint32_t>("maxChannelsQIE8HB");
+    config_.nsamples_qie10_hf = ps.getParameter<uint32_t>("nsamples_qie10_hf");
+    config_.nsamples_qie11_he = ps.getParameter<uint32_t>("nsamples_qie11_he");
+    config_.nsamples_qie8_hb = ps.getParameter<uint32_t>("nsamples_qie8_hb");
 
     inputCPU_.allocate();
     inputGPU_.allocate();
-    /*
     outputGPU_.allocate(config_);
+    /*
     scratchGPU_.allocate(config_);
     outputCPU_.allocate();
     */
@@ -100,8 +108,8 @@ HcalRawToDigiGPU::HcalRawToDigiGPU(
 
 HcalRawToDigiGPU::~HcalRawToDigiGPU() {
     inputGPU_.deallocate();
-    /*
     outputGPU_.deallocate(config_);
+    /*
     scratchGPU_.deallocate(config_);
     */
 }
@@ -142,7 +150,9 @@ void HcalRawToDigiGPU::acquire(
         if (nbytes < hcal::raw::empty_event_size)
             continue;
         
+#ifdef HCAL_RAWDECODE_CPUDEBUG
         printf("fed = %d nbytes = %lu\n", fed, nbytes);
+#endif
 
         // copy raw data into plain buffer
         std::memcpy(inputCPU_.data.data() + currentCummOffset, data.data(), nbytes);
@@ -156,8 +166,8 @@ void HcalRawToDigiGPU::acquire(
     }
 
     hcal::raw::entryPoint(
-        inputCPU_, inputGPU_, /*outputGPU_, scratchGPU_, outputCPU_,*/
-        /*conditions,*/ ctx.stream(), counter, currentCummOffset);
+        inputCPU_, inputGPU_, outputGPU_, /*scratchGPU_, outputCPU_,*/
+        conditions, config_, ctx.stream(), counter, currentCummOffset);
 }
 
 void HcalRawToDigiGPU::produce(
