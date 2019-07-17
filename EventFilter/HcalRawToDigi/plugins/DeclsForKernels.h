@@ -4,6 +4,8 @@
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
 
+#include "EventFilter/HcalRawToDigi/plugins/ElectronicsMappingGPU.h"
+
 #include <vector>
 
 namespace hcal { namespace raw {
@@ -11,6 +13,31 @@ namespace hcal { namespace raw {
 constexpr int32_t empty_event_size = 32;
 constexpr uint32_t utca_nfeds_max = 50;
 constexpr uint32_t nbytes_per_fed_max = 10 * 1024;
+
+struct Flavor1 {
+    static constexpr int WORDS_PER_SAMPLES = 1;
+    static constexpr int HEADER_WORDS = 1;
+};
+
+struct Flavor2 {
+    static constexpr int WORDS_PER_SAMPLES = 2;
+    static constexpr int HEADER_WORDS = 1;
+};
+
+struct Flavor3 {
+    static constexpr int WORDS_PER_SAMPLES = 1;
+    static constexpr int HEADER_WORDS = 1;
+};
+
+struct Flavor4 {
+    static constexpr int WORDS_PER_SAMPLES = 1;
+    static constexpr int HEADER_WORDS = 1;
+};
+
+struct Flavor5 {
+    static constexpr float WORDS_PER_SAMPLES = 0.5;
+    static constexpr int HEADER_WORDS = 1;
+};
 
 struct ConfigurationParameters {
     uint32_t maxChannels;
@@ -49,6 +76,10 @@ struct InputDataGPU {
             cudaCheck( cudaFree(feds) );
         }
     }
+};
+
+struct ConditionsProducts {
+    ElectronicsMappingGPU::Product const& eMappingProduct;
 };
 
 }}

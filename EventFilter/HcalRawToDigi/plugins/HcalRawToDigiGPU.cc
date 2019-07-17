@@ -23,6 +23,8 @@
 
 #include "EventFilter/HcalRawToDigi/plugins/DeclsForKernels.h"
 #include "EventFilter/HcalRawToDigi/plugins/DecodeGPU.h"
+#include "EventFilter/HcalRawToDigi/plugins/ElectronicsMappingGPU.h"
+#include "CondFormats/DataRecord/interface/HcalElectronicsMapRcd.h"
 #include "DataFormats/FEDRawData/interface/FEDNumbering.h"
 
 class HcalRawToDigiGPU
@@ -113,14 +115,12 @@ void HcalRawToDigiGPU::acquire(
     CUDAScopedContextAcquire ctx{event.streamID(), std::move(holder), cudaState_};
 
     // conditions
-    /*
     edm::ESHandle<hcal::raw::ElectronicsMappingGPU> eMappingHandle;
-    setup.get<HcalMappingElectronicsRcd>().get(eMappingHandle);
+    setup.get<HcalElectronicsMapRcd>().get(eMappingHandle);
     auto const& eMappingProduct = eMappingHandle->getProduct(ctx.stream());
-    */
 
     // bundle up conditions
-    //hcal::raw::ConditionsProducts conditions{eMappingProduct};
+    hcal::raw::ConditionsProducts conditions{eMappingProduct};
 
     // event data
     edm::Handle<FEDRawDataCollection> rawDataHandle;
