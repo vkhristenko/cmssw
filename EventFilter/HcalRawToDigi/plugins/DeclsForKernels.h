@@ -6,6 +6,8 @@
 
 #include "EventFilter/HcalRawToDigi/plugins/ElectronicsMappingGPU.h"
 
+#include "CUDADataFormats/HcalDigi/interface/DigiCollection.h"
+
 #include <vector>
 
 namespace hcal { namespace raw {
@@ -19,31 +21,6 @@ constexpr uint32_t nbytes_per_fed_max = 10 * 1024;
 constexpr uint32_t numOutputCollections = 2;
 constexpr uint8_t OutputF01HE = 0;
 constexpr uint8_t OutputF5HB = 1;
-
-struct Flavor01 {
-    static constexpr int WORDS_PER_SAMPLE = 1;
-    static constexpr int HEADER_WORDS = 1;
-};
-
-struct Flavor2 {
-    static constexpr int WORDS_PER_SAMPLE = 2;
-    static constexpr int HEADER_WORDS = 1;
-};
-
-struct Flavor3 {
-    static constexpr int WORDS_PER_SAMPLE = 1;
-    static constexpr int HEADER_WORDS = 1;
-};
-
-struct Flavor4 {
-    static constexpr int WORDS_PER_SAMPLE = 1;
-    static constexpr int HEADER_WORDS = 1;
-};
-
-struct Flavor5 {
-    static constexpr float WORDS_PER_SAMPLE = 0.5;
-    static constexpr int HEADER_WORDS = 1;
-};
 
 struct ConfigurationParameters {
     uint32_t maxChannelsF01HE;
