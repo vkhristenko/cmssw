@@ -14,37 +14,42 @@ constexpr int32_t empty_event_size = 32;
 constexpr uint32_t utca_nfeds_max = 50;
 constexpr uint32_t nbytes_per_fed_max = 10 * 1024;
 
+// each collection corresponds to a particular flavor with a certain number of 
+// samples per digi
+constexpr uint32_t numOutputCollections = 2;
+constexpr uint8_t OutputF01HE = 0;
+constexpr uint8_t OutputF5HB = 1;
+
 struct Flavor01 {
-    static constexpr int WORDS_PER_SAMPLES = 1;
+    static constexpr int WORDS_PER_SAMPLE = 1;
     static constexpr int HEADER_WORDS = 1;
 };
 
 struct Flavor2 {
-    static constexpr int WORDS_PER_SAMPLES = 2;
+    static constexpr int WORDS_PER_SAMPLE = 2;
     static constexpr int HEADER_WORDS = 1;
 };
 
 struct Flavor3 {
-    static constexpr int WORDS_PER_SAMPLES = 1;
+    static constexpr int WORDS_PER_SAMPLE = 1;
     static constexpr int HEADER_WORDS = 1;
 };
 
 struct Flavor4 {
-    static constexpr int WORDS_PER_SAMPLES = 1;
+    static constexpr int WORDS_PER_SAMPLE = 1;
     static constexpr int HEADER_WORDS = 1;
 };
 
 struct Flavor5 {
-    static constexpr float WORDS_PER_SAMPLES = 0.5;
+    static constexpr float WORDS_PER_SAMPLE = 0.5;
     static constexpr int HEADER_WORDS = 1;
 };
 
 struct ConfigurationParameters {
-    uint32_t maxChannelsQIE11HE;
-    uint32_t maxChannelsQIE8HB;
-    uint32_t nsamples_qie10_hf;
-    uint32_t nsamples_qie11_he;
-    uint32_t nsamples_qie8_hb;
+    uint32_t maxChannelsF01HE;
+    uint32_t maxChannelsF5HB;
+    uint32_t nsamplesF01HE;
+    uint32_t nsamplesF5HB;
 };
 
 struct InputDataCPU {
@@ -59,36 +64,61 @@ struct InputDataCPU {
     }
 };
 
-struct OutputDataGPU {
-    // qie 11 he
-    uint16_t *digisQIE11HE = nullptr;
-    uint32_t *idsQIE11HE = nullptr;
+struct OutputDataCPU {
+    std::vector<uint32_t, CUDAHostAllocator<uint32_t>> nchannels;
 
-    // qie 8 hb
-    uint16_t *digisQIE8HB = nullptr;
-    uint32_t *idsQIE8HB = nullptr;
+    void allocate() {
+        nchannels.resize(numOutputCollections);
+    }
+};
+
+struct ScratchDataGPU {
+    // depends on tHE number of output collections
+    // that is a statically known predefined number!!!
+    uint32_t *pChannelsCounters = nullptr;
+
+    void allocate(ConfigurationParameters const&) {
+        cudaCheck( cudaMalloc((void**)&pChannelsCounters,
+            sizeof(uint32_t) * numOutputCollections) );
+    }
+
+    void deallocate(ConfigurationParameters const&) {
+        if (pChannelsCounters) {
+            cudaCheck( cudaFree(pChannelsCounters) );
+        }
+    }
+};
+
+struct OutputDataGPU {
+    // qie 11 HE
+    uint16_t *digisF01HE = nullptr;
+    uint32_t *idsF01HE = nullptr;
+
+    // qie 8 HB
+    uint16_t *digisF5HB = nullptr;
+    uint32_t *idsF5HB = nullptr;
 
     void allocate(ConfigurationParameters const& config) {
-        cudaCheck( cudaMalloc((void**)&digisQIE11HE,
-            config.maxChannelsQIE11HE * sizeof(uint16_t) *
-            config.nsamples_qie11_he * Flavor01::WORDS_PER_SAMPLES) );
-        cudaCheck( cudaMalloc((void**)&idsQIE11HE,
-            sizeof(uint32_t) * config.maxChannelsQIE11HE) );
+        cudaCheck( cudaMalloc((void**)&digisF01HE,
+            config.maxChannelsF01HE * sizeof(uint16_t) *
+            config.nsamplesF01HE * Flavor01::WORDS_PER_SAMPLE) );
+        cudaCheck( cudaMalloc((void**)&idsF01HE,
+            sizeof(uint32_t) * config.maxChannelsF01HE) );
         
-        cudaCheck( cudaMalloc((void**)&digisQIE8HB,
-            config.maxChannelsQIE8HB * sizeof(uint16_t) *
-            config.nsamples_qie8_hb * Flavor5::WORDS_PER_SAMPLES) );
-        cudaCheck( cudaMalloc((void**)&idsQIE11HE,
-            sizeof(uint32_t) * config.maxChannelsQIE11HE) );
+        cudaCheck( cudaMalloc((void**)&digisF5HB,
+            config.maxChannelsF5HB * sizeof(uint16_t) *
+            config.nsamplesF5HB * Flavor5::WORDS_PER_SAMPLE) );
+        cudaCheck( cudaMalloc((void**)&idsF5HB,
+            sizeof(uint32_t) * config.maxChannelsF5HB) );
     }
 
     void deallocate(ConfigurationParameters const& config) {
-        if (digisQIE11HE) {
-            cudaCheck( cudaFree(digisQIE11HE) );
-            cudaCheck( cudaFree(idsQIE11HE) );
+        if (digisF01HE) {
+            cudaCheck( cudaFree(digisF01HE) );
+            cudaCheck( cudaFree(idsF01HE) );
 
-            cudaCheck( cudaFree(digisQIE8HB) );
-            cudaCheck( cudaFree(idsQIE8HB) );
+            cudaCheck( cudaFree(digisF5HB) );
+            cudaCheck( cudaFree(idsF5HB) );
         }    
     }
 };

@@ -16,6 +16,9 @@ class ElectronicsMappingGPU {
 public:
     struct Product {
         ~Product();
+        // trigger
+        uint32_t *eid2tid;
+        // detector
         uint32_t *eid2did;
     };
 
@@ -36,6 +39,7 @@ public:
 private:
     // in the future, we need to arrange so to avoid this copy on the host
     // if possible
+    std::vector<uint32_t, CUDAHostAllocator<uint32_t>> eid2tid_;
     std::vector<uint32_t, CUDAHostAllocator<uint32_t>> eid2did_;
 
     CUDAESProduct<Product> product_;
