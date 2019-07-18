@@ -1,9 +1,48 @@
 #include "DataFormats/HcalDetId/interface/HcalElectronicsId.h"
 #include "DataFormats/HcalDetId/interface/HcalSubdetector.h"
+#include "DataFormats/HcalDetId/interface/HcalDetId.h"
 
 #include "EventFilter/HcalRawToDigi/plugins/DecodeGPU.h"
 
 namespace hcal { namespace raw {
+
+__forceinline__ __device__
+char const* get_subdet_str(DetId const& did) {
+    switch (did.subdetId()) {
+    case HcalEmpty:
+        return "HcalEmpty";
+        break;
+    case HcalBarrel:
+        return "HcalBarrel";
+        break;
+    case HcalEndcap:
+        return "HcalEndcap";
+        break;
+    case HcalOuter:
+        return "HcalOuter";
+        break;
+    case HcalForward:
+        return "HcalForward";
+        break;
+    case HcalTriggerTower:
+        return "HcalTriggerTower";
+        break;
+    case HcalOther:
+        return "HcalOther";
+        break;
+    default:
+        return "Unknown";
+        break;
+    }
+
+    return "Unknown";
+}
+
+__forceinline__ __device__
+bool is_channel_header_word(uint16_t const* ptr) {
+    uint8_t bit = (*ptr >> 15) & 0x1;
+    return bit == 1;
+}
 
 __global__
 void kernel_rawdecode_test(
@@ -11,13 +50,14 @@ void kernel_rawdecode_test(
         uint32_t const* offsets,
         int const* feds,
         uint32_t const* eid2did,
-        uint16_t *digisQIE11HE,
-        uint32_t *idsQIE11HE,
-        uint16_t *digisQIE8HB,
-        uint32_t *idsQIE8HB,
-        uint32_t const nsamples_qie10_hf,
-        uint32_t const nsamples_qie11_he,
-        uint32_t const nsamples_qie8_hb,
+        uint32_t const* eid2tid,
+        uint16_t *digisF01HE,
+        uint32_t *idsF01HE,
+        uint16_t *digisF5HB,
+        uint32_t *idsF5HB,
+        uint32_t *pChannelsCounters,
+        uint32_t const nsamplesF01HE,
+        uint32_t const nsamplesF5HB,
         uint32_t const nBytesTotal) {
     auto const ifed = blockIdx.x;
     auto const fed = feds[ifed];
@@ -27,8 +67,8 @@ void kernel_rawdecode_test(
         : offsets[ifed+1] - offset;
 
     // FIXME: for debugging
-    //if (ifed > 0)
-    //    return;
+    //if (ifed > 0) return;
+
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
     printf("ifed = %d fed = %d offset = %u size = %u\n", ifed, fed, offset, size);
@@ -136,43 +176,74 @@ void kernel_rawdecode_test(
         auto const* end = reinterpret_cast<uint16_t const*>(channelDataBuffer64End); 
 
         // iterate thru the channel data
-        uint8_t wordsPerChannel = 0;
         while (ptr != end) {
-            uint8_t const fw_lastbit = (ptr[0] >> 15) & 0x1;
+            // assume that if all is valid, ptr points 
+            // to the header word of the channel to be decoded
+            // skip to the next channel header word if above assumption
+            // does not hold
+            uint8_t const fw_lastbit = (*ptr >> 15) & 0x1;
             if (fw_lastbit != 1) {
-                wordsPerChannel++;
                 ptr++;
                 continue;
-            } else {
-
-#ifdef HCAL_RAWDECODE_GPUDEBUG
-                printf(">>> wordsPerChannel = %u\n", wordsPerChannel);
-#endif
-
-                wordsPerChannel = 1;
             }
+
+            // for all of the flavors, these 2 guys have the same bit layout
             uint8_t const flavor = (ptr[0] >> 12) & 0x7;
             uint8_t const channelid = ptr[0] & 0xff;
+            auto const* const new_channel_start = ptr;
 
+            // flavor dependent stuff
             switch (flavor) {
             case 0:
             case 1:
-            case 3:
             {
+                // treat eid and did
                 uint8_t fiber = (channelid >> 3) & 0x1f;
                 uint8_t fchannel = channelid & 0x7;
                 HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
-                auto const did = DetId{eid2did[eid.linearIndex()]};
+                auto const did = HcalDetId{eid2did[eid.linearIndex()]};
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
-                printf("erawId = %u linearIndex = %u drawid = %u\n", 
-                    eid.rawId(), eid.linearIndex(), did.rawId());
+                printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
+                    eid.rawId(), eid.linearIndex(), did.rawId(),
+                    get_subdet_str(did));
                 printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
                     flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
 #endif
 
+                // remove digis not for HE
+                if (did.subdetId() != HcalEndcap) 
+                    break;
+
+                // count words
+                auto const* channel_header_word = ptr++;
+                while (!is_channel_header_word(ptr) && ptr!=end) ++ptr;
+                auto const* channel_end = ptr; // set ptr 
+                uint32_t const nwords = channel_end - channel_header_word;
+
+                // filter out this digi if nwords does not equal expected
+                uint32_t const expected_words = 
+                    nsamplesF01HE * Flavor01::WORDS_PER_SAMPLE + 
+                    Flavor01::HEADER_WORDS;
+                if (nwords != expected_words)
+                    break;
+
+                // inc the number of digis of this type
+                auto const pos = atomicAdd(&pChannelsCounters[OutputF01HE], 1);
+
+                // store to global mem words for this digi
+                idsF01HE[pos] = did.rawId();
+                for (uint8_t iword=0; iword<expected_words; iword++)
+                    digisF01HE[pos*expected_words + iword] = 
+                        channel_header_word[iword];
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("nwords = %u\n", nwords);
+#endif
+
                 break;
             }
+            case 3: break;
             case 2:
             {
                 uint8_t fiber = (channelid >> 3) & 0x1f;
@@ -181,8 +252,9 @@ void kernel_rawdecode_test(
                 auto const did = DetId{eid2did[eid.linearIndex()]};
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
-                printf("erawId = %u linearIndex = %u drawid\n", 
-                    eid.rawId(), eid.linearIndex(), did.rawId());
+                printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
+                    eid.rawId(), eid.linearIndex(), did.rawId(),
+                    get_subdet_str(did));
                 printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
                     flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
 #endif
@@ -194,11 +266,12 @@ void kernel_rawdecode_test(
                 uint8_t link = (channelid >> 4) & 0xf;
                 uint8_t tower = channelid & 0xf;
                 HcalElectronicsId eid{uhtrcrate, uhtrslot, link, tower, true};
-                auto const did = DetId{eid2did[eid.linearIndex()]};
+                auto const did = DetId{eid2tid[eid.linearIndex()]};
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
-                printf("erawId = %u linearIndex = %u drawid = %u\n", 
-                    eid.rawId(), eid.linearIndex(), did.rawId());
+                printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
+                    eid.rawId(), eid.linearIndex(), did.rawId(),
+                    get_subdet_str(did));
                 printf("flavor = %u crate = %u slot = %u channelid = %u link = %u tower = %u\n",
                     flavor, uhtrcrate, uhtrslot, channelid, link, tower);
 #endif
@@ -210,16 +283,42 @@ void kernel_rawdecode_test(
                 uint8_t fiber = (channelid >> 2) & 0x3f;
                 uint8_t fchannel = channelid & 0x3;
                 HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
-                auto const did = DetId{eid2did[eid.linearIndex()]};
-                auto const subdet = did.subdetId();
+                auto const did = HcalDetId{eid2did[eid.linearIndex()]};
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
                 printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
                     eid.rawId(), eid.linearIndex(), did.rawId(),
-                    subdet == HcalBarrel);
+                    get_subdet_str(did));
                 printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
                     flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
 #endif
+
+                // remove digis not for HB
+                if (did.subdetId() != HcalBarrel) 
+                    break;
+
+                // count words
+                auto const* channel_header_word = ptr++;
+                while (!is_channel_header_word(ptr) && ptr!=end) ++ptr;
+                auto const* channel_end = ptr; // set ptr 
+                uint32_t const nwords = channel_end - channel_header_word;
+
+                // filter out this digi if nwords does not equal expected
+                uint32_t const expected_words = 
+                    nsamplesF5HB * Flavor5::WORDS_PER_SAMPLE + 
+                    Flavor5::HEADER_WORDS;
+                if (nwords != expected_words)
+                    break;
+
+                // inc the number of digis of this type
+                auto const pos = atomicAdd(&pChannelsCounters[OutputF5HB], 1);
+
+                // store to global mem words for this digi
+                idsF5HB[pos] = did.rawId();
+                for (uint8_t iword=0; iword<expected_words; iword++)
+                    digisF5HB[pos*expected_words + iword] = 
+                        channel_header_word[iword];
+
                 break;
             }
             case 7:
@@ -257,14 +356,19 @@ void kernel_rawdecode_test(
                 ;
             }
 
-            ptr++;
+            // skip to the next word in case 
+            // 1) current channel was not treated
+            // 2) we are in the middle of the digi words and not at the end
+            while (new_channel_start==ptr || 
+                   !is_channel_header_word(ptr) && ptr!=end) ++ptr;
         }
     }
 }
 
 void entryPoint(
         InputDataCPU const& inputCPU, InputDataGPU& inputGPU,
-        OutputDataGPU& outputGPU,
+        OutputDataGPU& outputGPU, ScratchDataGPU &scratchGPU,
+        OutputDataCPU& outputCPU,
         ConditionsProducts const& conditions, ConfigurationParameters const& config,
         cuda::stream_t<> &cudaStream,
         uint32_t const nfedsWithData,
@@ -280,6 +384,10 @@ void entryPoint(
         nfedsWithData * sizeof(uint32_t),
         cudaMemcpyHostToDevice,
         cudaStream.id()) );
+    cudaCheck( cudaMemsetAsync(scratchGPU.pChannelsCounters,
+                               0,
+                               sizeof(uint32_t) * numOutputCollections,
+                               cudaStream.id()) );
     cudaCheck( cudaMemcpyAsync(inputGPU.feds,
         inputCPU.feds.data(),
         nfedsWithData * sizeof(int),
@@ -291,15 +399,22 @@ void entryPoint(
         inputGPU.offsets,
         inputGPU.feds,
         conditions.eMappingProduct.eid2did,
-        outputGPU.digisQIE11HE,
-        outputGPU.idsQIE11HE,
-        outputGPU.digisQIE8HB,
-        outputGPU.idsQIE8HB,
-        config.nsamples_qie10_hf,
-        config.nsamples_qie11_he,
-        config.nsamples_qie8_hb,
+        conditions.eMappingProduct.eid2tid,
+        outputGPU.digisF01HE,
+        outputGPU.idsF01HE,
+        outputGPU.digisF5HB,
+        outputGPU.idsF5HB,
+        scratchGPU.pChannelsCounters,
+        config.nsamplesF01HE,
+        config.nsamplesF5HB,
         nbytesTotal);
     cudaCheck( cudaGetLastError() );
+
+    cudaCheck( cudaMemcpyAsync(outputCPU.nchannels.data(),
+                              scratchGPU.pChannelsCounters,
+                              sizeof(uint32_t) * numOutputCollections,
+                              cudaMemcpyDeviceToHost,
+                              cudaStream.id()) );
 }
 
 }}
