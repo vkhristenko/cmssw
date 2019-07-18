@@ -43,8 +43,10 @@ private:
 
 private:
     edm::EDGetTokenT<FEDRawDataCollection> rawDataToken_;
-    //edm::EDPutTokenT<CUDAProduct<hcal::DigisCollection>> digisEBToken_, 
-    //    digisEEToken_;
+    edm::EDPutTokenT<CUDAProduct<hcal::DigiCollection<hcal::Flavor01>>> 
+        digisF01HEToken_;
+    edm::EDPutTokenT<CUDAProduct<hcal::DigiCollection<hcal::Flavor5>>> 
+        digisF5HBToken_;
 
     CUDAContextState cudaState_;
 
@@ -73,8 +75,8 @@ void HcalRawToDigiGPU::fillDescriptions(
     desc.add<uint32_t>("maxChannelsF5HB", 5000);
     desc.add<uint32_t>("nsamplesF01HE", 8);
     desc.add<uint32_t>("nsamplesF5HB", 8);
-//    desc.add<std::string>("digisLabelEB", "ebDigisGPU");
-//    desc.add<std::string>("digisLabelEE", "eeDigisGPU");
+    desc.add<std::string>("digisLabelF5HB", "f5HBDigisGPU");
+    desc.add<std::string>("digisLabelF01HE", "f01HEDigisGPU");
 
     std::string label = "hcalRawToDigiGPU";
     confDesc.add(label, desc);
@@ -84,10 +86,10 @@ HcalRawToDigiGPU::HcalRawToDigiGPU(
         const edm::ParameterSet& ps) 
     : rawDataToken_{consumes<FEDRawDataCollection>(ps.getParameter<edm::InputTag>(
         "InputLabel"))}
-    //, digisEBToken_{produces<CUDAProduct<hcal::DigisCollection>>(
-    //    ps.getParameter<std::string>("digisLabelEB"))}
-    //, digisEEToken_{produces<CUDAProduct<hcal::DigisCollection>>(
-    //    ps.getParameter<std::string>("digisLabelEE"))}
+    , digisF01HEToken_{produces<CUDAProduct<hcal::DigiCollection<hcal::Flavor01>>>(
+        ps.getParameter<std::string>("digisLabelF01HE"))}
+    , digisF5HBToken_{produces<CUDAProduct<hcal::DigiCollection<hcal::Flavor5>>>(
+        ps.getParameter<std::string>("digisLabelF5HB"))}
     , fedsToUnpack_{ps.getParameter<std::vector<int>>("FEDs")}
 {
     config_.maxChannelsF01HE = ps.getParameter<uint32_t>("maxChannelsF01HE");
@@ -175,6 +177,18 @@ void HcalRawToDigiGPU::produce(
         outputCPU_.nchannels[hcal::raw::OutputF01HE], 
         outputCPU_.nchannels[hcal::raw::OutputF5HB]);
 #endif
+
+    // get the number of channels
+    auto const nchannelsF01HE = outputCPU_.nchannels[hcal::raw::OutputF01HE];
+    auto const nchannelsF5HB = outputCPU_.nchannels[hcal::raw::OutputF5HB];
+
+    hcal::DigiCollection<hcal::Flavor01> digisF01HE{outputGPU_.idsF01HE,
+        outputGPU_.digisF01HE, nchannelsF01HE, config_.nsamplesF01HE};
+    hcal::DigiCollection<hcal::Flavor5> digisF5HB{outputGPU_.idsF5HB,
+        outputGPU_.digisF5HB, nchannelsF5HB, config_.nsamplesF5HB};
+
+    ctx.emplace(event, digisF01HEToken_, std::move(digisF01HE));
+    ctx.emplace(event, digisF5HBToken_, std::move(digisF5HB));
 
     /*
     // get the number of channels 

@@ -14,6 +14,7 @@
 <use   name="HeterogeneousCore/CUDAUtilities"/>
 <use   name="cuda-api-wrappers"/>
 <use   name="HeterogeneousCore/CUDACore"/>
+<use   name="CUDADataFormats/HcalDigi" />
 
 <library   file="HcalCalibFEDSelector.cc,HcalCalibTypeFilter.cc,HcalDigiToRaw.cc,HcalEmptyEventFilter.cc,HcalHistogramRawToDigi.cc,HcalRawToDigi.cc,modules.cc,HcalDigiToRawuHTR.cc,HcalRawToDigiFake.cc" name="EventFilterHcalRawToDigiPlugins">
 </library>
