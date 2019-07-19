@@ -48,34 +48,35 @@ private:
                  edm::WaitingTaskWithArenaHolder) override;
     void produce(edm::Event&, edm::EventSetup const&) override;
 
-    edm::EDGetTokenT<HBHEDigiCollection> digisTokenQ8_;
-    edm::EDGetTokenT<QIE11DigiCollection> digisTokenQ11_;
+    edm::EDGetTokenT<CUDAProduct<hcal::DigiCollection<hcal::Flavor01>>> 
+        digisTokenF01HE_;
+    edm::EDGetTokenT<CUDAProduct<hcal::DigiCollection<hcal::Flavor5>>> 
+        digisTokenF5HB_;
 
     hcal::mahi::ConfigParameters configParameters_;
-    hcal::mahi::InputDataGPU inputDataGPU_;
     CUDAContextState cudaState_;
 };
 
 HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps) 
-    : digisTokenQ8_{consumes<HBHEDigiCollection>(ps.getParameter<edm::InputTag>(
-        "digisLabelQIE8"))}
-    , digisTokenQ11_{consumes<QIE11DigiCollection>(ps.getParameter<edm::InputTag>(
-        "digisLabelQIE11"))}
+    : digisTokenF01HE_{
+        consumes<CUDAProduct<hcal::DigiCollection<hcal::Flavor01>>>(
+            ps.getParameter<edm::InputTag>("digisLabelF01HE"))}
+    , digisTokenF5HB_{
+        consumes<CUDAProduct<hcal::DigiCollection<hcal::Flavor5>>>(
+            ps.getParameter<edm::InputTag>("digisLabelF5HB"))}
 {
     configParameters_.maxChannels = ps.getParameter<uint32_t>("maxChannels");
-
-    inputDataGPU_.allocate(configParameters_);
 }
 
-HBHERecHitProducerGPU::~HBHERecHitProducerGPU() {
-    inputDataGPU_.deallocate(configParameters_);
-}
+HBHERecHitProducerGPU::~HBHERecHitProducerGPU() {}
 
 void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cdesc) {
     edm::ParameterSetDescription desc;
     desc.add<uint32_t>("maxChannels", 10000u);
-    desc.add<edm::InputTag>("digisLabelQIE8", edm::InputTag{"hcalDigis"});
-    desc.add<edm::InputTag>("digisLabelQIE11", edm::InputTag{"hcalDigis"});
+    desc.add<edm::InputTag>("digisLabelF01HE", 
+        edm::InputTag{"hcalRawToDigiGPU", "f01HEDigisGPU"});
+    desc.add<edm::InputTag>("digisLabelF5HB", 
+        edm::InputTag{"hcalRawToDigiGPU", "f5HBDigisGPU"});
 
     std::string label = "hbheRecHitProducerGPU";
     cdesc.add(label, desc);
@@ -86,11 +87,18 @@ void HBHERecHitProducerGPU::acquire(
         edm::EventSetup const& setup,
         edm::WaitingTaskWithArenaHolder holder) 
 {
-    // FIXME: remove debugging
+#ifdef HCAL_MAHI_CPUDEBUG
     auto start = std::chrono::high_resolution_clock::now();
+#endif
 
-    // raii
-    CUDAScopedContextAcquire ctx{event.streamID(), std::move(holder), cudaState_};
+    // input + raii
+    auto const& f01HEProduct = event.get(digisTokenF01HE_);
+    auto const& f5HBProduct = event.get(digisTokenF5HB_);
+    CUDAScopedContextAcquire ctx{f01HEProduct, std::move(holder), cudaState_};
+    auto const& f01HEDigis = ctx.get(f01HEProduct);
+    auto const& f5HBDigis = ctx.get(f5HBProduct);
+
+    hcal::mahi::InputDataGPU inputGPU{f01HEDigis, f5HBDigis};
 
     // conditions
     edm::ESHandle<HcalRecoParamsGPU> recoParamsHandle;
@@ -136,20 +144,14 @@ void HBHERecHitProducerGPU::acquire(
         respCorrsProduct, timeCorrsProduct
     };
 
-    // event data
-    edm::Handle<HBHEDigiCollection> digisQ8;
-    edm::Handle<QIE11DigiCollection> digisQ11;
-    event.getByToken(digisTokenQ8_, digisQ8);
-    event.getByToken(digisTokenQ11_, digisQ11);
-
-    hcal::mahi::InputDataCPU inputCPU{*digisQ8, *digisQ11};
-    hcal::mahi::entryPoint(inputCPU, inputDataGPU_, conditions,
+    hcal::mahi::entryPoint(inputGPU, conditions,
         configParameters_, ctx.stream());
 
-    // FIXME: remove debugging
+#ifdef HCAL_MAHI_CPUDEBUG
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     std::cout << "acquire  duration = " << duration << std::endl;
+#endif
 }
 
 void HBHERecHitProducerGPU::produce(

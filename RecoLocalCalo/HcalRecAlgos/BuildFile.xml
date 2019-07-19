@@ -20,6 +20,7 @@
 <use   name="HeterogeneousCore/CUDAUtilities"/>
 <use   name="cuda-api-wrappers"/>
 <use   name="HeterogeneousCore/CUDACore"/>
+<use   name="CUDADataFormats/HcalDigi"/>
 
 <export>
   <lib   name="1"/>
