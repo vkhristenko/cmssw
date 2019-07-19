@@ -182,6 +182,16 @@ void HcalRawToDigiGPU::produce(
     auto const nchannelsF01HE = outputCPU_.nchannels[hcal::raw::OutputF01HE];
     auto const nchannelsF5HB = outputCPU_.nchannels[hcal::raw::OutputF5HB];
 
+#ifdef HCAL_RAWDECODE_CPUDEBUG
+    printf("nchannels f01 he = %u nchannels f5 hb = %u\n",
+        nchannelsF01HE, nchannelsF5HB);
+    printf("nsamples f01he = %u stride f01he = %u nsamples f5hb = %u stride f5hb = %u\n",
+        config_.nsamplesF01HE, 
+        hcal::compute_stride<hcal::Flavor01>(config_.nsamplesF01HE),
+        config_.nsamplesF5HB,
+        hcal::compute_stride<hcal::Flavor5>(config_.nsamplesF5HB));
+#endif
+
     hcal::DigiCollection<hcal::Flavor01> digisF01HE{outputGPU_.idsF01HE,
         outputGPU_.digisF01HE, nchannelsF01HE, 
         hcal::compute_stride<hcal::Flavor01>(config_.nsamplesF01HE)};

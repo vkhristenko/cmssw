@@ -245,7 +245,7 @@ void kernel_rawdecode_test(
 
             // store to global mem words for this digi
             idsF01HE[pos] = did.rawId();
-            for (uint8_t iword=0; iword<expected_words; iword++)
+            for (uint32_t iword=0; iword<expected_words; iword++)
                 digisF01HE[pos*expected_words + iword] = 
                     channel_header_word[iword];
 
@@ -328,7 +328,7 @@ void kernel_rawdecode_test(
 
             // store to global mem words for this digi
             idsF5HB[pos] = did.rawId();
-            for (uint8_t iword=0; iword<expected_words; iword++)
+            for (uint32_t iword=0; iword<expected_words; iword++)
                 digisF5HB[pos*expected_words + iword] = 
                     channel_header_word[iword];
 
