@@ -183,26 +183,14 @@ void HcalRawToDigiGPU::produce(
     auto const nchannelsF5HB = outputCPU_.nchannels[hcal::raw::OutputF5HB];
 
     hcal::DigiCollection<hcal::Flavor01> digisF01HE{outputGPU_.idsF01HE,
-        outputGPU_.digisF01HE, nchannelsF01HE, config_.nsamplesF01HE};
+        outputGPU_.digisF01HE, nchannelsF01HE, 
+        hcal::compute_stride<hcal::Flavor01>(config_.nsamplesF01HE)};
     hcal::DigiCollection<hcal::Flavor5> digisF5HB{outputGPU_.idsF5HB,
-        outputGPU_.digisF5HB, nchannelsF5HB, config_.nsamplesF5HB};
+        outputGPU_.digisF5HB, nchannelsF5HB, 
+        hcal::compute_stride<hcal::Flavor5>(config_.nsamplesF5HB)};
 
     ctx.emplace(event, digisF01HEToken_, std::move(digisF01HE));
     ctx.emplace(event, digisF5HBToken_, std::move(digisF5HB));
-
-    /*
-    // get the number of channels 
-    auto const nchannelsEB = outputCPU_.nchannels[0];
-    auto const nchannelsEE = outputCPU_.nchannels[1];
-    
-    hcal::DigisCollection digisEB{outputGPU_.idsEB, 
-        outputGPU_.samplesEB, nchannelsEB};
-    hcal::DigisCollection digisEE{outputGPU_.idsEE,
-        outputGPU_.samplesEE, nchannelsEE};
-
-    ctx.emplace(event, digisEBToken_, std::move(digisEB));
-    ctx.emplace(event, digisEEToken_, std::move(digisEE));
-    */
 }
 
 DEFINE_FWK_MODULE(HcalRawToDigiGPU);

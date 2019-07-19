@@ -222,9 +222,10 @@ void kernel_rawdecode_test(
                 uint32_t const nwords = channel_end - channel_header_word;
 
                 // filter out this digi if nwords does not equal expected
-                uint32_t const expected_words = 
-                    nsamplesF01HE * Flavor01::WORDS_PER_SAMPLE + 
-                    Flavor01::HEADER_WORDS;
+                //uint32_t const expected_words = 
+                //    nsamplesF01HE * Flavor01::WORDS_PER_SAMPLE + 
+                //    Flavor01::HEADER_WORDS;
+                auto const expected_words = compute_stride<Flavor01>(nsamplesF01HE);
                 if (nwords != expected_words)
                     break;
 
@@ -304,9 +305,10 @@ void kernel_rawdecode_test(
                 uint32_t const nwords = channel_end - channel_header_word;
 
                 // filter out this digi if nwords does not equal expected
-                uint32_t const expected_words = 
-                    nsamplesF5HB * Flavor5::WORDS_PER_SAMPLE + 
-                    Flavor5::HEADER_WORDS;
+                //uint32_t const expected_words = 
+                //    nsamplesF5HB * Flavor5::WORDS_PER_SAMPLE + 
+                //    Flavor5::HEADER_WORDS;
+                auto const expected_words = compute_stride<Flavor5>(nsamplesF5HB);
                 if (nwords != expected_words)
                     break;
 

@@ -78,13 +78,13 @@ struct OutputDataGPU {
     void allocate(ConfigurationParameters const& config) {
         cudaCheck( cudaMalloc((void**)&digisF01HE,
             config.maxChannelsF01HE * sizeof(uint16_t) *
-            config.nsamplesF01HE * Flavor01::WORDS_PER_SAMPLE) );
+            compute_stride<Flavor01>(config.nsamplesF01HE)) );
         cudaCheck( cudaMalloc((void**)&idsF01HE,
             sizeof(uint32_t) * config.maxChannelsF01HE) );
         
         cudaCheck( cudaMalloc((void**)&digisF5HB,
             config.maxChannelsF5HB * sizeof(uint16_t) *
-            config.nsamplesF5HB * Flavor5::WORDS_PER_SAMPLE) );
+            compute_stride<Flavor5>(config.nsamplesF5HB)) );
         cudaCheck( cudaMalloc((void**)&idsF5HB,
             sizeof(uint32_t) * config.maxChannelsF5HB) );
     }
