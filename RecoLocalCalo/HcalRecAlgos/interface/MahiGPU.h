@@ -1,5 +1,5 @@
-#ifndef RecoLocalCalo_HcalRecAlgos_interface_HBHEMahiGPU_h
-#define RecoLocalCalo_HcalRecAlgos_interface_HBHEMahiGPU_h
+#ifndef RecoLocalCalo_HcalRecAlgos_interface_MahiGPU_h
+#define RecoLocalCalo_HcalRecAlgos_interface_MahiGPU_h
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/DeclsForKernels.h"
 
@@ -13,4 +13,4 @@ void entryPoint(
 
 }}
 
-#endif // RecoLocalCalo_HcalRecAlgos_interface_HBHEMahiGPU_h
+#endif // RecoLocalCalo_HcalRecAlgos_interface_MahiGPU_h

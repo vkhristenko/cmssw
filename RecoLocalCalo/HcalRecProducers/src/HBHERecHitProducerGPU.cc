@@ -33,7 +33,7 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalTimeCorrsGPU.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/DeclsForKernels.h"
-#include "RecoLocalCalo/HcalRecAlgos/interface/HBHEMahiGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/MahiGPU.h"
 
 class HBHERecHitProducerGPU : public edm::stream::EDProducer<edm::ExternalWork>
 {
