@@ -81,7 +81,7 @@ struct OutputDataGPU {
             compute_stride<Flavor01>(config.nsamplesF01HE)) );
         cudaCheck( cudaMalloc((void**)&idsF01HE,
             sizeof(uint32_t) * config.maxChannelsF01HE) );
-        
+
         cudaCheck( cudaMalloc((void**)&digisF5HB,
             config.maxChannelsF5HB * sizeof(uint16_t) *
             compute_stride<Flavor5>(config.nsamplesF5HB)) );

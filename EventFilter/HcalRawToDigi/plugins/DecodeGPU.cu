@@ -233,9 +233,6 @@ void kernel_rawdecode_test(
             uint32_t const nwords = channel_end - channel_header_word;
 
             // filter out this digi if nwords does not equal expected
-            //uint32_t const expected_words = 
-            //    nsamplesF01HE * Flavor01::WORDS_PER_SAMPLE + 
-            //    Flavor01::HEADER_WORDS;
             auto const expected_words = compute_stride<Flavor01>(nsamplesF01HE);
             if (nwords != expected_words)
                 break;
@@ -255,7 +252,54 @@ void kernel_rawdecode_test(
 
             break;
         }
-        case 3: break;
+        case 3: 
+        {
+            /*
+            // treat eid and did
+            uint8_t fiber = (channelid >> 3) & 0x1f;
+            uint8_t fchannel = channelid & 0x7;
+            HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
+            auto const did = HcalDetId{eid2did[eid.linearIndex()]};
+ 
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+            printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
+                eid.rawId(), eid.linearIndex(), did.rawId(),
+                get_subdet_str(did));
+            printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
+                flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
+#endif
+
+            // remove digis not for HE
+            if (did.subdetId() != HcalEndcap) 
+                break;
+
+            // count words
+            auto const* channel_header_word = ptr++;
+            while (!is_channel_header_word(ptr) && ptr!=end) ++ptr;
+            auto const* channel_end = ptr; // set ptr 
+            uint32_t const nwords = channel_end - channel_header_word;
+
+            // filter out this digi if nwords does not equal expected
+            auto const expected_words = compute_stride<Flavor3>(nsamplesF3HE);
+            if (nwords != expected_words)
+                break;
+
+            // inc the number of digis of this type
+            auto const pos = atomicAdd(&pChannelsCounters[OutputF3HE], 1);
+
+            // store to global mem words for this digi
+            idsF3HE[pos] = did.rawId();
+            for (uint32_t iword=0; iword<expected_words; iword++)
+                digisF3HE[pos*expected_words + iword] = 
+                    channel_header_word[iword];
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+            printf("nwords = %u\n", nwords);
+#endif
+            */
+
+            break;
+        }
         case 2:
         {
             uint8_t fiber = (channelid >> 3) & 0x1f;
