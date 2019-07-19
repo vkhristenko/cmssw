@@ -20,5 +20,5 @@
 </library>
 <library   file="HcalLaserEventFiltProducer2012.cc, HcalLaserEventFilter2012.cc,HcalLaserHFFilter2012.cc,HcalLaserHBHEFilter2012.cc,HcalLaserHBHEHFFilter2012.cc" name="EventFilterHcalRawToDigiFiltersPlugins">
 </library>
-<library file="HcalRawToDigiGPU.cc,DecodeGPU.cu,HcalESProducerGPUDefs.cc,ElectronicsMappingGPU.cc" name="EventFilterHcalRawToDigiGPUPlugins">
+<library file="HcalRawToDigiGPU.cc,DecodeGPU.cu,HcalESProducerGPUDefs.cc,ElectronicsMappingGPU.cc,HcalCPUDigisProducer.cc" name="EventFilterHcalRawToDigiGPUPlugins">
 </library>
