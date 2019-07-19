@@ -1,4 +1,4 @@
-#include "RecoLocalCalo/HcalRecAlgos/interface/HBHEMahiGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/MahiGPU.h"
 
 #include <cuda/api_wrappers.h>
 
