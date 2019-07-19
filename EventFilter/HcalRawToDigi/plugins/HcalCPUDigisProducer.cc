@@ -90,7 +90,7 @@ void HcalCPUDigisProducer::acquire(
 
     // resize out tmp buffers
     idsf01he.resize(f01HEDigis.ndigis);
-    dataf01he.resize(f01HEDigis.ndigis * f5HBDigis.stride);
+    dataf01he.resize(f01HEDigis.ndigis * f01HEDigis.stride);
     idsf5hb.resize(f5HBDigis.ndigis);
     dataf5hb.resize(f5HBDigis.ndigis * f5HBDigis.stride);
     stridef01he = f01HEDigis.stride;
