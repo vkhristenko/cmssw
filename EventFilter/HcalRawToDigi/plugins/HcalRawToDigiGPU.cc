@@ -71,8 +71,8 @@ void HcalRawToDigiGPU::fillDescriptions(
     for (int i=0; i<nFeds; ++i)
         feds[i] = i + FEDNumbering::MINHCALuTCAFEDID;
     desc.add<std::vector<int>>("FEDs", feds);
-    desc.add<uint32_t>("maxChannelsF01HE", 5000);
-    desc.add<uint32_t>("maxChannelsF5HB", 5000);
+    desc.add<uint32_t>("maxChannelsF01HE", 5000u);
+    desc.add<uint32_t>("maxChannelsF5HB", 5000u);
     desc.add<uint32_t>("nsamplesF01HE", 8);
     desc.add<uint32_t>("nsamplesF5HB", 8);
     desc.add<std::string>("digisLabelF5HB", "f5HBDigisGPU");
@@ -181,16 +181,6 @@ void HcalRawToDigiGPU::produce(
     // get the number of channels
     auto const nchannelsF01HE = outputCPU_.nchannels[hcal::raw::OutputF01HE];
     auto const nchannelsF5HB = outputCPU_.nchannels[hcal::raw::OutputF5HB];
-
-#ifdef HCAL_RAWDECODE_CPUDEBUG
-    printf("nchannels f01 he = %u nchannels f5 hb = %u\n",
-        nchannelsF01HE, nchannelsF5HB);
-    printf("nsamples f01he = %u stride f01he = %u nsamples f5hb = %u stride f5hb = %u\n",
-        config_.nsamplesF01HE, 
-        hcal::compute_stride<hcal::Flavor01>(config_.nsamplesF01HE),
-        config_.nsamplesF5HB,
-        hcal::compute_stride<hcal::Flavor5>(config_.nsamplesF5HB));
-#endif
 
     hcal::DigiCollection<hcal::Flavor01> digisF01HE{outputGPU_.idsF01HE,
         outputGPU_.digisF01HE, nchannelsF01HE, 

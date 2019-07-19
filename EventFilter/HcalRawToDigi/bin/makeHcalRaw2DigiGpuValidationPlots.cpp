@@ -127,10 +127,9 @@ int main(int argc, char *argv[]) {
                       << ">>> ngpuf01he = " << ngpuf01he << std::endl
                       << ">>> ncpuf01he = " << ncpuf01he
                       << std::endl;
-        } else {
-            // assume sizes are equal
-            assert(ngpuf01he == ncpuf01he);
+        }
 
+        {
             auto const& idsgpu = f01HEProduct.ids();
             auto const& datagpu = f01HEProduct.data();
 
@@ -138,6 +137,11 @@ int main(int argc, char *argv[]) {
                 auto const cpudf = QIE11DataFrame{qie11Product[ich]};
                 auto const cpuid = cpudf.id();
                 auto iter2idgpu = std::find(idsgpu.begin(), idsgpu.end(), cpuid);
+
+                if (iter2idgpu == idsgpu.end()) {
+                    std::cerr << "missing "<< HcalDetId{cpuid} << std::endl;
+                    continue;
+                }
 
                 // FIXME: cna fail...
                 assert(*iter2idgpu == cpuid);
@@ -181,17 +185,20 @@ int main(int argc, char *argv[]) {
                       << ">>> ngpuf5hb = " << ngpuf5hb << std::endl
                       << ">>> ncpuf5hb = " << ncpuf5hb
                       << std::endl;
-        } else {
-            assert(ngpuf5hb == ncpuf5hb);
+        }
 
+        {
             auto const& idsgpu = f5HBProduct.ids();
             auto const& datagpu = f5HBProduct.data();
             for (uint32_t i=0; i<ncpuf5hb; i++) {
                 auto const cpudf = qie8Product[i];
                 auto const cpuid = cpudf.id().rawId();
                 auto iter2idgpu = std::find(idsgpu.begin(), idsgpu.end(), cpuid);
+                if (iter2idgpu == idsgpu.end()) {
+                    std::cerr << "missing "<< HcalDetId{cpuid} << std::endl;
+                    continue;
+                }
 
-                // FIXME can fail
                 assert(*iter2idgpu == cpuid);
 
                 auto const ptrdiff = iter2idgpu - idsgpu.begin();
