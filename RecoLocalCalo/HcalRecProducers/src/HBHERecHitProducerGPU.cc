@@ -21,6 +21,7 @@
 #include "CondFormats/DataRecord/interface/HcalQIEDataRcd.h"
 #include "CondFormats/DataRecord/interface/HcalRespCorrsRcd.h"
 #include "CondFormats/DataRecord/interface/HcalTimeCorrsRcd.h"
+#include "CondFormats/DataRecord/interface/HcalQIETypesRcd.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRecoParamsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalGainWidthsGPU.h"
@@ -31,6 +32,7 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIECodersGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRespCorrsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalTimeCorrsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIETypesGPU.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/DeclsForKernels.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/MahiGPU.h"
@@ -135,13 +137,18 @@ void HBHERecHitProducerGPU::acquire(
     edm::ESHandle<HcalTimeCorrsGPU> timeCorrsHandle;
     setup.get<HcalTimeCorrsRcd>().get(timeCorrsHandle);
     auto const& timeCorrsProduct = timeCorrsHandle->getProduct(ctx.stream());
+    
+    edm::ESHandle<HcalQIETypesGPU> qieTypesHandle;
+    setup.get<HcalQIETypesRcd>().get(qieTypesHandle);
+    auto const& qieTypesProduct = qieTypesHandle->getProduct(ctx.stream());
 
     // bundle up conditions
     hcal::mahi::ConditionsProducts conditions{
         gainWidthsProduct, gainsProduct, lutCorrsProduct,
         pedestalWidthsProduct, pedestalsProduct,
         qieCodersProduct, recoParamsProduct,
-        respCorrsProduct, timeCorrsProduct
+        respCorrsProduct, timeCorrsProduct,
+        qieTypesProduct
     };
 
     hcal::mahi::entryPoint(inputGPU, conditions,

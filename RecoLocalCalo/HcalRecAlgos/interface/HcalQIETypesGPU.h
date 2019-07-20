@@ -1,36 +1,35 @@
-#ifndef RecoLocalCalo_HcalRecAlgos_interface_HcalGainsGPU_h
-#define RecoLocalCalo_HcalRecAlgos_interface_HcalGainsGPU_h
+#ifndef RecoLocalCalo_HcalRecAlgos_interface_HcalQIETypesGPU_h
+#define RecoLocalCalo_HcalRecAlgos_interface_HcalQIETypesGPU_h
 
-#include "CondFormats/HcalObjects/interface/HcalGains.h"
+#include "CondFormats/HcalObjects/interface/HcalQIETypes.h"
 
 #ifndef __CUDACC__
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
 #include "HeterogeneousCore/CUDACore/interface/CUDAESProduct.h"
 #endif
 
-class HcalGainsGPU {
+class HcalQIETypesGPU {
 public:
     struct Product {
         ~Product();
-        float *values;
+        int *values;
     };
 
 #ifndef __CUDACC__
     // rearrange reco params
-    HcalGainsGPU(HcalGains const&);
+    HcalQIETypesGPU(HcalQIETypes const&);
 
     // will trigger deallocation of Product thru ~Product
-    ~HcalGainsGPU() = default;
+    ~HcalQIETypesGPU() = default;
 
     // get device pointers
     Product const& getProduct(cuda::stream_t<>&) const;
 
     // 
-    static std::string name() { return std::string{"hcalGainsGPU"}; }
+    static std::string name() { return std::string{"hcalQIETypesGPU"}; }
 
 private:
-    uint64_t totalChannels_;
-    std::vector<float, CUDAHostAllocator<float>> values_;
+    std::vector<int, CUDAHostAllocator<int>> values_;
 
     CUDAESProduct<Product> product_;
 #endif

@@ -9,6 +9,7 @@
 #include "CondFormats/HcalObjects/interface/HcalPedestalWidths.h"
 #include "CondFormats/HcalObjects/interface/HcalGainWidths.h"
 #include "CondFormats/HcalObjects/interface/HcalQIEData.h"
+#include "CondFormats/HcalObjects/interface/HcalQIETypes.h"
 
 #include "CondFormats/DataRecord/interface/HcalRecoParamsRcd.h"
 #include "CondFormats/DataRecord/interface/HcalPedestalsRcd.h"
@@ -19,6 +20,7 @@
 #include "CondFormats/DataRecord/interface/HcalPedestalWidthsRcd.h"
 #include "CondFormats/DataRecord/interface/HcalGainWidthsRcd.h"
 #include "CondFormats/DataRecord/interface/HcalQIEDataRcd.h"
+#include "CondFormats/DataRecord/interface/HcalQIETypesRcd.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRecoParamsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalPedestalsGPU.h"
@@ -29,6 +31,7 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalPedestalWidthsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalGainWidthsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIECodersGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIETypesGPU.h"
 
 #include <iostream>
 
@@ -67,6 +70,11 @@ using HcalQIECodersGPUESProducer = HcalESProducerGPU<HcalQIECodersGPU,
                                                      HcalQIEData,
                                                      HcalQIEDataRcd>;
 
+using HcalQIETypesGPUESProducer = HcalESProducerGPU<
+    HcalQIETypesGPU,
+    HcalQIETypes,
+    HcalQIETypesRcd>;
+
 DEFINE_FWK_EVENTSETUP_MODULE(HcalRecoParamsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalPedestalsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalGainsGPUESProducer);
@@ -76,3 +84,4 @@ DEFINE_FWK_EVENTSETUP_MODULE(HcalTimeCorrsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalPedestalWidthsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalGainWidthsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalQIECodersGPUESProducer);
+DEFINE_FWK_EVENTSETUP_MODULE(HcalQIETypesGPUESProducer);

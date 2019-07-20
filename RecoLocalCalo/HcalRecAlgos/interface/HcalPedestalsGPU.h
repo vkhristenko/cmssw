@@ -12,6 +12,9 @@ class HcalPedestalsGPU {
 public:
     struct Product {
         ~Product();
+        float *values;
+        float *widths;
+        /*
         float *value0;
         float *value1;
         float *value2;
@@ -20,6 +23,7 @@ public:
         float *width1;
         float *width2;
         float *width3;
+        */
     };
 
 #ifndef __CUDACC__
@@ -41,8 +45,11 @@ public:
 private:
     bool unitIsADC_;
     uint64_t totalChannels_;
+    std::vector<float, CUDAHostAllocator<float>> values_, widths_;
+    /*
     std::vector<float, CUDAHostAllocator<float>> value0_, value1_, value2_, value3_,
                                                  width0_, width1_, width2_, width3_;
+                                                 */
 
     CUDAESProduct<Product> product_;
 #endif
