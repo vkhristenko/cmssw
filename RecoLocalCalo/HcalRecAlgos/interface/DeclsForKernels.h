@@ -14,6 +14,7 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIECodersGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRespCorrsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalTimeCorrsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIETypesGPU.h"
 
 namespace hcal { namespace mahi {
 
@@ -27,6 +28,7 @@ struct ConditionsProducts {
     HcalRecoParamsGPU::Product const& recoParams;
     HcalRespCorrsGPU::Product const& respCorrs;
     HcalTimeCorrsGPU::Product const& timeCorrs;
+    HcalQIETypesGPU::Product const& qieTypes;
 };
 
 struct ConfigParameters {
