@@ -10,6 +10,8 @@
 #include "CondFormats/HcalObjects/interface/HcalGainWidths.h"
 #include "CondFormats/HcalObjects/interface/HcalQIEData.h"
 #include "CondFormats/HcalObjects/interface/HcalQIETypes.h"
+#include "CondFormats/HcalObjects/interface/HcalSiPMParameters.h"
+#include "CondFormats/HcalObjects/interface/HcalSiPMCharacteristics.h"
 
 #include "CondFormats/DataRecord/interface/HcalRecoParamsRcd.h"
 #include "CondFormats/DataRecord/interface/HcalPedestalsRcd.h"
@@ -21,6 +23,8 @@
 #include "CondFormats/DataRecord/interface/HcalGainWidthsRcd.h"
 #include "CondFormats/DataRecord/interface/HcalQIEDataRcd.h"
 #include "CondFormats/DataRecord/interface/HcalQIETypesRcd.h"
+#include "CondFormats/DataRecord/interface/HcalSiPMParametersRcd.h"
+#include "CondFormats/DataRecord/interface/HcalSiPMCharacteristicsRcd.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRecoParamsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalPedestalsGPU.h"
@@ -32,6 +36,8 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalGainWidthsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIECodersGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIETypesGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMParametersGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMCharacteristicsGPU.h"
 
 #include <iostream>
 
@@ -75,6 +81,16 @@ using HcalQIETypesGPUESProducer = HcalESProducerGPU<
     HcalQIETypes,
     HcalQIETypesRcd>;
 
+using HcalSiPMParametersGPUESProducer = HcalESProducerGPU<
+    HcalSiPMParametersGPU,
+    HcalSiPMParameters,
+    HcalSiPMParametersRcd>;
+
+using HcalSiPMCharacteristicsGPUESProducer = HcalESProducerGPU<
+    HcalSiPMCharacteristicsGPU,
+    HcalSiPMCharacteristics,
+    HcalSiPMCharacteristicsRcd>;
+
 DEFINE_FWK_EVENTSETUP_MODULE(HcalRecoParamsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalPedestalsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalGainsGPUESProducer);
@@ -85,3 +101,5 @@ DEFINE_FWK_EVENTSETUP_MODULE(HcalPedestalWidthsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalGainWidthsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalQIECodersGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalQIETypesGPUESProducer);
+DEFINE_FWK_EVENTSETUP_MODULE(HcalSiPMParametersGPUESProducer);
+DEFINE_FWK_EVENTSETUP_MODULE(HcalSiPMCharacteristicsGPUESProducer);
