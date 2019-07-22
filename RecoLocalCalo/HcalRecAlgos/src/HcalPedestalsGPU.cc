@@ -14,6 +14,10 @@ HcalPedestalsGPU::HcalPedestalsGPU(HcalPedestals const& pedestals)
     , values_(totalChannels_*4)
     , widths_(totalChannels_*4)
 {
+#ifdef HCAL_MAHI_CPUDEBUG
+    std::cout << "unitIsADC = " << unitIsADC_ << std::endl;
+#endif
+
     // fill in eb
     auto const& barrelValues = pedestals.getAllContainers()[0].second;
     for (uint64_t i=0; i<barrelValues.size(); ++i) {

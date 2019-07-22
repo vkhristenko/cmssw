@@ -197,6 +197,8 @@ void kernel_prep1d_sameNumberOfSamples(
     auto const* pedestalsForChannel = pedestals +
         hashedId*4;
     auto const pedestal = pedestalsForChannel[capid];
+    auto const sipmType = sipmTypeValues[hashedId];
+    auto const fcByPE = fcByPEValues[hashedId];
 
 #ifdef HCAL_MAHI_GPUDEBUG
     printf("qieType = %d qieOffset0 = %f qieOffset1 = %f qieSlope0 = %f qieSlope1 = %f\n", qieOffsets[0], qieOffsets[1], qieSlopes[0], qieSlopes[1]);
@@ -241,8 +243,6 @@ void kernel_prep1d_sameNumberOfSamples(
     } else {
         // flavor 0 or 1
         // conditions needed for sipms
-        auto const sipmType = sipmTypeValues[hashedId];
-        auto const fcByPE = fcByPEValues[hashedId];
 
 #ifdef HCAL_MAHI_GPUDEBUG
         printf("hashedId = %u sipmType = %d fcByPE = %f tx = %d ty = %d bx = %d\n",
@@ -267,9 +267,20 @@ void kernel_prep1d_sameNumberOfSamples(
     }
 
 #ifdef HCAL_MAHI_GPUDEBUG
-        printf("sample = %d gch = %d adc = %u capid = %u charge = %f rawCharge = %f\n",
-            sample, gch, adc, capid, charge, rawCharge);
+    printf("sample = %d gch = %d adc = %u capid = %u charge = %f rawCharge = %f\n",
+        sample, gch, adc, capid, charge, rawCharge);
 #endif
+
+    //
+    // prepare inputs for the minimization
+    //
+
+    // TODO: need to make sure we use pedestals or effective pedestals properly
+    // for now just use regular pedestals/pedestal widths
+    /*auto const averagePedestalWidth = 0.25 * (
+        pedestalWidth
+    );*/
+    auto const chargePedSubtracted = rawCharge - pedestal; // a la amplitude
 
 }
 
