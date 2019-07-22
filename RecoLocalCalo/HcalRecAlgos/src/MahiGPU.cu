@@ -62,6 +62,37 @@ float const qie11shape[257] = {
     112908
 };
 
+constexpr int32_t IPHI_MAX = 72;
+
+__forceinline__ __device__
+uint32_t did2linearIndexHB(
+        uint32_t const didraw, int const maxDepthHB, 
+        int const firstHBRing, int const lastHBRing,
+        int const nEtaHB) {
+    HcalDetId did{didraw};
+    uint32_t const value = (did.depth() - 1) + maxDepthHB * (did.iphi() - 1);
+    return did.ieta() > 0
+        ? value + maxDepthHB * IPHI_MAX * (did.ieta() - firstHBRing)
+        : value + maxDepthHB * IPHI_MAX * (did.ieta() + lastHBRing + nEtaHB);
+}
+
+__forceinline__ __device__
+uint32_t did2linearIndexHE(
+        uint32_t const didraw, int const maxDepthHE, int const maxPhiHE,
+        int const firstHERing, int const lastHERing,
+        int const nEtaHE) {
+    HcalDetId did{didraw};
+    uint32_t const value = (did.depth() - 1) + maxDepthHE * (did.iphi() - 1);
+    return did.ieta() > 0
+        ? value + maxDepthHE * maxPhiHE * (did.ieta() - firstHERing)
+        : value + maxDepthHE * maxPhiHE * (did.ieta() + lastHERing + nEtaHE);
+}
+
+__forceinline__ __device__
+uint32_t get_qiecoder_index(uint32_t const capid, uint32_t const range) {
+    return capid * 4 + range;
+}
+
 // TODO: add/validate restrict (will increase #registers in use by the kernel)
 template<int NSAMPLES>
 __global__
@@ -73,30 +104,94 @@ void kernel_prep1d(
         uint32_t const stridef01HE,
         uint32_t const stridef5HB,
         uint32_t const nchannelsf01HE,
-        uint32_t const nchannels) {
+        uint32_t const nchannels,
+        float const* qieCoderOffsets,
+        float const* qieCoderSlopes,
+        int const* qieTypes,
+        int const maxDepthHB,
+        int const maxDepthHE,
+        int const maxPhiHE,
+        int const firstHBRing,
+        int const lastHBRing,
+        int const firstHERing,
+        int const lastHERing,
+        int const nEtaHB,
+        int const nEtaHE,
+        uint32_t const offsetForHashes) {
     // constants
     constexpr auto nsamples = NSAMPLES;
 
     // indices
-    auto const tx = threadIdx.x + blockIdx.x*blockDim.x;
-    int const linearCh = tx / nsamples;
-    auto const sample = threadIdx.x % nsamples;
-    auto const nchannels_per_block = blockDim.x / nsamples;
+    auto const sample = threadIdx.x;
+    auto const lch = threadIdx.y;
+    auto const gch = lch + blockDim.y*blockIdx.x;
+    auto const nchannels_per_block = blockDim.x;
 
     // remove 
-    if (linearCh >= nchannels) return;
+    if (gch >= nchannels) return;
 
-    // set up pointers based on which collection this thread is working on
-    auto const stride = linearCh >= nchannelsf01HE
+    // FIXME: for debugging
+    if (gch > 0) return;
+
+    // get event input quantities
+    auto const stride = gch >= nchannelsf01HE
         ? stridef5HB
         : stridef01HE;
-    auto const id = linearCh >= nchannelsf01HE
-        ? idsf5HB[linearCh - nchannelsf01HE]
-        : idsf01HE[linearCh];
+    auto const id = gch >= nchannelsf01HE
+        ? idsf5HB[gch - nchannelsf01HE]
+        : idsf01HE[gch];
+    auto const did = HcalDetId{id};
+    auto const adc = gch >= nchannelsf01HE
+        ? adc_for_sample<Flavor5>(
+            dataf5HB + stride*(gch - nchannelsf01HE), sample)
+        : adc_for_sample<Flavor01>(dataf01HE + stride*gch, sample);
+    auto const capid = gch >= nchannelsf01HE
+        ? capid_for_sample<Flavor5>(
+            dataf5HB + stride*(gch - nchannelsf01HE), sample)
+        : capid_for_sample<Flavor01>(dataf01HE + stride*gch, sample);
+
+    // compute hash for this did
+    auto const hashedId = did.subdetId() == HcalBarrel
+        ? did2linearIndexHB(id, maxDepthHB, firstHBRing, lastHBRing, nEtaHB)
+        : did2linearIndexHE(id, maxDepthHE, maxPhiHE, firstHERing, lastHERing, nEtaHE)
+            + offsetForHashes;
+
+    // conditions based on the hash
+    auto const qieType = qieTypes[hashedId] > 0 ? 1 : 0; // 2 types at this point
+    auto const* qieOffsets = qieCoderOffsets + 
+        hashedId*HcalQIECodersGPU::numValuesPerChannel;
+    auto const* qieSlopes = qieCoderSlopes +
+        hashedId*HcalQIECodersGPU::numValuesPerChannel;
+
+#ifdef HCAL_MAHI_GPUDEBUG
+    printf("qieType = %d qieOffset0 = %f qieOffset1 = %f qieSlope0 = %f qieSlope1 = %f\n", qieOffsets[0], qieOffsets[1], qieSlopes[0], qieSlopes[1]);
+#endif
+
+    // compute charge
+    auto const range = qieType==0
+        ? (adc >> 5) & 0x3
+        : (adc >> 6) & 0x3;
+    auto const* qieShapeToUse = qieType==0 ? qie8shape : qie11shape;
+    auto const nbins = qieType==0 ? 32 : 64;
+    auto const center = adc % nbins == nbins-1
+        ? 0.5 * (3 * qieShapeToUse[adc] - qieShapeToUse[adc-1])
+        : 0.5 * (qieShapeToUse[adc] + qieShapeToUse[adc+3]);
+    auto const index = get_qiecoder_index(capid, range);
+    float const charge = (center - qieOffsets[index]) / 
+        qieSlopes[index];
+
+#ifdef HCAL_MAHI_GPUDEBUG
+    printf("sample = %d gch = %d rawid = %u hashedId = %u adc = %u charge = %f\n",
+        sample, gch, id, hashedId, adc, charge);
+#endif
+
+    // get conditions
+
+
 
     // compute adc2fc
     /*
-    auto const adc = linearCh >= nchannelsf01HE
+    auto const adc = gch >= nchannelsf01HE
         ? adc_for_sample<Flavor5>(dataf5HB)
     auto const charge = 
     */
@@ -107,7 +202,54 @@ void entryPoint(
         ConditionsProducts const& conditions,
         ConfigParameters const& configParameters,
         cuda::stream_t<>& cudaStream) {
-    // 
+    auto const totalChannels = inputGPU.f01HEDigis.ndigis + inputGPU.f5HBDigis.ndigis;
+
+
+    // FIXME: do not need an assumption on the number of samples to use at this stage
+    // thiw will be needed only for minimization stage
+    switch (compute_nsamples<Flavor01>(inputGPU.f01HEDigis.stride)) {
+    case 8:
+    {
+        dim3 threadsPerBlock{8, configParameters.kprep1dChannelsPerBlock};
+        int blocks = static_cast<uint32_t>(threadsPerBlock.y) > totalChannels
+            ? 1
+            : (totalChannels + threadsPerBlock.y - 1) / threadsPerBlock.y;
+        kernel_prep1d<8><<<blocks, threadsPerBlock, 0, cudaStream.id()>>>(
+            inputGPU.f01HEDigis.data,
+            inputGPU.f5HBDigis.data,
+            inputGPU.f01HEDigis.ids,
+            inputGPU.f5HBDigis.ids,
+            inputGPU.f01HEDigis.stride,
+            inputGPU.f5HBDigis.stride,
+            inputGPU.f01HEDigis.ndigis,
+            totalChannels,
+            conditions.qieCoders.offsets,
+            conditions.qieCoders.slopes,
+            conditions.qieTypes.values,
+            conditions.topology->maxDepthHB(),
+            conditions.topology->maxDepthHE(),
+            conditions.recConstants->getNPhi(1) > IPHI_MAX
+                ? conditions.recConstants->getNPhi(1)
+                : IPHI_MAX,
+            conditions.topology->firstHBRing(),
+            conditions.topology->lastHBRing(),
+            conditions.topology->firstHERing(),
+            conditions.topology->lastHERing(),
+            conditions.recConstants->getEtaRange(0).second - 
+                conditions.recConstants->getEtaRange(0).first + 1,
+            conditions.topology->firstHERing() > conditions.topology->lastHERing() 
+                ? 0
+                : (conditions.topology->lastHERing() - 
+                    conditions.topology->firstHERing() + 1),
+            conditions.offsetForHashes
+        );
+        cudaCheck( cudaGetLastError() );
+        break;
+    }
+    default:
+        std::cout << "Unsupported number of samples" << std::endl;
+        assert(false);
+    }
 }
 
 }}

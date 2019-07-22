@@ -42,9 +42,12 @@ public:
     // 
     static std::string name() { return std::string{"hcalPedestalsGPU"}; }
 
+    uint32_t offsetForHashes() const { return offsetForHashes_; }
+
 private:
     bool unitIsADC_;
     uint64_t totalChannels_;
+    uint32_t offsetForHashes_;
     std::vector<float, CUDAHostAllocator<float>> values_, widths_;
     /*
     std::vector<float, CUDAHostAllocator<float>> value0_, value1_, value2_, value3_,
