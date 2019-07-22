@@ -1,3 +1,5 @@
+#include "DataFormats/HcalRecHit/interface/HcalSpecialTimes.h"
+
 #include "RecoLocalCalo/HcalRecAlgos/interface/MahiGPU.h"
 
 #include <cuda/api_wrappers.h>
@@ -93,10 +95,18 @@ uint32_t get_qiecoder_index(uint32_t const capid, uint32_t const range) {
     return capid * 4 + range;
 }
 
+__forceinline__ __device__
+float compute_reco_correction_factor(
+        float const par1,
+        float const par2, 
+        float const par3,
+        float const x) {
+    return par3*x*x + par2*x + par1;
+}
+
 // TODO: add/validate restrict (will increase #registers in use by the kernel)
-template<int NSAMPLES>
 __global__
-void kernel_prep1d(
+void kernel_prep1d_sameNumberOfSamples(
         uint16_t const* dataf01HE,
         uint16_t const* dataf5HB,
         uint32_t const* idsf01HE,
@@ -108,6 +118,12 @@ void kernel_prep1d(
         float const* qieCoderOffsets,
         float const* qieCoderSlopes,
         int const* qieTypes,
+        float const* pedestals,
+        int const* sipmTypeValues,
+        float const* fcByPEValues,
+        float const* parLin1Values,
+        float const* parLin2Values,
+        float const* parLin3Values,
         int const maxDepthHB,
         int const maxDepthHE,
         int const maxPhiHE,
@@ -117,26 +133,42 @@ void kernel_prep1d(
         int const lastHERing,
         int const nEtaHB,
         int const nEtaHE,
+        int const sipmQTSShift,
+        int const sipmQNTStoSum,
         uint32_t const offsetForHashes) {
-    // constants
-    constexpr auto nsamples = NSAMPLES;
-
-    // indices
+    // indices + runtime constants
     auto const sample = threadIdx.x;
+    int32_t const nsamplesExpected = blockDim.x;
     auto const lch = threadIdx.y;
     auto const gch = lch + blockDim.y*blockIdx.x;
     auto const nchannels_per_block = blockDim.x;
+    auto const linearThPerBlock = threadIdx.x + threadIdx.y*blockDim.x;
 
     // remove 
     if (gch >= nchannels) return;
 
-    // FIXME: for debugging
+#ifdef HCAL_MAHI_GPUDEBUG
+#ifdef HCAL_MAHI_GPUDEBUG_SINGLECHANNEL
     if (gch > 0) return;
+#endif
+#endif
+
+    // configure shared mem
+    extern __shared__ char smem[];
+    float *shrChargeMinusPedestal = reinterpret_cast<float*>(smem);
 
     // get event input quantities
     auto const stride = gch >= nchannelsf01HE
         ? stridef5HB
         : stridef01HE;
+    auto const nsamples = gch >= nchannelsf01HE
+        ? compute_nsamples<Flavor5>(stride)
+        : compute_nsamples<Flavor01>(stride);
+    
+#ifdef HCAL_MAHI_GPUDEBUG
+    assert(nsamples == nsamplesExpected);
+#endif
+
     auto const id = gch >= nchannelsf01HE
         ? idsf5HB[gch - nchannelsf01HE]
         : idsf01HE[gch];
@@ -162,6 +194,9 @@ void kernel_prep1d(
         hashedId*HcalQIECodersGPU::numValuesPerChannel;
     auto const* qieSlopes = qieCoderSlopes +
         hashedId*HcalQIECodersGPU::numValuesPerChannel;
+    auto const* pedestalsForChannel = pedestals +
+        hashedId*4;
+    auto const pedestal = pedestalsForChannel[capid];
 
 #ifdef HCAL_MAHI_GPUDEBUG
     printf("qieType = %d qieOffset0 = %f qieOffset1 = %f qieSlope0 = %f qieSlope1 = %f\n", qieOffsets[0], qieOffsets[1], qieSlopes[0], qieSlopes[1]);
@@ -180,21 +215,62 @@ void kernel_prep1d(
     float const charge = (center - qieOffsets[index]) / 
         qieSlopes[index];
 
+    // NOTE: this synching is really only needed for flavor 01 channels
+    shrChargeMinusPedestal[linearThPerBlock] = charge - pedestal;
+    __syncthreads();
+
 #ifdef HCAL_MAHI_GPUDEBUG
     printf("sample = %d gch = %d rawid = %u hashedId = %u adc = %u charge = %f\n",
         sample, gch, id, hashedId, adc, charge);
 #endif
 
-    // get conditions
+    // TODO: this should be properly treated
+    int32_t soi = 4;
+    
+    // 
+    // compute various quantities (raw charge and tdc stuff)
+    // NOTE: this branch will be divergent only for a single warp that 
+    // sits on the boundary when flavor 01 channels end and flavor 5 start
+    //
+    float rawCharge;
+    float tdcTime;
+    if (gch >= nchannelsf01HE) {
+        // flavor 5
+        rawCharge = charge;
+        tdcTime = HcalSpecialTimes::UNKNOWN_T_NOTDC;
+    } else {
+        // flavor 0 or 1
+        // conditions needed for sipms
+        auto const sipmType = sipmTypeValues[hashedId];
+        auto const fcByPE = fcByPEValues[hashedId];
 
+#ifdef HCAL_MAHI_GPUDEBUG
+        printf("hashedId = %u sipmType = %d fcByPE = %f tx = %d ty = %d bx = %d\n",
+            hashedId, sipmType, fcByPE, threadIdx.x, threadIdx.y, blockIdx.x);
+#endif
 
+        auto const parLin1 = parLin1Values[sipmType-1];
+        auto const parLin2 = parLin2Values[sipmType-1];
+        auto const parLin3 = parLin3Values[sipmType-1];
 
-    // compute adc2fc
-    /*
-    auto const adc = gch >= nchannelsf01HE
-        ? adc_for_sample<Flavor5>(dataf5HB)
-    auto const charge = 
-    */
+        int const first = std::max(soi + sipmQTSShift, 0);
+        int const last = std::max(soi + sipmQNTStoSum, nsamplesExpected);
+        float sipmq = 0.0f;
+        for (auto ts=first; ts<last; ts++)
+            sipmq += shrChargeMinusPedestal[threadIdx.y*nsamplesExpected + ts];
+        auto const effectivePixelsFired = sipmq / fcByPE;
+        auto const factor = compute_reco_correction_factor(
+            parLin1, parLin2, parLin3, effectivePixelsFired);
+        auto const rawCharge = (charge - pedestal)*factor + pedestal;
+        tdcTime = HcalSpecialTimes::getTDCTime(
+            tdc_for_sample<Flavor01>(dataf01HE + stride*gch, sample));
+    }
+
+#ifdef HCAL_MAHI_GPUDEBUG
+        printf("sample = %d gch = %d adc = %u capid = %u charge = %f rawCharge = %f\n",
+            sample, gch, adc, capid, charge, rawCharge);
+#endif
+
 }
 
 void entryPoint(
@@ -204,52 +280,56 @@ void entryPoint(
         cuda::stream_t<>& cudaStream) {
     auto const totalChannels = inputGPU.f01HEDigis.ndigis + inputGPU.f5HBDigis.ndigis;
 
+    // TODO: this can be lifted by implementing a separate kernel
+    // similar to the default one, but properly handling the diff in #samples
+    auto const f01nsamples = compute_nsamples<Flavor01>(inputGPU.f01HEDigis.stride);
+    auto const f5nsamples = compute_nsamples<Flavor5>(inputGPU.f5HBDigis.stride);
+    assert(f01nsamples == f5nsamples);
 
-    // FIXME: do not need an assumption on the number of samples to use at this stage
-    // thiw will be needed only for minimization stage
-    switch (compute_nsamples<Flavor01>(inputGPU.f01HEDigis.stride)) {
-    case 8:
-    {
-        dim3 threadsPerBlock{8, configParameters.kprep1dChannelsPerBlock};
-        int blocks = static_cast<uint32_t>(threadsPerBlock.y) > totalChannels
-            ? 1
-            : (totalChannels + threadsPerBlock.y - 1) / threadsPerBlock.y;
-        kernel_prep1d<8><<<blocks, threadsPerBlock, 0, cudaStream.id()>>>(
-            inputGPU.f01HEDigis.data,
-            inputGPU.f5HBDigis.data,
-            inputGPU.f01HEDigis.ids,
-            inputGPU.f5HBDigis.ids,
-            inputGPU.f01HEDigis.stride,
-            inputGPU.f5HBDigis.stride,
-            inputGPU.f01HEDigis.ndigis,
-            totalChannels,
-            conditions.qieCoders.offsets,
-            conditions.qieCoders.slopes,
-            conditions.qieTypes.values,
-            conditions.topology->maxDepthHB(),
-            conditions.topology->maxDepthHE(),
-            conditions.recConstants->getNPhi(1) > IPHI_MAX
-                ? conditions.recConstants->getNPhi(1)
-                : IPHI_MAX,
-            conditions.topology->firstHBRing(),
-            conditions.topology->lastHBRing(),
-            conditions.topology->firstHERing(),
-            conditions.topology->lastHERing(),
-            conditions.recConstants->getEtaRange(0).second - 
-                conditions.recConstants->getEtaRange(0).first + 1,
-            conditions.topology->firstHERing() > conditions.topology->lastHERing() 
-                ? 0
-                : (conditions.topology->lastHERing() - 
-                    conditions.topology->firstHERing() + 1),
-            conditions.offsetForHashes
-        );
-        cudaCheck( cudaGetLastError() );
-        break;
-    }
-    default:
-        std::cout << "Unsupported number of samples" << std::endl;
-        assert(false);
-    }
+    dim3 threadsPerBlock{f01nsamples, configParameters.kprep1dChannelsPerBlock};
+    int blocks = static_cast<uint32_t>(threadsPerBlock.y) > totalChannels
+        ? 1
+        : (totalChannels + threadsPerBlock.y - 1) / threadsPerBlock.y;
+    int nbytesShared = f01nsamples*sizeof(float)*
+        configParameters.kprep1dChannelsPerBlock;
+    kernel_prep1d_sameNumberOfSamples<<<blocks, threadsPerBlock, nbytesShared, cudaStream.id()>>>(
+        inputGPU.f01HEDigis.data,
+        inputGPU.f5HBDigis.data,
+        inputGPU.f01HEDigis.ids,
+        inputGPU.f5HBDigis.ids,
+        inputGPU.f01HEDigis.stride,
+        inputGPU.f5HBDigis.stride,
+        inputGPU.f01HEDigis.ndigis,
+        totalChannels,
+        conditions.qieCoders.offsets,
+        conditions.qieCoders.slopes,
+        conditions.qieTypes.values,
+        conditions.pedestals.values,
+        conditions.sipmParameters.type,
+        conditions.sipmParameters.fcByPE,
+        conditions.sipmCharacteristics.parLin1,
+        conditions.sipmCharacteristics.parLin2,
+        conditions.sipmCharacteristics.parLin3,
+        conditions.topology->maxDepthHB(),
+        conditions.topology->maxDepthHE(),
+        conditions.recConstants->getNPhi(1) > IPHI_MAX
+            ? conditions.recConstants->getNPhi(1)
+            : IPHI_MAX,
+        conditions.topology->firstHBRing(),
+        conditions.topology->lastHBRing(),
+        conditions.topology->firstHERing(),
+        conditions.topology->lastHERing(),
+        conditions.recConstants->getEtaRange(0).second - 
+            conditions.recConstants->getEtaRange(0).first + 1,
+        conditions.topology->firstHERing() > conditions.topology->lastHERing() 
+            ? 0
+            : (conditions.topology->lastHERing() - 
+                conditions.topology->firstHERing() + 1),
+        configParameters.sipmQTSShift,
+        configParameters.sipmQNTStoSum,
+        conditions.offsetForHashes
+    );
+    cudaCheck( cudaGetLastError() );
 }
 
 }}

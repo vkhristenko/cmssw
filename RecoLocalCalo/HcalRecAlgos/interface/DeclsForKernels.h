@@ -18,6 +18,8 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRespCorrsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalTimeCorrsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIETypesGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMParametersGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMCharacteristicsGPU.h"
 
 namespace hcal { namespace mahi {
 
@@ -32,6 +34,8 @@ struct ConditionsProducts {
     HcalRespCorrsGPU::Product const& respCorrs;
     HcalTimeCorrsGPU::Product const& timeCorrs;
     HcalQIETypesGPU::Product const& qieTypes;
+    HcalSiPMParametersGPU::Product const& sipmParameters;
+    HcalSiPMCharacteristicsGPU::Product const& sipmCharacteristics;
     HcalTopology const* topology;
     HcalDDDRecConstants const* recConstants;
     uint32_t offsetForHashes;
@@ -40,6 +44,8 @@ struct ConditionsProducts {
 struct ConfigParameters {
     uint32_t maxChannels;
     uint32_t kprep1dChannelsPerBlock;
+    int sipmQTSShift;
+    int sipmQNTStoSum;
 };
 
 struct InputDataGPU {

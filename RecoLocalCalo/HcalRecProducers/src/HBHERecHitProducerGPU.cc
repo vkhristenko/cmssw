@@ -23,6 +23,8 @@
 #include "CondFormats/DataRecord/interface/HcalRespCorrsRcd.h"
 #include "CondFormats/DataRecord/interface/HcalTimeCorrsRcd.h"
 #include "CondFormats/DataRecord/interface/HcalQIETypesRcd.h"
+#include "CondFormats/DataRecord/interface/HcalSiPMParametersRcd.h"
+#include "CondFormats/DataRecord/interface/HcalSiPMCharacteristicsRcd.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRecoParamsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalGainWidthsGPU.h"
@@ -34,6 +36,8 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRespCorrsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalTimeCorrsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIETypesGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMParametersGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMCharacteristicsGPU.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/DeclsForKernels.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/MahiGPU.h"
@@ -71,6 +75,8 @@ HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps)
     configParameters_.maxChannels = ps.getParameter<uint32_t>("maxChannels");
     configParameters_.kprep1dChannelsPerBlock = ps.getParameter<uint32_t>(
         "kprep1dChannelsPerBlock");
+    configParameters_.sipmQTSShift = ps.getParameter<int>("sipmQTSShift");
+    configParameters_.sipmQNTStoSum = ps.getParameter<int>("sipmQNTStoSum");
 }
 
 HBHERecHitProducerGPU::~HBHERecHitProducerGPU() {}
@@ -83,6 +89,8 @@ void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cde
         edm::InputTag{"hcalRawToDigiGPU", "f01HEDigisGPU"});
     desc.add<edm::InputTag>("digisLabelF5HB", 
         edm::InputTag{"hcalRawToDigiGPU", "f5HBDigisGPU"});
+    desc.add<int>("sipmQTSShift", 0);
+    desc.add<int>("sipmQNTStoSum", 3);
 
     std::string label = "hbheRecHitProducerGPU";
     cdesc.add(label, desc);
@@ -151,6 +159,14 @@ void HBHERecHitProducerGPU::acquire(
     edm::ESHandle<HcalDDDRecConstants> recConstantsHandle;
     setup.get<HcalRecNumberingRecord>().get(recConstantsHandle);
 
+    edm::ESHandle<HcalSiPMParametersGPU> sipmParametersHandle;
+    setup.get<HcalSiPMParametersRcd>().get(sipmParametersHandle);
+    auto const& sipmParametersProduct = sipmParametersHandle->getProduct(ctx.stream());
+    
+    edm::ESHandle<HcalSiPMCharacteristicsGPU> sipmCharacteristicsHandle;
+    setup.get<HcalSiPMCharacteristicsRcd>().get(sipmCharacteristicsHandle);
+    auto const& sipmCharacteristicsProduct = sipmCharacteristicsHandle->getProduct(ctx.stream());
+
     // bundle up conditions
     hcal::mahi::ConditionsProducts conditions{
         gainWidthsProduct, gainsProduct, lutCorrsProduct,
@@ -158,6 +174,7 @@ void HBHERecHitProducerGPU::acquire(
         qieCodersProduct, recoParamsProduct,
         respCorrsProduct, timeCorrsProduct,
         qieTypesProduct, 
+        sipmParametersProduct, sipmCharacteristicsProduct,
         topologyHandle.product(), recConstantsHandle.product(),
         pedestalsHandle->offsetForHashes()
     };
