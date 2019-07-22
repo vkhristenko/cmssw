@@ -10,6 +10,7 @@ HcalPedestalsGPU::HcalPedestalsGPU(HcalPedestals const& pedestals)
     : unitIsADC_{pedestals.isADC()}
     , totalChannels_{pedestals.getAllContainers()[0].second.size()
         + pedestals.getAllContainers()[1].second.size()}
+    , offsetForHashes_{static_cast<uint32_t>(pedestals.getAllContainers()[0].second.size())}
     , values_(totalChannels_*4)
     , widths_(totalChannels_*4)
 {

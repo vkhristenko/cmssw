@@ -5,6 +5,9 @@
 
 #include "CUDADataFormats/HcalDigi/interface/DigiCollection.h"
 
+#include "Geometry/HcalCommonData/interface/HcalDDDRecConstants.h"
+#include "Geometry/CaloTopology/interface/HcalTopology.h"
+
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRecoParamsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalGainWidthsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalGainsGPU.h"
@@ -29,10 +32,14 @@ struct ConditionsProducts {
     HcalRespCorrsGPU::Product const& respCorrs;
     HcalTimeCorrsGPU::Product const& timeCorrs;
     HcalQIETypesGPU::Product const& qieTypes;
+    HcalTopology const* topology;
+    HcalDDDRecConstants const* recConstants;
+    uint32_t offsetForHashes;
 };
 
 struct ConfigParameters {
     uint32_t maxChannels;
+    uint32_t kprep1dChannelsPerBlock;
 };
 
 struct InputDataGPU {

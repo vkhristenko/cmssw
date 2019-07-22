@@ -48,6 +48,14 @@ struct Flavor5 {
 };
 
 template<typename Flavor>
+constexpr 
+uint8_t capid_for_sample(
+        uint16_t const* const dfstart, uint32_t const sample) {
+    auto const capid_first = (*dfstart >> 8) & 0x3;
+    return (capid_first + sample) & 0x3; // same as % 4
+}
+
+template<typename Flavor>
 constexpr
 typename Flavor::adc_type adc_for_sample(
         uint16_t const* const dfstart, uint32_t const sample) {

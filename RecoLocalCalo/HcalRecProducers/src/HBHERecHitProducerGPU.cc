@@ -10,6 +10,7 @@
 #include "FWCore/Framework/interface/EventSetup.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
 
+#include "Geometry/HcalCommonData/interface/HcalDDDRecConstants.h"
 #include "DataFormats/HcalDigi/interface/HcalDigiCollections.h"
 
 #include "CondFormats/DataRecord/interface/HcalRecoParamsRcd.h"
@@ -68,6 +69,8 @@ HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps)
             ps.getParameter<edm::InputTag>("digisLabelF5HB"))}
 {
     configParameters_.maxChannels = ps.getParameter<uint32_t>("maxChannels");
+    configParameters_.kprep1dChannelsPerBlock = ps.getParameter<uint32_t>(
+        "kprep1dChannelsPerBlock");
 }
 
 HBHERecHitProducerGPU::~HBHERecHitProducerGPU() {}
@@ -75,6 +78,7 @@ HBHERecHitProducerGPU::~HBHERecHitProducerGPU() {}
 void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cdesc) {
     edm::ParameterSetDescription desc;
     desc.add<uint32_t>("maxChannels", 10000u);
+    desc.add<uint32_t>("kprep1dChannelsPerBlock", 32);
     desc.add<edm::InputTag>("digisLabelF01HE", 
         edm::InputTag{"hcalRawToDigiGPU", "f01HEDigisGPU"});
     desc.add<edm::InputTag>("digisLabelF5HB", 
@@ -142,13 +146,20 @@ void HBHERecHitProducerGPU::acquire(
     setup.get<HcalQIETypesRcd>().get(qieTypesHandle);
     auto const& qieTypesProduct = qieTypesHandle->getProduct(ctx.stream());
 
+    edm::ESHandle<HcalTopology> topologyHandle;
+    setup.get<HcalRecNumberingRecord>().get(topologyHandle);
+    edm::ESHandle<HcalDDDRecConstants> recConstantsHandle;
+    setup.get<HcalRecNumberingRecord>().get(recConstantsHandle);
+
     // bundle up conditions
     hcal::mahi::ConditionsProducts conditions{
         gainWidthsProduct, gainsProduct, lutCorrsProduct,
         pedestalWidthsProduct, pedestalsProduct,
         qieCodersProduct, recoParamsProduct,
         respCorrsProduct, timeCorrsProduct,
-        qieTypesProduct
+        qieTypesProduct, 
+        topologyHandle.product(), recConstantsHandle.product(),
+        pedestalsHandle->offsetForHashes()
     };
 
     hcal::mahi::entryPoint(inputGPU, conditions,
