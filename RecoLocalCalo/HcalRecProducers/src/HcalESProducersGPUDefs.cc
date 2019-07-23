@@ -113,3 +113,18 @@ DEFINE_FWK_EVENTSETUP_MODULE(HcalQIECodersGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalQIETypesGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalSiPMParametersGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalSiPMCharacteristicsGPUESProducer);
+
+#include "FWCore/Framework/interface/eventsetuprecord_registration_macro.h"
+
+#include "RecoLocalCalo/HcalRecProducers/src/HcalCombinedRecordsGPU.h"
+
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalsGPU.h"
+
+EVENTSETUP_RECORD_REG(HcalConvertedPedestalsRcd);
+
+using HcalConvertedPedestalsGPUESProducer = HcalESProducerGPUWithDependencies<
+    HcalConvertedPedestalsRcd,
+    HcalConvertedPedestalsGPU,
+    HcalPedestals, HcalQIEData
+>;
+DEFINE_FWK_EVENTSETUP_MODULE(HcalConvertedPedestalsGPUESProducer);
