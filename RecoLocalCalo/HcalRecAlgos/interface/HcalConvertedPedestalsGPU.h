@@ -3,6 +3,7 @@
 
 #include "CondFormats/HcalObjects/interface/HcalPedestals.h"
 #include "CondFormats/HcalObjects/interface/HcalQIEData.h"
+#include "CondFormats/HcalObjects/interface/HcalQIETypes.h"
 
 #ifndef __CUDACC__
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
@@ -17,10 +18,11 @@ public:
     };
 
 #ifndef __CUDACC__
-    // FIXME: testing
-    HcalConvertedPedestalsGPU() = default;
     // order matters!
-    HcalConvertedPedestalsGPU(HcalPedestals const&, HcalQIEData const&);
+    HcalConvertedPedestalsGPU(
+            HcalPedestals const&, 
+            HcalQIEData const&,
+            HcalQIETypes const&);
 
     // will trigger deallocation of Product thru ~Product
     ~HcalConvertedPedestalsGPU() = default;
