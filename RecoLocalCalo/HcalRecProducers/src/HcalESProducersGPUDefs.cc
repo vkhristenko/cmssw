@@ -41,55 +41,65 @@
 
 #include <iostream>
 
-using HcalRecoParamsGPUESProducer = HcalESProducerGPU<HcalRecoParamsGPU,
-                                                      HcalRecoParams,
-                                                      HcalRecoParamsRcd>;
-using HcalPedestalsGPUESProducer = HcalESProducerGPU<HcalPedestalsGPU,
-                                                     HcalPedestals,
-                                                     HcalPedestalsRcd>;
+using HcalRecoParamsGPUESProducer = HcalESProducerGPU<
+    HcalRecoParamsRcd,
+    HcalRecoParamsGPU,
+    HcalRecoParams>;
 
-using HcalGainsGPUESProducer = HcalESProducerGPU<HcalGainsGPU,
-                                                 HcalGains,
-                                                 HcalGainsRcd>;
+using HcalPedestalsGPUESProducer = HcalESProducerGPU<
+    HcalPedestalsRcd,
+    HcalPedestalsGPU,
+    HcalPedestals>;
 
-using HcalLUTCorrsGPUESProducer = HcalESProducerGPU<HcalLUTCorrsGPU,
-                                                     HcalLUTCorrs,
-                                                     HcalLUTCorrsRcd>;
+using HcalGainsGPUESProducer = HcalESProducerGPU<
+    HcalGainsRcd,
+    HcalGainsGPU,
+    HcalGains>;
 
-using HcalRespCorrsGPUESProducer = HcalESProducerGPU<HcalRespCorrsGPU,
-                                                     HcalRespCorrs,
-                                                     HcalRespCorrsRcd>;
+using HcalLUTCorrsGPUESProducer = HcalESProducerGPU<
+    HcalLUTCorrsRcd,
+    HcalLUTCorrsGPU,
+    HcalLUTCorrs>;
 
-using HcalTimeCorrsGPUESProducer = HcalESProducerGPU<HcalTimeCorrsGPU,
-                                                     HcalTimeCorrs,
-                                                     HcalTimeCorrsRcd>;
+using HcalRespCorrsGPUESProducer = HcalESProducerGPU<
+    HcalRespCorrsRcd,
+    HcalRespCorrsGPU,
+    HcalRespCorrs>;
 
-using HcalPedestalWidthsGPUESProducer = HcalESProducerGPU<HcalPedestalWidthsGPU,
-                                                     HcalPedestalWidths,
-                                                     HcalPedestalWidthsRcd>;
+using HcalTimeCorrsGPUESProducer = HcalESProducerGPU<
+    HcalTimeCorrsRcd,
+    HcalTimeCorrsGPU,
+    HcalTimeCorrs>;
 
-using HcalGainWidthsGPUESProducer = HcalESProducerGPU<HcalGainWidthsGPU,
-                                                     HcalGainWidths,
-                                                     HcalGainWidthsRcd>;
+using HcalPedestalWidthsGPUESProducer = HcalESProducerGPU<
+    HcalPedestalWidthsRcd,
+    HcalPedestalWidthsGPU,
+    HcalPedestalWidths>;
 
-using HcalQIECodersGPUESProducer = HcalESProducerGPU<HcalQIECodersGPU,
-                                                     HcalQIEData,
-                                                     HcalQIEDataRcd>;
+using HcalGainWidthsGPUESProducer = HcalESProducerGPU<
+    HcalGainWidthsRcd,
+    HcalGainWidthsGPU,
+    HcalGainWidths>;
+
+using HcalQIECodersGPUESProducer = HcalESProducerGPU<
+    HcalQIEDataRcd,
+    HcalQIECodersGPU,
+    HcalQIEData>;
 
 using HcalQIETypesGPUESProducer = HcalESProducerGPU<
+    HcalQIETypesRcd,
     HcalQIETypesGPU,
-    HcalQIETypes,
-    HcalQIETypesRcd>;
+    HcalQIETypes>;
 
 using HcalSiPMParametersGPUESProducer = HcalESProducerGPU<
+    HcalSiPMParametersRcd,
     HcalSiPMParametersGPU,
-    HcalSiPMParameters,
-    HcalSiPMParametersRcd>;
+    HcalSiPMParameters>;
 
 using HcalSiPMCharacteristicsGPUESProducer = HcalESProducerGPU<
+    HcalSiPMCharacteristicsRcd,
     HcalSiPMCharacteristicsGPU,
-    HcalSiPMCharacteristics,
-    HcalSiPMCharacteristicsRcd>;
+    HcalSiPMCharacteristics>;
 
 DEFINE_FWK_EVENTSETUP_MODULE(HcalRecoParamsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalPedestalsGPUESProducer);

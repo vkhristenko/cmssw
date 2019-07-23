@@ -222,8 +222,8 @@ void kernel_prep1d_sameNumberOfSamples(
     __syncthreads();
 
 #ifdef HCAL_MAHI_GPUDEBUG
-    printf("sample = %d gch = %d rawid = %u hashedId = %u adc = %u charge = %f\n",
-        sample, gch, id, hashedId, adc, charge);
+    printf("sample = %d gch = %d rawid = %u hashedId = %u adc = %u charge = %f pedestal = %f\n",
+        sample, gch, id, hashedId, adc, charge, pedestal);
 #endif
 
     // TODO: this should be properly treated
@@ -281,7 +281,6 @@ void kernel_prep1d_sameNumberOfSamples(
         pedestalWidth
     );*/
     auto const chargePedSubtracted = rawCharge - pedestal; // a la amplitude
-
 }
 
 void entryPoint(
