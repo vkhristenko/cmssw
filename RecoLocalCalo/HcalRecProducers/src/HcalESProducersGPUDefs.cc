@@ -125,6 +125,6 @@ EVENTSETUP_RECORD_REG(HcalConvertedPedestalsRcd);
 using HcalConvertedPedestalsGPUESProducer = HcalESProducerGPUWithDependencies<
     HcalConvertedPedestalsRcd,
     HcalConvertedPedestalsGPU,
-    HcalPedestals, HcalQIEData
+    HcalPedestals, HcalQIEData, HcalQIETypes
 >;
 DEFINE_FWK_EVENTSETUP_MODULE(HcalConvertedPedestalsGPUESProducer);

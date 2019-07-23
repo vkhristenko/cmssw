@@ -3,9 +3,24 @@
 #include "FWCore/Utilities/interface/typelookup.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
 
+#include <cmath>
+
+namespace {
+    float convert(
+            float const x, int const i,
+            HcalQIECoder const& coder, HcalQIEShape const& shape) {
+        int const x1 = static_cast<int>(std::floor(x));
+        int const x2 = static_cast<int>(std::floor(x+1));
+        float const y2 = coder.charge(shape, x2, i);
+        float const y1 = coder.charge(shape, x1, i);
+        return (y2 - y1) / (x - x1) + y1;
+    }
+}
+
 // FIXME: add proper getters to conditions
 HcalConvertedPedestalsGPU::HcalConvertedPedestalsGPU(
-        HcalPedestals const& pedestals, HcalQIEData const& qieData) 
+        HcalPedestals const& pedestals, HcalQIEData const& qieData,
+        HcalQIETypes const& qieTypes) 
     : totalChannels_{pedestals.getAllContainers()[0].second.size()
         + pedestals.getAllContainers()[1].second.size()}
     , offsetForHashes_{static_cast<uint32_t>(pedestals.getAllContainers()[0].second.size())}
@@ -15,24 +30,65 @@ HcalConvertedPedestalsGPU::HcalConvertedPedestalsGPU(
     std::cout << "hello from converted pedestals" << std::endl;
 #endif
 
-    // fill in eb
-    auto const& barrelValues = pedestals.getAllContainers()[0].second;
-    for (uint64_t i=0; i<barrelValues.size(); ++i) {
-        values_[i*4] = barrelValues[i].getValue(0);
-        values_[i*4 + 1] = barrelValues[i].getValue(1);
-        values_[i*4 + 2] = barrelValues[i].getValue(2);
-        values_[i*4 + 3] = barrelValues[i].getValue(3);
+    // have to convert to fc if stored in adc
+    auto const unitIsADC = pedestals.isADC();
+
+    // fill in barrel
+    auto const& pedestalBarrelValues = pedestals.getAllContainers()[0].second;
+    auto const& qieDataBarrelValues = qieData.getAllContainers()[0].second;
+    auto const& qieTypesBarrelValues = qieTypes.getAllContainers()[0].second;
+
+#ifdef HCAL_MAHI_CPUDEBUG
+    assert(pedestalBarrelValues.size() == qieDataBarrelValues.size());
+    assert(pedestalBarrelValues.size() == qieTypesBarrelValues.size());
+#endif
+
+    for (uint64_t i=0; i<pedestalBarrelValues.size(); ++i) {
+        auto const& qieCoder = qieDataBarrelValues[i];
+        auto const qieType = qieTypesBarrelValues[i].getValue();
+        auto const& qieShape = qieData.getShape(qieType);
+
+        values_[i*4] = unitIsADC 
+            ? convert(pedestalBarrelValues[i].getValue(0), 0, qieCoder, qieShape)
+            : pedestalBarrelValues[i].getValue(0);
+        values_[i*4 + 1] = unitIsADC 
+            ? convert(pedestalBarrelValues[i].getValue(1), 1, qieCoder, qieShape)
+            : pedestalBarrelValues[i].getValue(1);
+        values_[i*4 + 2] = unitIsADC 
+            ? convert(pedestalBarrelValues[i].getValue(2), 2, qieCoder, qieShape)
+            : pedestalBarrelValues[i].getValue(2);
+        values_[i*4 + 3] = unitIsADC 
+            ? convert(pedestalBarrelValues[i].getValue(3), 3, qieCoder, qieShape)
+            : pedestalBarrelValues[i].getValue(3);
     }
 
-    // fill in ee
-    auto const& endcapValues = pedestals.getAllContainers()[1].second;
-    auto const offset = barrelValues.size();
-    for (uint64_t i=0; i<endcapValues.size(); ++i) {
-        auto const off = offset + i;
-        values_[off*4] = endcapValues[i].getValue(0);
-        values_[off*4 + 1] = endcapValues[i].getValue(1);
-        values_[off*4 + 2] = endcapValues[i].getValue(2);
-        values_[off*4 + 3] = endcapValues[i].getValue(3);
+    // fill in endcap
+    auto const& pedestalEndcapValues = pedestals.getAllContainers()[1].second;
+    auto const& qieDataEndcapValues = qieData.getAllContainers()[1].second;
+    auto const& qieTypesEndcapValues = qieTypes.getAllContainers()[1].second;
+
+#ifdef HCAL_MAHI_CPUDEBUG
+    assert(pedestalEndcapValues.size() == qieDataEndcapValues.size());
+    assert(pedestalEndcapValues.size() == qieTypesEndcapValues.size());
+#endif
+
+    for (uint64_t i=0; i<pedestalEndcapValues.size(); ++i) {
+        auto const& qieCoder = qieDataEndcapValues[i];
+        auto const qieType = qieTypesEndcapValues[i].getValue();
+        auto const& qieShape = qieData.getShape(qieType);
+
+        values_[i*4] = unitIsADC 
+            ? convert(pedestalEndcapValues[i].getValue(0), 0, qieCoder, qieShape)
+            : pedestalEndcapValues[i].getValue(0);
+        values_[i*4 + 1] = unitIsADC 
+            ? convert(pedestalEndcapValues[i].getValue(1), 1, qieCoder, qieShape)
+            : pedestalEndcapValues[i].getValue(1);
+        values_[i*4 + 2] = unitIsADC 
+            ? convert(pedestalEndcapValues[i].getValue(2), 2, qieCoder, qieShape)
+            : pedestalEndcapValues[i].getValue(2);
+        values_[i*4 + 3] = unitIsADC 
+            ? convert(pedestalEndcapValues[i].getValue(3), 3, qieCoder, qieShape)
+            : pedestalEndcapValues[i].getValue(3);
     }
 }
 
