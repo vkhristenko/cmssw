@@ -13,7 +13,7 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalGainsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalLUTCorrsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalPedestalWidthsGPU.h"
-#include "RecoLocalCalo/HcalRecAlgos/interface/HcalPedestalsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIECodersGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRespCorrsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalTimeCorrsGPU.h"
@@ -28,7 +28,7 @@ struct ConditionsProducts {
     HcalGainsGPU::Product const& gains;
     HcalLUTCorrsGPU::Product const& lutCorrs;
     HcalPedestalWidthsGPU::Product const& pedestalWidths;
-    HcalPedestalsGPU::Product const& pedestals;
+    HcalConvertedPedestalsGPU::Product const& pedestals;
     HcalQIECodersGPU::Product const& qieCoders;
     HcalRecoParamsGPU::Product const& recoParams;
     HcalRespCorrsGPU::Product const& respCorrs;

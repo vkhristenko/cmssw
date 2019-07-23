@@ -18,7 +18,6 @@
 #include "CondFormats/DataRecord/interface/HcalGainsRcd.h"
 #include "CondFormats/DataRecord/interface/HcalLUTCorrsRcd.h"
 #include "CondFormats/DataRecord/interface/HcalPedestalWidthsRcd.h"
-#include "CondFormats/DataRecord/interface/HcalPedestalsRcd.h"
 #include "CondFormats/DataRecord/interface/HcalQIEDataRcd.h"
 #include "CondFormats/DataRecord/interface/HcalRespCorrsRcd.h"
 #include "CondFormats/DataRecord/interface/HcalTimeCorrsRcd.h"
@@ -26,18 +25,23 @@
 #include "CondFormats/DataRecord/interface/HcalSiPMParametersRcd.h"
 #include "CondFormats/DataRecord/interface/HcalSiPMCharacteristicsRcd.h"
 
+//#include "CondFormats/DataRecord/interface/HcalPedestalsRcd.h"
+#include "RecoLocalCalo/HcalRecProducers/src/HcalCombinedRecordsGPU.h"
+
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRecoParamsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalGainWidthsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalGainsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalLUTCorrsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalPedestalWidthsGPU.h"
-#include "RecoLocalCalo/HcalRecAlgos/interface/HcalPedestalsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIECodersGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRespCorrsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalTimeCorrsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIETypesGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMParametersGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMCharacteristicsGPU.h"
+
+//#include "RecoLocalCalo/HcalRecAlgos/interface/HcalPedestalsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalsGPU.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/DeclsForKernels.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/MahiGPU.h"
@@ -134,8 +138,8 @@ void HBHERecHitProducerGPU::acquire(
     edm::ESHandle<HcalPedestalWidthsGPU> pedestalWidthsHandle;
     setup.get<HcalPedestalWidthsRcd>().get(pedestalWidthsHandle);
     auto const& pedestalWidthsProduct = pedestalWidthsHandle->getProduct(ctx.stream());
-    edm::ESHandle<HcalPedestalsGPU> pedestalsHandle;
-    setup.get<HcalPedestalsRcd>().get(pedestalsHandle);
+    edm::ESHandle<HcalConvertedPedestalsGPU> pedestalsHandle;
+    setup.get<HcalConvertedPedestalsRcd>().get(pedestalsHandle);
     auto const& pedestalsProduct = pedestalsHandle->getProduct(ctx.stream());
     
     edm::ESHandle<HcalQIECodersGPU> qieCodersHandle;
