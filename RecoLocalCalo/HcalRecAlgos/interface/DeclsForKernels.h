@@ -46,6 +46,7 @@ struct ConfigParameters {
     uint32_t kprep1dChannelsPerBlock;
     int sipmQTSShift;
     int sipmQNTStoSum;
+    int firstSampleShift;
 };
 
 struct InputDataGPU {
