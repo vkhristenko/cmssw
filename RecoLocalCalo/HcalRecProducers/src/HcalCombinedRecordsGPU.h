@@ -2,6 +2,7 @@
 #define RecoLocalCalo_HcalRecProducers_src_HcalCombinedRecordsGPU_h
 
 #include "CondFormats/DataRecord/interface/HcalPedestalsRcd.h"
+#include "CondFormats/DataRecord/interface/HcalPedestalWidthsRcd.h"
 #include "CondFormats/DataRecord/interface/HcalQIEDataRcd.h"
 #include "CondFormats/DataRecord/interface/HcalQIETypesRcd.h"
 
@@ -9,6 +10,13 @@
 
 using HcalConvertedPedestalsRcd = HcalCombinedRecord<
     HcalPedestalsRcd,
+    HcalQIEDataRcd,
+    HcalQIETypesRcd
+>;
+
+using HcalConvertedPedestalWidthsRcd = HcalCombinedRecord<
+    HcalPedestalsRcd,
+    HcalPedestalWidthsRcd,
     HcalQIEDataRcd,
     HcalQIETypesRcd
 >;

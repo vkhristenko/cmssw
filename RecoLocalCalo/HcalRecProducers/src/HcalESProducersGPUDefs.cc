@@ -119,12 +119,22 @@ DEFINE_FWK_EVENTSETUP_MODULE(HcalSiPMCharacteristicsGPUESProducer);
 #include "RecoLocalCalo/HcalRecProducers/src/HcalCombinedRecordsGPU.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalWidthsGPU.h"
 
 EVENTSETUP_RECORD_REG(HcalConvertedPedestalsRcd);
+EVENTSETUP_RECORD_REG(HcalConvertedPedestalWidthsRcd);
 
 using HcalConvertedPedestalsGPUESProducer = HcalESProducerGPUWithDependencies<
     HcalConvertedPedestalsRcd,
     HcalConvertedPedestalsGPU,
     HcalPedestals, HcalQIEData, HcalQIETypes
 >;
+
+using HcalConvertedPedestalWidthsGPUESProducer = HcalESProducerGPUWithDependencies<
+    HcalConvertedPedestalWidthsRcd,
+    HcalConvertedPedestalWidthsGPU,
+    HcalPedestals, HcalPedestalWidths, HcalQIEData, HcalQIETypes
+>;
+
 DEFINE_FWK_EVENTSETUP_MODULE(HcalConvertedPedestalsGPUESProducer);
+DEFINE_FWK_EVENTSETUP_MODULE(HcalConvertedPedestalWidthsGPUESProducer);
