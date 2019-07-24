@@ -28,15 +28,28 @@ HcalConvertedPedestalsGPU::HcalConvertedPedestalsGPU(
 {
 #ifdef HCAL_MAHI_CPUDEBUG
     std::cout << "hello from converted pedestals" << std::endl;
+    std::cout << "pedestals HB values = " 
+        << pedestals.getAllContainers()[0].second.size()
+        << "  HE values = " << pedestals.getAllContainers()[1].second.size()
+        << std::endl;
+    std::cout << "qiedata HB values = " 
+        << qieData.getAllContainers()[0].second.size()
+        << "  HE values = " << qieData.getAllContainers()[1].second.size()
+        << std::endl;
 #endif
 
+    // retrieve all collections
+    auto const pedestalsAll = pedestals.getAllContainers();
+    auto const qieDataAll = qieData.getAllContainers();
+    auto const qieTypesAll = qieTypes.getAllContainers();
+    
     // have to convert to fc if stored in adc
     auto const unitIsADC = pedestals.isADC();
 
     // fill in barrel
-    auto const& pedestalBarrelValues = pedestals.getAllContainers()[0].second;
-    auto const& qieDataBarrelValues = qieData.getAllContainers()[0].second;
-    auto const& qieTypesBarrelValues = qieTypes.getAllContainers()[0].second;
+    auto const& pedestalBarrelValues = pedestalsAll[0].second;
+    auto const& qieDataBarrelValues = qieDataAll[0].second;
+    auto const& qieTypesBarrelValues = qieTypesAll[0].second;
 
 #ifdef HCAL_MAHI_CPUDEBUG
     assert(pedestalBarrelValues.size() == qieDataBarrelValues.size());
@@ -63,9 +76,9 @@ HcalConvertedPedestalsGPU::HcalConvertedPedestalsGPU(
     }
 
     // fill in endcap
-    auto const& pedestalEndcapValues = pedestals.getAllContainers()[1].second;
-    auto const& qieDataEndcapValues = qieData.getAllContainers()[1].second;
-    auto const& qieTypesEndcapValues = qieTypes.getAllContainers()[1].second;
+    auto const& pedestalEndcapValues = pedestalsAll[1].second;
+    auto const& qieDataEndcapValues = qieDataAll[1].second;
+    auto const& qieTypesEndcapValues = qieTypesAll[1].second;
 
 #ifdef HCAL_MAHI_CPUDEBUG
     assert(pedestalEndcapValues.size() == qieDataEndcapValues.size());
