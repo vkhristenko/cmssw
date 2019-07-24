@@ -79,6 +79,7 @@ HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps)
         "kprep1dChannelsPerBlock");
     configParameters_.sipmQTSShift = ps.getParameter<int>("sipmQTSShift");
     configParameters_.sipmQNTStoSum = ps.getParameter<int>("sipmQNTStoSum");
+    configParameters_.firstSampleShift = ps.getParameter<int>("firstSampleShift");
 }
 
 HBHERecHitProducerGPU::~HBHERecHitProducerGPU() {}
@@ -93,6 +94,7 @@ void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cde
         edm::InputTag{"hcalRawToDigiGPU", "f5HBDigisGPU"});
     desc.add<int>("sipmQTSShift", 0);
     desc.add<int>("sipmQNTStoSum", 3);
+    desc.add<int>("firstSampleShift", 0);
 
     std::string label = "hbheRecHitProducerGPU";
     cdesc.add(label, desc);

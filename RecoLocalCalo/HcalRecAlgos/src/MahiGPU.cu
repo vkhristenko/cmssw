@@ -104,6 +104,70 @@ float compute_reco_correction_factor(
     return par3*x*x + par2*x + par1;
 }
 
+__forceinline__ __device__
+float compute_coder_charge(
+        int const qieType,
+        uint8_t const adc,
+        uint8_t const capid,
+        float const* qieOffsets,
+        float const* qieSlopes) {
+    auto const range = qieType==0
+        ? (adc >> 5) & 0x3
+        : (adc >> 6) & 0x3;
+    auto const* qieShapeToUse = qieType==0 ? qie8shape : qie11shape;
+    auto const nbins = qieType==0 ? 32 : 64;
+    auto const center = adc % nbins == nbins-1
+        ? 0.5 * (3 * qieShapeToUse[adc] - qieShapeToUse[adc-1])
+        : 0.5 * (qieShapeToUse[adc] + qieShapeToUse[adc+3]);
+    auto const index = get_qiecoder_index(capid, range);
+    return (center - qieOffsets[index]) / qieSlopes[index];
+}
+
+__forceinline__ __device__
+float compute_diff_charge_gain(
+        int const qieType, 
+        uint8_t adc, 
+        uint8_t const capid,
+        float const* qieOffsets,
+        float const* qieSlopes,
+        bool const isqie11) {
+    constexpr uint32_t mantissaMaskQIE8 = 0x1fu;
+    constexpr uint32_t mantissaMaskQIE11 = 0x3f;
+    auto const mantissaMask = isqie11 ? mantissaMaskQIE11 : mantissaMaskQIE8;
+    auto const q = compute_coder_charge(qieType, adc, capid, qieOffsets, qieSlopes);
+    auto const mantissa = adc & mantissaMask;
+
+    if (mantissa==0u || mantissa==mantissaMask-1u)
+        return compute_coder_charge(
+            qieType, adc+1u, capid, qieOffsets, qieSlopes) - q;
+    else if (mantissa==1u || mantissa==mantissaMask)
+        return q - compute_coder_charge(
+            qieType, adc-1u, capid, qieOffsets, qieSlopes);
+    else {
+        auto const qup = compute_coder_charge(
+            qieType, adc+1u, capid, qieOffsets, qieSlopes);
+        auto const qdown = compute_coder_charge(
+            qieType, adc-1u, capid, qieOffsets, qieSlopes);
+        auto const upgain = qup - q;
+        auto const downgain = q - qdown;
+        auto const averagegain = (qup - qdown) / 2.f;
+        if (std::abs(upgain - downgain) < 0.01f*averagegain)
+            return averagegain;
+        else {
+            auto const q2up = compute_coder_charge(
+                qieType, adc+2u, capid, qieOffsets, qieSlopes);
+            auto const q2down = compute_coder_charge(
+                qieType, adc-2u, capid, qieOffsets, qieSlopes);
+            auto const upgain2 = q2up - qup;
+            auto const downgain2 = qdown - q2down;
+            if (std::abs(upgain2 - upgain) < std::abs(downgain2 - downgain))
+                return upgain;
+            else 
+                return downgain;
+        }
+    }
+}
+
 // TODO: add/validate restrict (will increase #registers in use by the kernel)
 __global__
 void kernel_prep1d_sameNumberOfSamples(
@@ -115,6 +179,8 @@ void kernel_prep1d_sameNumberOfSamples(
         uint32_t const stridef5HB,
         uint32_t const nchannelsf01HE,
         uint32_t const nchannels,
+        uint32_t const* recoParam1Values,
+        uint32_t const* recoParam2Values,
         float const* qieCoderOffsets,
         float const* qieCoderSlopes,
         int const* qieTypes,
@@ -135,6 +201,7 @@ void kernel_prep1d_sameNumberOfSamples(
         int const nEtaHE,
         int const sipmQTSShift,
         int const sipmQNTStoSum,
+        int const firstSampleShift,
         uint32_t const offsetForHashes) {
     // indices + runtime constants
     auto const sample = threadIdx.x;
@@ -143,6 +210,9 @@ void kernel_prep1d_sameNumberOfSamples(
     auto const gch = lch + blockDim.y*blockIdx.x;
     auto const nchannels_per_block = blockDim.x;
     auto const linearThPerBlock = threadIdx.x + threadIdx.y*blockDim.x;
+
+    constexpr uint32_t mantissaMaskQIE8 = 0x1fu;
+    constexpr uint32_t mantissaMaskQIE11 = 0x3f;
 
     // remove 
     if (gch >= nchannels) return;
@@ -156,6 +226,10 @@ void kernel_prep1d_sameNumberOfSamples(
     // configure shared mem
     extern __shared__ char smem[];
     float *shrChargeMinusPedestal = reinterpret_cast<float*>(smem);
+    float *shrMethod0EnergyAccum = shrChargeMinusPedestal + 
+        nsamplesExpected*nchannels_per_block;
+    if (sample == 0)
+        shrMethod0EnergyAccum[lch] = 0;
 
     // get event input quantities
     auto const stride = gch >= nchannelsf01HE
@@ -199,32 +273,20 @@ void kernel_prep1d_sameNumberOfSamples(
     auto const pedestal = pedestalsForChannel[capid];
     auto const sipmType = sipmTypeValues[hashedId];
     auto const fcByPE = fcByPEValues[hashedId];
+    auto const recoParam1 = recoParam1Values[hashedId];
+    auto const recoParam2 = recoParam2Values[hashedId];
 
 #ifdef HCAL_MAHI_GPUDEBUG
     printf("qieType = %d qieOffset0 = %f qieOffset1 = %f qieSlope0 = %f qieSlope1 = %f\n", qieOffsets[0], qieOffsets[1], qieSlopes[0], qieSlopes[1]);
 #endif
 
     // compute charge
-    auto const range = qieType==0
-        ? (adc >> 5) & 0x3
-        : (adc >> 6) & 0x3;
-    auto const* qieShapeToUse = qieType==0 ? qie8shape : qie11shape;
-    auto const nbins = qieType==0 ? 32 : 64;
-    auto const center = adc % nbins == nbins-1
-        ? 0.5 * (3 * qieShapeToUse[adc] - qieShapeToUse[adc-1])
-        : 0.5 * (qieShapeToUse[adc] + qieShapeToUse[adc+3]);
-    auto const index = get_qiecoder_index(capid, range);
-    float const charge = (center - qieOffsets[index]) / 
-        qieSlopes[index];
+    auto const charge = compute_coder_charge(
+        qieType, adc, capid, qieOffsets, qieSlopes);
 
     // NOTE: this synching is really only needed for flavor 01 channels
     shrChargeMinusPedestal[linearThPerBlock] = charge - pedestal;
     __syncthreads();
-
-#ifdef HCAL_MAHI_GPUDEBUG
-    printf("sample = %d gch = %d rawid = %u hashedId = %u adc = %u charge = %f pedestal = %f\n",
-        sample, gch, id, hashedId, adc, charge, pedestal);
-#endif
 
     // TODO: this should be properly treated
     int32_t soi = 4;
@@ -236,6 +298,13 @@ void kernel_prep1d_sameNumberOfSamples(
     //
     float rawCharge;
     float tdcTime;
+    auto const dfc = compute_diff_charge_gain(
+        qieType,
+        adc,
+        capid,
+        qieOffsets,
+        qieSlopes,
+        gch < nchannelsf01HE);
     if (gch >= nchannelsf01HE) {
         // flavor 5
         rawCharge = charge;
@@ -243,12 +312,6 @@ void kernel_prep1d_sameNumberOfSamples(
     } else {
         // flavor 0 or 1
         // conditions needed for sipms
-
-#ifdef HCAL_MAHI_GPUDEBUG
-        printf("hashedId = %u sipmType = %d fcByPE = %f tx = %d ty = %d bx = %d\n",
-            hashedId, sipmType, fcByPE, threadIdx.x, threadIdx.y, blockIdx.x);
-#endif
-
         auto const parLin1 = parLin1Values[sipmType-1];
         auto const parLin2 = parLin2Values[sipmType-1];
         auto const parLin3 = parLin3Values[sipmType-1];
@@ -267,20 +330,24 @@ void kernel_prep1d_sameNumberOfSamples(
     }
 
 #ifdef HCAL_MAHI_GPUDEBUG
-    printf("sample = %d gch = %d adc = %u capid = %u charge = %f rawCharge = %f\n",
-        sample, gch, adc, capid, charge, rawCharge);
+    printf("sample = %d gch = %d adc = %u capid = %u charge = %f rawCharge = %f dfc = %f\n",
+        sample, gch, adc, capid, charge, rawCharge, dfc);
 #endif
 
-    //
-    // prepare inputs for the minimization
-    //
-
-    // TODO: need to make sure we use pedestals or effective pedestals properly
-    // for now just use regular pedestals/pedestal widths
-    /*auto const averagePedestalWidth = 0.25 * (
-        pedestalWidth
-    );*/
-    auto const chargePedSubtracted = rawCharge - pedestal; // a la amplitude
+    // compute method 0 quantities
+    // TODO: need to apply containment
+    // TODO: need to apply time slew
+    auto const nsamplesToAdd = 
+        (recoParam1 < 10) ? (recoParam2) : ((recoParam1 >> 14) & 0xF);
+    auto const startSampleTmp = soi + firstSampleShift;
+    auto const startSample = startSampleTmp<0 ? 0 : startSampleTmp;
+    auto const endSample = startSample + nsamplesToAdd < nsamples
+        ? startSample + nsamplesToAdd
+        : nsamples;
+    auto const chargePedSubtracted = rawCharge - pedestal;
+    // FIXME: do we need to provide a global memory atomics
+    // alternative for the Kepler arch?
+    atomicAdd(&shrMethod0EnergyAccum[lch], chargePedSubtracted);
 }
 
 void entryPoint(
@@ -300,7 +367,7 @@ void entryPoint(
     int blocks = static_cast<uint32_t>(threadsPerBlock.y) > totalChannels
         ? 1
         : (totalChannels + threadsPerBlock.y - 1) / threadsPerBlock.y;
-    int nbytesShared = f01nsamples*sizeof(float)*
+    int nbytesShared = (f01nsamples + 1)*sizeof(float)*
         configParameters.kprep1dChannelsPerBlock;
     kernel_prep1d_sameNumberOfSamples<<<blocks, threadsPerBlock, nbytesShared, cudaStream.id()>>>(
         inputGPU.f01HEDigis.data,
@@ -311,6 +378,8 @@ void entryPoint(
         inputGPU.f5HBDigis.stride,
         inputGPU.f01HEDigis.ndigis,
         totalChannels,
+        conditions.recoParams.param1,
+        conditions.recoParams.param2,
         conditions.qieCoders.offsets,
         conditions.qieCoders.slopes,
         conditions.qieTypes.values,
@@ -337,6 +406,7 @@ void entryPoint(
                 conditions.topology->firstHERing() + 1),
         configParameters.sipmQTSShift,
         configParameters.sipmQNTStoSum,
+        configParameters.firstSampleShift,
         conditions.offsetForHashes
     );
     cudaCheck( cudaGetLastError() );
