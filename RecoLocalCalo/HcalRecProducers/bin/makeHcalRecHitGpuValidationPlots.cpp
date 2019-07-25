@@ -10,11 +10,8 @@
 #include <TTree.h>
 #include <TPaveStats.h>
 
-/*
-#include "DataFormats/Common/interface/Wrapper.h"
-#include "DataFormats/HcalDigi/interface/HcalDigiCollections.h"
-#include "CUDADataFormats/HcalDigi/interface/DigiCollection.h"
-*/
+#include "DataFormats/HcalRecHit/interface/HcalRecHitCollections.h"
+#include "CUDADataFormats/HcalRecHitSoA/interface/RecHitCollection.h"
 
 #define CREATE_HIST_1D(varname, nbins, first, last) \
     auto varname = new TH1D(#varname, #varname, nbins, first, last)
@@ -32,14 +29,8 @@ int main(int argc, char *argv[]) {
     std::string outFileName{argv[2]};
     
     // branches to use
-    /*
-    edm::Wrapper<edm::DataFrameContainer> *wgpuf01he=nullptr, *wgpuf5hb=nullptr;
-    edm::Wrapper<QIE11DigiCollection> *wcpuf01he=nullptr;
-    edm::Wrapper<HBHEDigiCollection> *wcpuf5hb=nullptr;
-
-    std::string inFileName{argv[1]};
-    std::string outFileName{argv[2]};
-    */
+    edm::Wrapper<HBHERecHitCollection> *wcpu;
+    edm::Wrapper<hcal::RecHitCollection<hcal::Tag::soa>> *wgpu;
 
     // prep output 
     TFile rfout{outFileName.c_str(), "recreate"};
@@ -81,22 +72,29 @@ int main(int argc, char *argv[]) {
     // prep input
     TFile rfin{inFileName.c_str()};
     TTree *rt = (TTree*)rfin.Get("Events");
-    /*
-    rt->SetBranchAddress("QIE11DataFrameHcalDataFrameContainer_hcalDigis__RECO.",
-        &wcpuf01he);
-    rt->SetBranchAddress("HBHEDataFramesSorted_hcalDigis__RECO.", &wcpuf5hb);
-    rt->SetBranchAddress("edmDataFrameContainer_hcalCPUDigisProducer_f5HBDigis_RECO.",
-        &wgpuf5hb);
-    rt->SetBranchAddress(
-        "edmDataFrameContainer_hcalCPUDigisProducer_f01HEDigis_RECO.",
-        &wgpuf01he);
-        */
+    rt->SetBranchAddress("hcalTagsoahcalRecHitCollection_hcalCPURecHitsProducer_recHitsM0LabelOut_RECO.", &wgpu);
+    rt->SetBranchAddress("HBHERecHitsSorted_hbheprereco__RECO.", &wcpu);
 
     // accumulate
     auto const nentries = rt->GetEntries();
     std::cout << ">>> nentries = " << nentries << std::endl;
     for (int ie=0; ie<nentries; ++ie) {
         rt->GetEntry(ie);
+
+        auto const& gpuProduct = wgpu->bareProduct();
+        auto const& cpuProduct = wcpu->bareProduct();
+
+        auto const ncpu = cpuProduct.size();
+        auto const ngpu = gpuProduct.energy.size();
+
+        if (ngpu != ncpu) {
+            std::cerr << "*** mismatch in number of rec hits for event "
+                      << ie
+                      << std::endl
+                      << ">>> ngpu = " << ngpu << std::endl
+                      << ">>> ncpu = " << ncpu
+                      << std::endl;
+        }
 
         /*
         auto const& f01HEProduct = wgpuf01he->bareProduct();
