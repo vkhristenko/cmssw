@@ -27,8 +27,10 @@ HcalPedestalWidthsGPU::HcalPedestalWidthsGPU(HcalPedestalWidths const& pedestals
     , sigma32_(totalChannels_)
     , sigma33_(totalChannels_)
 {
+    auto const& containers = pedestals.getAllContainers();
+
     // fill in hb
-    auto const& barrelValues = pedestals.getAllContainers()[0].second;
+    auto const& barrelValues = containers[0].second;
     for (uint64_t i=0; i<barrelValues.size(); ++i) {
         sigma00_[i] = *(barrelValues[i].getValues() /* + 0 */);
         sigma01_[i] = *(barrelValues[i].getValues() + 1);
@@ -49,7 +51,7 @@ HcalPedestalWidthsGPU::HcalPedestalWidthsGPU(HcalPedestalWidths const& pedestals
     }
 
     // fill in he
-    auto const& endcapValues = pedestals.getAllContainers()[1].second;
+    auto const& endcapValues = containers[1].second;
     auto const offset = barrelValues.size();
     for (uint64_t i=0; i<endcapValues.size(); ++i) {
         sigma00_[i + offset] = *(endcapValues[i].getValues() /* + 0 */);

@@ -7,26 +7,28 @@
 
 // FIXME: add proper getters to conditions
 HcalRespCorrsGPU::HcalRespCorrsGPU(HcalRespCorrs const& respcorrs) 
-    : value_(respcorrs.getAllContainers()[0].second.size()
+    : values_(respcorrs.getAllContainers()[0].second.size()
         + respcorrs.getAllContainers()[1].second.size())
 {
+    auto const& containers = respcorrs.getAllContainers();
+
     // fill in eb
-    auto const& barrelValues = respcorrs.getAllContainers()[0].second;
+    auto const& barrelValues = containers[0].second;
     for (uint64_t i=0; i<barrelValues.size(); ++i) {
-        value_[i] = barrelValues[i].getValue();
+        values_[i] = barrelValues[i].getValue();
     }
 
     // fill in ee
-    auto const& endcapValues = respcorrs.getAllContainers()[1].second;
+    auto const& endcapValues = containers[1].second;
     auto const offset = barrelValues.size();
     for (uint64_t i=0; i<endcapValues.size(); ++i) {
-        value_[i + offset] = endcapValues[i].getValue();
+        values_[i + offset] = endcapValues[i].getValue();
     }
 }
 
 HcalRespCorrsGPU::Product::~Product() {
     // deallocation
-    cudaCheck( cudaFree(value) );
+    cudaCheck( cudaFree(values) );
 }
 
 HcalRespCorrsGPU::Product const& HcalRespCorrsGPU::getProduct(
@@ -34,13 +36,13 @@ HcalRespCorrsGPU::Product const& HcalRespCorrsGPU::getProduct(
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
         [this](HcalRespCorrsGPU::Product& product, cuda::stream_t<>& cudaStream){
             // malloc
-            cudaCheck( cudaMalloc((void**)&product.value, 
-                this->value_.size() * sizeof(float)) );
+            cudaCheck( cudaMalloc((void**)&product.values, 
+                this->values_.size() * sizeof(float)) );
             
             // transfer
-            cudaCheck( cudaMemcpyAsync(product.value, 
-                                       this->value_.data(),
-                                       this->value_.size() * sizeof(float),
+            cudaCheck( cudaMemcpyAsync(product.values, 
+                                       this->values_.data(),
+                                       this->values_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
                                        cudaStream.id()) );
         });

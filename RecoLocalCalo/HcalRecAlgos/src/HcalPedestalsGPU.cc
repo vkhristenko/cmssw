@@ -18,8 +18,10 @@ HcalPedestalsGPU::HcalPedestalsGPU(HcalPedestals const& pedestals)
     std::cout << "unitIsADC = " << unitIsADC_ << std::endl;
 #endif
 
+    auto const& containers = pedestals.getAllContainers();
+
     // fill in eb
-    auto const& barrelValues = pedestals.getAllContainers()[0].second;
+    auto const& barrelValues = containers[0].second;
     for (uint64_t i=0; i<barrelValues.size(); ++i) {
         values_[i*4] = barrelValues[i].getValue(0);
         values_[i*4 + 1] = barrelValues[i].getValue(1);
@@ -33,7 +35,7 @@ HcalPedestalsGPU::HcalPedestalsGPU(HcalPedestals const& pedestals)
     }
 
     // fill in ee
-    auto const& endcapValues = pedestals.getAllContainers()[1].second;
+    auto const& endcapValues = containers[1].second;
     auto const offset = barrelValues.size();
     for (uint64_t i=0; i<endcapValues.size(); ++i) {
         auto const off = offset + i;

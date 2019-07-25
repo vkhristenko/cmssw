@@ -190,6 +190,8 @@ void kernel_prep1d_sameNumberOfSamples(
         float const* parLin1Values,
         float const* parLin2Values,
         float const* parLin3Values,
+        float const* gainValues,
+        float const* respCorrectionValues,
         int const maxDepthHB,
         int const maxDepthHE,
         int const maxPhiHE,
@@ -225,11 +227,19 @@ void kernel_prep1d_sameNumberOfSamples(
 
     // configure shared mem
     extern __shared__ char smem[];
-    float *shrChargeMinusPedestal = reinterpret_cast<float*>(smem);
+    float *shrEnergyM0PerTS = reinterpret_cast<float*>(smem);
+    float *shrChargeMinusPedestal = shrEnergyM0PerTS +
+        nsamplesExpected*nchannels_per_block;
     float *shrMethod0EnergyAccum = shrChargeMinusPedestal + 
         nsamplesExpected*nchannels_per_block;
-    if (sample == 0)
+    unsigned long long int *shrMethod0EnergySamplePair = 
+        reinterpret_cast<unsigned long long int*>(
+            shrMethod0EnergyAccum + nchannels_per_block);
+    if (sample == 0) {
         shrMethod0EnergyAccum[lch] = 0;
+        shrMethod0EnergySamplePair[lch] = 
+            __float_as_uint(std::numeric_limits<float>::min());
+    }
 
     // get event input quantities
     auto const stride = gch >= nchannelsf01HE
@@ -263,6 +273,7 @@ void kernel_prep1d_sameNumberOfSamples(
             + offsetForHashes;
 
     // conditions based on the hash
+    // FIXME: remove hardcoded values
     auto const qieType = qieTypes[hashedId] > 0 ? 1 : 0; // 2 types at this point
     auto const* qieOffsets = qieCoderOffsets + 
         hashedId*HcalQIECodersGPU::numValuesPerChannel;
@@ -270,6 +281,10 @@ void kernel_prep1d_sameNumberOfSamples(
         hashedId*HcalQIECodersGPU::numValuesPerChannel;
     auto const* pedestalsForChannel = pedestals +
         hashedId*4;
+    auto const* gains = gainValues + 
+        hashedId*4;
+    auto const gain = gains[capid];
+    auto const respCorrection = respCorrectionValues[hashedId];
     auto const pedestal = pedestalsForChannel[capid];
     auto const sipmType = sipmTypeValues[hashedId];
     auto const fcByPE = fcByPEValues[hashedId];
@@ -277,7 +292,7 @@ void kernel_prep1d_sameNumberOfSamples(
     auto const recoParam2 = recoParam2Values[hashedId];
 
 #ifdef HCAL_MAHI_GPUDEBUG
-    printf("qieType = %d qieOffset0 = %f qieOffset1 = %f qieSlope0 = %f qieSlope1 = %f\n", qieOffsets[0], qieOffsets[1], qieSlopes[0], qieSlopes[1]);
+    printf("qieType = %d qieOffset0 = %f qieOffset1 = %f qieSlope0 = %f qieSlope1 = %f\n", qieType, qieOffsets[0], qieOffsets[1], qieSlopes[0], qieSlopes[1]);
 #endif
 
     // compute charge
@@ -329,25 +344,75 @@ void kernel_prep1d_sameNumberOfSamples(
             tdc_for_sample<Flavor01>(dataf01HE + stride*gch, sample));
     }
 
-#ifdef HCAL_MAHI_GPUDEBUG
-    printf("sample = %d gch = %d adc = %u capid = %u charge = %f rawCharge = %f dfc = %f\n",
-        sample, gch, adc, capid, charge, rawCharge, dfc);
-#endif
-
     // compute method 0 quantities
     // TODO: need to apply containment
     // TODO: need to apply time slew
+    // TODO: for < run 3, apply HBM legacy energy correction
     auto const nsamplesToAdd = 
-        (recoParam1 < 10) ? (recoParam2) : ((recoParam1 >> 14) & 0xF);
+        recoParam1 < 10 ? recoParam2 : (recoParam1 >> 14) & 0xF;
     auto const startSampleTmp = soi + firstSampleShift;
     auto const startSample = startSampleTmp<0 ? 0 : startSampleTmp;
     auto const endSample = startSample + nsamplesToAdd < nsamples
         ? startSample + nsamplesToAdd
         : nsamples;
-    auto const chargePedSubtracted = rawCharge - pedestal;
+    // NOTE: gain is a small number < 10^-3, multiply it last
+    auto const energym0_per_ts = gain*((rawCharge - pedestal)* respCorrection);
+    // store to shared mem
+    shrEnergyM0PerTS[lch*nsamplesExpected + sample] = energym0_per_ts;
+
+#ifdef HCAL_MAHI_GPUDEBUG
+    printf("sample = %d gch = %d hashedId = %u adc = %u capid = %u\n"
+        "charge = %f rawCharge = %f dfc = %f pedestal = %f\n"
+        "gain = %f respCorrection = %f energym0_per_ts = %f\n",
+        sample, gch, hashedId, adc, capid, charge, rawCharge, dfc, pedestal,
+        gain, respCorrection, energym0_per_ts);
+    printf("startSample = %d endSample = %d param1 = %u param2 = %u\n",
+        startSample, endSample, recoParam1, recoParam2);
+#endif
+
     // FIXME: do we need to provide a global memory atomics
     // alternative for the Kepler arch?
-    atomicAdd(&shrMethod0EnergyAccum[lch], chargePedSubtracted);
+    if (sample>=startSample && sample<endSample) {
+        atomicAdd(&shrMethod0EnergyAccum[lch], energym0_per_ts);
+        // pack sample, energy as 64 bit value
+        unsigned long long int old = shrMethod0EnergySamplePair[lch], assumed;
+        unsigned long long int val = 
+            (static_cast<unsigned long long int>(sample) << 32) + 
+            __float_as_uint(energym0_per_ts);
+        do {
+            assumed = old;
+            // decode energy, sample values
+            int const current_sample = (assumed >> 32) & 0xffffffff;
+            float const current_energy = __uint_as_float(assumed & 0xffffffff);
+            if (energym0_per_ts > current_energy)
+                old = atomicCAS(&shrMethod0EnergySamplePair[lch], assumed, val);
+            else 
+                break;
+        } while (assumed != old);
+    }
+    __syncthreads();
+
+    if (sample == 0) {
+        auto const method0_energy = shrMethod0EnergyAccum[lch];
+        auto const val = shrMethod0EnergySamplePair[lch];
+        int const max_sample = (val >> 32) & 0xffffffff;
+        float const max_energy = __uint_as_float(val & 0xffffffff);
+        float const max_energy_1 = max_sample < nsamples-1
+            ? shrEnergyM0PerTS[lch*nsamplesExpected + max_sample + 1]
+            : 0.f;
+        float const position = nsamplesToAdd < nsamples
+            ? max_sample - soi
+            : max_sample;
+        auto const sum = max_energy + max_energy_1;
+        float const time = max_energy>0.f && max_energy_1>0.f
+            ? 25.f * (position + max_energy_1 / sum)
+            : 25.f * position;
+
+#ifdef HCAL_MAHI_GPUDEBUG
+        printf("method0_energy = %f max_sample = %d max_energy = %f time = %f\n",
+            method0_energy, max_sample, max_energy, time);
+#endif
+    }
 }
 
 void entryPoint(
@@ -367,7 +432,7 @@ void entryPoint(
     int blocks = static_cast<uint32_t>(threadsPerBlock.y) > totalChannels
         ? 1
         : (totalChannels + threadsPerBlock.y - 1) / threadsPerBlock.y;
-    int nbytesShared = (f01nsamples + 1)*sizeof(float)*
+    int nbytesShared = (2*f01nsamples + 2)*sizeof(float)*
         configParameters.kprep1dChannelsPerBlock;
     kernel_prep1d_sameNumberOfSamples<<<blocks, threadsPerBlock, nbytesShared, cudaStream.id()>>>(
         inputGPU.f01HEDigis.data,
@@ -389,6 +454,8 @@ void entryPoint(
         conditions.sipmCharacteristics.parLin1,
         conditions.sipmCharacteristics.parLin2,
         conditions.sipmCharacteristics.parLin3,
+        conditions.gains.values,
+        conditions.respCorrs.values,
         conditions.topology->maxDepthHB(),
         conditions.topology->maxDepthHE(),
         conditions.recConstants->getNPhi(1) > IPHI_MAX
