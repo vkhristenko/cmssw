@@ -12,7 +12,7 @@ class HcalRespCorrsGPU {
 public:
     struct Product {
         ~Product();
-        float *value;
+        float *values;
     };
 
 #ifndef __CUDACC__
@@ -29,7 +29,7 @@ public:
     static std::string name() { return std::string{"hcalRespCorrsGPU"}; }
 
 private:
-    std::vector<float, CUDAHostAllocator<float>> value_;
+    std::vector<float, CUDAHostAllocator<float>> values_;
 
     CUDAESProduct<Product> product_;
 #endif

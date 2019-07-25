@@ -10,14 +10,16 @@ HcalTimeCorrsGPU::HcalTimeCorrsGPU(HcalTimeCorrs const& timecorrs)
     : value_(timecorrs.getAllContainers()[0].second.size()
         + timecorrs.getAllContainers()[1].second.size())
 {
+    auto const& containers = timecorrs.getAllContainers();
+
     // fill in eb
-    auto const& barrelValues = timecorrs.getAllContainers()[0].second;
+    auto const& barrelValues = containers[0].second;
     for (uint64_t i=0; i<barrelValues.size(); ++i) {
         value_[i] = barrelValues[i].getValue();
     }
 
     // fill in ee
-    auto const& endcapValues = timecorrs.getAllContainers()[1].second;
+    auto const& endcapValues = containers[1].second;
     auto const offset = barrelValues.size();
     for (uint64_t i=0; i<endcapValues.size(); ++i) {
         value_[i + offset] = endcapValues[i].getValue();

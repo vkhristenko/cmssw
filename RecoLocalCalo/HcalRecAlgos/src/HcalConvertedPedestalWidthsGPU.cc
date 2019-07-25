@@ -106,30 +106,32 @@ HcalConvertedPedestalWidthsGPU::HcalConvertedPedestalWidthsGPU(
     assert(pedestalEndcapValues.size() == qieTypesEndcapValues.size());
 #endif
 
+    auto const offset = pedestalWidthBarrelValues.size();
     for (uint64_t i=0; i<pedestalEndcapValues.size(); ++i) {
         auto const& qieCoder = qieDataEndcapValues[i];
         auto const qieType = qieTypesEndcapValues[i].getValue();
         auto const& qieShape = qieData.getShape(qieType);
+        auto const off = offset + i;
 
-        values_[i*4] = unitIsADC 
+        values_[off*4] = unitIsADC 
             ? convert(
                 pedestalEndcapValues[i].getValue(0),
                 pedestalWidthEndcapValues[i].getWidth(0),
                 0, qieCoder, qieShape)
             : pedestalWidthEndcapValues[i].getWidth(0);
-        values_[i*4 + 1] = unitIsADC 
+        values_[off*4 + 1] = unitIsADC 
             ? convert(
                 pedestalEndcapValues[i].getValue(1),
                 pedestalWidthEndcapValues[i].getWidth(1),
                 1, qieCoder, qieShape)
             : pedestalWidthEndcapValues[i].getWidth(1);
-        values_[i*4 + 2] = unitIsADC 
+        values_[off*4 + 2] = unitIsADC 
             ? convert(
                 pedestalEndcapValues[i].getValue(2),
                 pedestalWidthEndcapValues[i].getWidth(2),
                 2, qieCoder, qieShape)
             : pedestalWidthEndcapValues[i].getWidth(2);
-        values_[i*4 + 3] = unitIsADC 
+        values_[off*4 + 3] = unitIsADC 
             ? convert(
                 pedestalEndcapValues[i].getValue(3),
                 pedestalWidthEndcapValues[i].getWidth(3),

@@ -13,7 +13,7 @@ namespace {
         int const x2 = static_cast<int>(std::floor(x+1));
         float const y2 = coder.charge(shape, x2, i);
         float const y1 = coder.charge(shape, x1, i);
-        return (y2 - y1) / (x - x1) + y1;
+        return (y2 - y1) * (x - x1) + y1;
     }
 }
 
@@ -85,21 +85,23 @@ HcalConvertedPedestalsGPU::HcalConvertedPedestalsGPU(
     assert(pedestalEndcapValues.size() == qieTypesEndcapValues.size());
 #endif
 
+    auto const offset = pedestalBarrelValues.size();
     for (uint64_t i=0; i<pedestalEndcapValues.size(); ++i) {
         auto const& qieCoder = qieDataEndcapValues[i];
         auto const qieType = qieTypesEndcapValues[i].getValue();
         auto const& qieShape = qieData.getShape(qieType);
+        auto const off = offset + i;
 
-        values_[i*4] = unitIsADC 
+        values_[off*4] = unitIsADC 
             ? convert(pedestalEndcapValues[i].getValue(0), 0, qieCoder, qieShape)
             : pedestalEndcapValues[i].getValue(0);
-        values_[i*4 + 1] = unitIsADC 
+        values_[off*4 + 1] = unitIsADC 
             ? convert(pedestalEndcapValues[i].getValue(1), 1, qieCoder, qieShape)
             : pedestalEndcapValues[i].getValue(1);
-        values_[i*4 + 2] = unitIsADC 
+        values_[off*4 + 2] = unitIsADC 
             ? convert(pedestalEndcapValues[i].getValue(2), 2, qieCoder, qieShape)
             : pedestalEndcapValues[i].getValue(2);
-        values_[i*4 + 3] = unitIsADC 
+        values_[off*4 + 3] = unitIsADC 
             ? convert(pedestalEndcapValues[i].getValue(3), 3, qieCoder, qieShape)
             : pedestalEndcapValues[i].getValue(3);
     }

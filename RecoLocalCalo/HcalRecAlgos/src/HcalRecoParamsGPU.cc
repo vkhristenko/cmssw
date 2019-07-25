@@ -12,20 +12,28 @@ HcalRecoParamsGPU::HcalRecoParamsGPU(HcalRecoParams const& recoParams)
     , param1_(totalChannels_)
     , param2_(totalChannels_)
 {
+    auto const& containers = recoParams.getAllContainers();
+
     // fill in eb
-    auto const& barrelValues = recoParams.getAllContainers()[0].second;
+    auto const& barrelValues = containers[0].second;
     for (uint64_t i=0; i<barrelValues.size(); ++i) {
         param1_[i] = barrelValues[i].param1();
         param2_[i] = barrelValues[i].param2();
     }
 
     // fill in ee
-    auto const& endcapValues = recoParams.getAllContainers()[1].second;
+    auto const& endcapValues = containers[1].second;
     auto const offset = barrelValues.size();
     for (uint64_t i=0; i<endcapValues.size(); ++i) {
         param1_[i + offset] = endcapValues[i].param1();
-        param1_[i + offset] = endcapValues[i].param2();
+        param2_[i + offset] = endcapValues[i].param2();
     }
+
+    /*
+#ifdef HCAL_MAHI_CPUDEBUG
+    printf("param1 = %u param2 = %u",
+        param1_[17076])
+#endif*/
 }
 
 HcalRecoParamsGPU::Product::~Product() {

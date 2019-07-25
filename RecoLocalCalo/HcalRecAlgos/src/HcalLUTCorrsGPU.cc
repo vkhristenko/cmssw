@@ -10,14 +10,16 @@ HcalLUTCorrsGPU::HcalLUTCorrsGPU(HcalLUTCorrs const& lutcorrs)
     : value_(lutcorrs.getAllContainers()[0].second.size()
         + lutcorrs.getAllContainers()[1].second.size())
 {
+    auto const& containers = lutcorrs.getAllContainers();
+
     // fill in eb
-    auto const& barrelValues = lutcorrs.getAllContainers()[0].second;
+    auto const& barrelValues = containers[0].second;
     for (uint64_t i=0; i<barrelValues.size(); ++i) {
         value_[i] = barrelValues[i].getValue();
     }
 
     // fill in ee
-    auto const& endcapValues = lutcorrs.getAllContainers()[1].second;
+    auto const& endcapValues = containers[1].second;
     auto const offset = barrelValues.size();
     for (uint64_t i=0; i<endcapValues.size(); ++i) {
         value_[i + offset] = endcapValues[i].getValue();

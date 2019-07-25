@@ -14,8 +14,10 @@ HcalSiPMParametersGPU::HcalSiPMParametersGPU(HcalSiPMParameters const& parameter
     , darkCurrent_(totalChannels_)
     , auxi2_(totalChannels_)
 {
+    auto const& containers = parameters.getAllContainers();
+
     // fill in eb
-    auto const& barrelValues = parameters.getAllContainers()[0].second;
+    auto const& barrelValues = containers[0].second;
     for (uint64_t i=0; i<barrelValues.size(); ++i) {
         auto const& item = barrelValues[i];
         type_[i] = item.getType();
@@ -26,7 +28,7 @@ HcalSiPMParametersGPU::HcalSiPMParametersGPU(HcalSiPMParameters const& parameter
     }
 
     // fill in ee
-    auto const& endcapValues = parameters.getAllContainers()[1].second;
+    auto const& endcapValues = containers[1].second;
     auto const offset = barrelValues.size();
     for (uint64_t i=0; i<endcapValues.size(); ++i) {
         auto const off = offset + i;

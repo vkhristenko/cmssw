@@ -11,8 +11,10 @@ HcalGainsGPU::HcalGainsGPU(HcalGains const& gains)
         + gains.getAllContainers()[1].second.size()}
     , values_(totalChannels_ * 4)
 {
+    auto const& gainContainers = gains.getAllContainers();
+
     // fill in eb
-    auto const& barrelValues = gains.getAllContainers()[0].second;
+    auto const& barrelValues = gainContainers[0].second;
     for (uint64_t i=0; i<barrelValues.size(); ++i) {
         values_[i*4] = barrelValues[i].getValue(0);
         values_[i*4 + 1] = barrelValues[i].getValue(1);
@@ -21,7 +23,7 @@ HcalGainsGPU::HcalGainsGPU(HcalGains const& gains)
     }
 
     // fill in ee
-    auto const& endcapValues = gains.getAllContainers()[1].second;
+    auto const& endcapValues = gainContainers[1].second;
     auto const offset = barrelValues.size();
     for (uint64_t i=0; i<endcapValues.size(); ++i) {
         auto const off = offset + i;
