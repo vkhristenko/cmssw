@@ -17,3 +17,4 @@
 <use   name="cuda-api-wrappers"/>
 <use   name="cuda"/>
 <use   name="CUDADataFormats/HcalDigi"/>
+<use   name="CUDADataFormats/HcalRecHitSoA"/>

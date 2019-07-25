@@ -8,7 +8,8 @@
 namespace hcal { namespace mahi {
 
 void entryPoint(
-        InputDataGPU const&, ConditionsProducts const&,
+        InputDataGPU const&, OutputDataGPU&,
+        ConditionsProducts const&,
         ConfigParameters const&, cuda::stream_t<>&);
 
 }}
