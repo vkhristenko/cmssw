@@ -61,8 +61,10 @@ private:
         digisTokenF01HE_;
     edm::EDGetTokenT<CUDAProduct<hcal::DigiCollection<hcal::Flavor5>>> 
         digisTokenF5HB_;
+    edm::EDPutTokenT<CUDAProduct<hcal::RecHitCollection<hcal::Tag::ptr>>> rechitsM0Token_;
 
     hcal::mahi::ConfigParameters configParameters_;
+    hcal::mahi::OutputDataGPU outputGPU_;
     CUDAContextState cudaState_;
 };
 
@@ -73,6 +75,9 @@ HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps)
     , digisTokenF5HB_{
         consumes<CUDAProduct<hcal::DigiCollection<hcal::Flavor5>>>(
             ps.getParameter<edm::InputTag>("digisLabelF5HB"))}
+    , rechitsM0Token_{
+        produces<CUDAProduct<hcal::RecHitCollection<hcal::Tag::ptr>>>(
+            ps.getParameter<std::string>("recHitsLabelM0HBHE"))}
 {
     configParameters_.maxChannels = ps.getParameter<uint32_t>("maxChannels");
     configParameters_.kprep1dChannelsPerBlock = ps.getParameter<uint32_t>(
@@ -80,9 +85,13 @@ HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps)
     configParameters_.sipmQTSShift = ps.getParameter<int>("sipmQTSShift");
     configParameters_.sipmQNTStoSum = ps.getParameter<int>("sipmQNTStoSum");
     configParameters_.firstSampleShift = ps.getParameter<int>("firstSampleShift");
+
+    outputGPU_.allocate(configParameters_);
 }
 
-HBHERecHitProducerGPU::~HBHERecHitProducerGPU() {}
+HBHERecHitProducerGPU::~HBHERecHitProducerGPU() {
+    outputGPU_.deallocate(configParameters_);
+}
 
 void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cdesc) {
     edm::ParameterSetDescription desc;
@@ -92,6 +101,7 @@ void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cde
         edm::InputTag{"hcalRawToDigiGPU", "f01HEDigisGPU"});
     desc.add<edm::InputTag>("digisLabelF5HB", 
         edm::InputTag{"hcalRawToDigiGPU", "f5HBDigisGPU"});
+    desc.add<std::string>("recHitsLabelM0HBHE", "recHitsM0HBHE");
     desc.add<int>("sipmQTSShift", 0);
     desc.add<int>("sipmQNTStoSum", 3);
     desc.add<int>("firstSampleShift", 0);
@@ -183,7 +193,7 @@ void HBHERecHitProducerGPU::acquire(
         pedestalsHandle->offsetForHashes()
     };
 
-    hcal::mahi::entryPoint(inputGPU, conditions,
+    hcal::mahi::entryPoint(inputGPU, outputGPU_, conditions,
         configParameters_, ctx.stream());
 
 #ifdef HCAL_MAHI_CPUDEBUG
@@ -198,6 +208,10 @@ void HBHERecHitProducerGPU::produce(
         edm::EventSetup const& setup) 
 {
     CUDAScopedContextProduce ctx{cudaState_};
+
+    // copy construct a new guy/view and place cuda product into the event
+    hcal::RecHitCollection<hcal::Tag::ptr> recHits = outputGPU_.recHits;
+    ctx.emplace(event, rechitsM0Token_, std::move(recHits));
 }
 
 DEFINE_FWK_MODULE(HBHERecHitProducerGPU);

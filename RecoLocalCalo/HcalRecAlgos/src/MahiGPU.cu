@@ -178,6 +178,9 @@ void kernel_prep1d_sameNumberOfSamples(
         uint32_t const stridef01HE,
         uint32_t const stridef5HB,
         uint32_t const nchannelsf01HE,
+        float *method0Energy,
+        float *method0Time,
+        uint32_t *outputdid,
         uint32_t const nchannels,
         uint32_t const* recoParam1Values,
         uint32_t const* recoParam2Values,
@@ -408,6 +411,11 @@ void kernel_prep1d_sameNumberOfSamples(
             ? 25.f * (position + max_energy_1 / sum)
             : 25.f * position;
 
+        // store method0 quantities to global mem
+        outputdid[gch] = id;
+        method0Energy[gch] = method0_energy;
+        method0Time[gch] = time;
+
 #ifdef HCAL_MAHI_GPUDEBUG
         printf("method0_energy = %f max_sample = %d max_energy = %f time = %f\n",
             method0_energy, max_sample, max_energy, time);
@@ -417,10 +425,16 @@ void kernel_prep1d_sameNumberOfSamples(
 
 void entryPoint(
         InputDataGPU const& inputGPU,
+        OutputDataGPU& outputGPU,
         ConditionsProducts const& conditions,
         ConfigParameters const& configParameters,
         cuda::stream_t<>& cudaStream) {
     auto const totalChannels = inputGPU.f01HEDigis.ndigis + inputGPU.f5HBDigis.ndigis;
+
+    // FIXME: may be move this assignment to emphasize this more clearly
+    // FIXME: number of channels for output might change given that 
+    //   some channesl might be filtered out
+    outputGPU.recHits.size = totalChannels;
 
     // TODO: this can be lifted by implementing a separate kernel
     // similar to the default one, but properly handling the diff in #samples
@@ -442,6 +456,9 @@ void entryPoint(
         inputGPU.f01HEDigis.stride,
         inputGPU.f5HBDigis.stride,
         inputGPU.f01HEDigis.ndigis,
+        outputGPU.recHits.energy,
+        outputGPU.recHits.time,
+        outputGPU.recHits.did,
         totalChannels,
         conditions.recoParams.param1,
         conditions.recoParams.param2,

@@ -21,6 +21,8 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMParametersGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMCharacteristicsGPU.h"
 
+#include "CUDADataFormats/HcalRecHitSoA/interface/RecHitCollection.h"
+
 namespace hcal { namespace mahi {
 
 struct ConditionsProducts {
@@ -47,6 +49,25 @@ struct ConfigParameters {
     int sipmQTSShift;
     int sipmQNTStoSum;
     int firstSampleShift;
+};
+
+struct OutputDataGPU {
+    RecHitCollection<Tag::ptr> recHits;
+
+    void allocate(ConfigParameters const& config) {
+        cudaCheck( cudaMalloc((void**)&recHits.energy,
+            config.maxChannels * sizeof(float)) );
+        cudaCheck( cudaMalloc((void**)&recHits.time,
+            config.maxChannels * sizeof(float)) );
+        cudaCheck( cudaMalloc((void**)&recHits.did,
+            config.maxChannels * sizeof(uint32_t)) );
+    }
+
+    void deallocate(ConfigParameters const& config) {
+        cudaCheck( cudaFree(recHits.energy) );
+        cudaCheck( cudaFree(recHits.time) );
+        cudaCheck( cudaFree(recHits.did) );
+    }
 };
 
 struct InputDataGPU {
