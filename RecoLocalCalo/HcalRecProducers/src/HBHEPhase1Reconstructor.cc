@@ -523,6 +523,10 @@ void HBHEPhase1Reconstructor::processData(const Collection& coll,
             const double gainWidth = calibWidth.gain(capid);
             //always use QIE-only pedestal for this computation
             const double rawCharge = rcfs.getRawCharge(cs[inputTS], calib.pedestal(capid));
+            if (cell.rawId() == 1160268851) {
+                printf("rawCharge = %f charge = %f pedestal = %f\n", 
+                    rawCharge, cs[inputTS], calib.pedestal(capid));
+            }
             const float t = getTDCTimeFromSample(s);
             const float dfc = getDifferentialChargeGain(*channelCoder, *shape, adc,
                                                         capid, channelInfo->hasTimeInfo()); 

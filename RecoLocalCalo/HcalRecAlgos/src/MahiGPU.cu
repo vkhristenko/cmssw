@@ -118,7 +118,7 @@ float compute_coder_charge(
     auto const nbins = qieType==0 ? 32 : 64;
     auto const center = adc % nbins == nbins-1
         ? 0.5 * (3 * qieShapeToUse[adc] - qieShapeToUse[adc-1])
-        : 0.5 * (qieShapeToUse[adc] + qieShapeToUse[adc+3]);
+        : 0.5 * (qieShapeToUse[adc] + qieShapeToUse[adc+1]);
     auto const index = get_qiecoder_index(capid, range);
     return (center - qieOffsets[index]) / qieSlopes[index];
 }
@@ -269,6 +269,12 @@ void kernel_prep1d_sameNumberOfSamples(
             dataf5HB + stride*(gch - nchannelsf01HE), sample)
         : capid_for_sample<Flavor01>(dataf01HE + stride*gch, sample);
 
+#ifdef HCAL_MAHI_GPUDEBUG
+#ifdef HCAL_MAHI_GPUDEBUG_FILTERDETID
+    if (id != 1160268851) return;
+#endif
+#endif
+
     // compute hash for this did
     auto const hashedId = did.subdetId() == HcalBarrel
         ? did2linearIndexHB(id, maxDepthHB, firstHBRing, lastHBRing, nEtaHB)
@@ -335,7 +341,7 @@ void kernel_prep1d_sameNumberOfSamples(
         auto const parLin3 = parLin3Values[sipmType-1];
 
         int const first = std::max(soi + sipmQTSShift, 0);
-        int const last = std::max(soi + sipmQNTStoSum, nsamplesExpected);
+        int const last = std::min(soi + sipmQNTStoSum, nsamplesExpected);
         float sipmq = 0.0f;
         for (auto ts=first; ts<last; ts++)
             sipmq += shrChargeMinusPedestal[threadIdx.y*nsamplesExpected + ts];
@@ -345,6 +351,10 @@ void kernel_prep1d_sameNumberOfSamples(
         auto const rawCharge = (charge - pedestal)*factor + pedestal;
         tdcTime = HcalSpecialTimes::getTDCTime(
             tdc_for_sample<Flavor01>(dataf01HE + stride*gch, sample));
+
+#ifdef HCAL_MAHI_GPUDEBUG
+        printf("first = %d last = %d factor = %f\n", first, last, factor);
+#endif
     }
 
     // compute method 0 quantities
@@ -364,10 +374,10 @@ void kernel_prep1d_sameNumberOfSamples(
     shrEnergyM0PerTS[lch*nsamplesExpected + sample] = energym0_per_ts;
 
 #ifdef HCAL_MAHI_GPUDEBUG
-    printf("sample = %d gch = %d hashedId = %u adc = %u capid = %u\n"
-        "charge = %f rawCharge = %f dfc = %f pedestal = %f\n"
-        "gain = %f respCorrection = %f energym0_per_ts = %f\n",
-        sample, gch, hashedId, adc, capid, charge, rawCharge, dfc, pedestal,
+    printf("id = %u sample = %d gch = %d hashedId = %u adc = %u capid = %u\n"
+        "   charge = %f rawCharge = %f dfc = %f pedestal = %f\n"
+        "   gain = %f respCorrection = %f energym0_per_ts = %f\n",
+        id, sample, gch, hashedId, adc, capid, charge, rawCharge, dfc, pedestal,
         gain, respCorrection, energym0_per_ts);
     printf("startSample = %d endSample = %d param1 = %u param2 = %u\n",
         startSample, endSample, recoParam1, recoParam2);
