@@ -188,6 +188,8 @@ void kernel_prep1d_sameNumberOfSamples(
         float const* qieCoderSlopes,
         int const* qieTypes,
         float const* pedestals,
+        float const* effectivePedestals,
+        bool const useEffectivePedestals,
         int const* sipmTypeValues,
         float const* fcByPEValues,
         float const* parLin1Values,
@@ -295,6 +297,10 @@ void kernel_prep1d_sameNumberOfSamples(
     auto const gain = gains[capid];
     auto const respCorrection = respCorrectionValues[hashedId];
     auto const pedestal = pedestalsForChannel[capid];
+    // if needed, only use effective pedestals for f01
+    auto const pedestalToUseForMethod0 = useEffectivePedestals && gch < nchannelsf01HE
+        ? effectivePedestals[hashedId*4 + capid]
+        : pedestal;
     auto const sipmType = sipmTypeValues[hashedId];
     auto const fcByPE = fcByPEValues[hashedId];
     auto const recoParam1 = recoParam1Values[hashedId];
@@ -313,8 +319,9 @@ void kernel_prep1d_sameNumberOfSamples(
     __syncthreads();
 
     // TODO: this should be properly treated
-    int32_t soi = 4;
-    
+    int32_t soi = 3;
+   
+
     // 
     // compute various quantities (raw charge and tdc stuff)
     // NOTE: this branch will be divergent only for a single warp that 
@@ -348,12 +355,13 @@ void kernel_prep1d_sameNumberOfSamples(
         auto const effectivePixelsFired = sipmq / fcByPE;
         auto const factor = compute_reco_correction_factor(
             parLin1, parLin2, parLin3, effectivePixelsFired);
-        auto const rawCharge = (charge - pedestal)*factor + pedestal;
+        rawCharge = (charge - pedestal)*factor + pedestal;
         tdcTime = HcalSpecialTimes::getTDCTime(
             tdc_for_sample<Flavor01>(dataf01HE + stride*gch, sample));
 
 #ifdef HCAL_MAHI_GPUDEBUG
-        printf("first = %d last = %d factor = %f\n", first, last, factor);
+        printf("first = %d last = %d sipmQ = %f factor = %f rawCharge = %f\n", 
+            first, last, sipmq, factor, rawCharge);
 #endif
     }
 
@@ -369,7 +377,7 @@ void kernel_prep1d_sameNumberOfSamples(
         ? startSample + nsamplesToAdd
         : nsamples;
     // NOTE: gain is a small number < 10^-3, multiply it last
-    auto const energym0_per_ts = gain*((rawCharge - pedestal)* respCorrection);
+    auto const energym0_per_ts = gain*((rawCharge - pedestalToUseForMethod0)*respCorrection);
     // store to shared mem
     shrEnergyM0PerTS[lch*nsamplesExpected + sample] = energym0_per_ts;
 
@@ -377,7 +385,8 @@ void kernel_prep1d_sameNumberOfSamples(
     printf("id = %u sample = %d gch = %d hashedId = %u adc = %u capid = %u\n"
         "   charge = %f rawCharge = %f dfc = %f pedestal = %f\n"
         "   gain = %f respCorrection = %f energym0_per_ts = %f\n",
-        id, sample, gch, hashedId, adc, capid, charge, rawCharge, dfc, pedestal,
+        id, sample, gch, hashedId, adc, capid, charge, rawCharge, dfc, 
+        pedestalToUseForMethod0,
         gain, respCorrection, energym0_per_ts);
     printf("startSample = %d endSample = %d param1 = %u param2 = %u\n",
         startSample, endSample, recoParam1, recoParam2);
@@ -476,6 +485,10 @@ void entryPoint(
         conditions.qieCoders.slopes,
         conditions.qieTypes.values,
         conditions.pedestals.values,
+        conditions.convertedEffectivePedestals
+            ? conditions.convertedEffectivePedestals->values
+            : conditions.pedestals.values,
+        configParameters.useEffectivePedestals,
         conditions.sipmParameters.type,
         conditions.sipmParameters.fcByPE,
         conditions.sipmCharacteristics.parLin1,

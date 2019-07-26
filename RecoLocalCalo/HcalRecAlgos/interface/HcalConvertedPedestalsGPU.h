@@ -35,7 +35,7 @@ public:
 
     uint32_t offsetForHashes() const { return offsetForHashes_; }
 
-private:
+protected:
     uint64_t totalChannels_;
     uint32_t offsetForHashes_;
     std::vector<float, CUDAHostAllocator<float>> values_;

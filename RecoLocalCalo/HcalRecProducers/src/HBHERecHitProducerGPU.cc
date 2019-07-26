@@ -23,8 +23,6 @@
 #include "CondFormats/DataRecord/interface/HcalQIETypesRcd.h"
 #include "CondFormats/DataRecord/interface/HcalSiPMParametersRcd.h"
 #include "CondFormats/DataRecord/interface/HcalSiPMCharacteristicsRcd.h"
-#include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalsGPU.h"
-#include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalWidthsGPU.h"
 
 //#include "CondFormats/DataRecord/interface/HcalPedestalsRcd.h"
 #include "RecoLocalCalo/HcalRecProducers/src/HcalCombinedRecordsGPU.h"
@@ -40,6 +38,9 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIETypesGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMParametersGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMCharacteristicsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedEffectivePedestalsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalWidthsGPU.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/DeclsForKernels.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/MahiGPU.h"
@@ -85,6 +86,7 @@ HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps)
     configParameters_.sipmQTSShift = ps.getParameter<int>("sipmQTSShift");
     configParameters_.sipmQNTStoSum = ps.getParameter<int>("sipmQNTStoSum");
     configParameters_.firstSampleShift = ps.getParameter<int>("firstSampleShift");
+    configParameters_.useEffectivePedestals = ps.getParameter<bool>("useEffectivePedestals");
 
     outputGPU_.allocate(configParameters_);
 }
@@ -105,6 +107,7 @@ void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cde
     desc.add<int>("sipmQTSShift", 0);
     desc.add<int>("sipmQNTStoSum", 3);
     desc.add<int>("firstSampleShift", 0);
+    desc.add<bool>("useEffectivePedestals", true);
 
     std::string label = "hbheRecHitProducerGPU";
     cdesc.add(label, desc);
@@ -152,6 +155,13 @@ void HBHERecHitProducerGPU::acquire(
     setup.get<HcalConvertedPedestalsRcd>().get(pedestalsHandle);
     auto const& pedestalsProduct = pedestalsHandle->getProduct(ctx.stream());
     
+    edm::ESHandle<HcalConvertedEffectivePedestalsGPU> effectivePedestalsHandle;
+    if (configParameters_.useEffectivePedestals)
+        setup.get<HcalConvertedEffectivePedestalsRcd>().get(effectivePedestalsHandle);
+    auto const* effectivePedestalsProduct = configParameters_.useEffectivePedestals
+        ? &effectivePedestalsHandle->getProduct(ctx.stream())
+        : nullptr;
+    
     edm::ESHandle<HcalQIECodersGPU> qieCodersHandle;
     setup.get<HcalQIEDataRcd>().get(qieCodersHandle);
     auto const& qieCodersProduct = qieCodersHandle->getProduct(ctx.stream());
@@ -189,6 +199,7 @@ void HBHERecHitProducerGPU::acquire(
         respCorrsProduct, timeCorrsProduct,
         qieTypesProduct, 
         sipmParametersProduct, sipmCharacteristicsProduct,
+        effectivePedestalsProduct,
         topologyHandle.product(), recConstantsHandle.product(),
         pedestalsHandle->offsetForHashes()
     };
