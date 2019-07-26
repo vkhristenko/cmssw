@@ -14,6 +14,12 @@ using HcalConvertedPedestalsRcd = HcalCombinedRecord<
     HcalQIETypesRcd
 >;
 
+using HcalConvertedEffectivePedestalsRcd = HcalCombinedRecord<
+    HcalPedestalsRcd,
+    HcalQIEDataRcd,
+    HcalQIETypesRcd
+>;
+
 using HcalConvertedPedestalWidthsRcd = HcalCombinedRecord<
     HcalPedestalsRcd,
     HcalPedestalWidthsRcd,

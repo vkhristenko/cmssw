@@ -14,6 +14,7 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalLUTCorrsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalWidthsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedEffectivePedestalsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalQIECodersGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRespCorrsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalTimeCorrsGPU.h"
@@ -22,6 +23,9 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMCharacteristicsGPU.h"
 
 #include "CUDADataFormats/HcalRecHitSoA/interface/RecHitCollection.h"
+
+#include <optional>
+#include <functional>
 
 namespace hcal { namespace mahi {
 
@@ -38,6 +42,7 @@ struct ConditionsProducts {
     HcalQIETypesGPU::Product const& qieTypes;
     HcalSiPMParametersGPU::Product const& sipmParameters;
     HcalSiPMCharacteristicsGPU::Product const& sipmCharacteristics;
+    HcalConvertedPedestalsGPU::Product const* convertedEffectivePedestals;
     HcalTopology const* topology;
     HcalDDDRecConstants const* recConstants;
     uint32_t offsetForHashes;
@@ -49,6 +54,7 @@ struct ConfigParameters {
     int sipmQTSShift;
     int sipmQNTStoSum;
     int firstSampleShift;
+    bool useEffectivePedestals;
 };
 
 struct OutputDataGPU {

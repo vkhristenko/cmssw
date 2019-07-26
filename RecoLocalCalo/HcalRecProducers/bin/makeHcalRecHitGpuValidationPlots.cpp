@@ -35,9 +35,12 @@ int main(int argc, char *argv[]) {
     // prep output 
     TFile rfout{outFileName.c_str(), "recreate"};
 
-    CREATE_HIST_1D(hEnergyM0GPU, 1000, 0, 100);
-    CREATE_HIST_1D(hEnergyM0CPU, 1000, 0, 100);
-    CREATE_HIST_2D(hEnergyM0GPUvsCPU, 1000, 0, 100);
+    CREATE_HIST_1D(hEnergyM0HBGPU, 1000, 0, 100);
+    CREATE_HIST_1D(hEnergyM0HEGPU, 1000, 0, 100);
+    CREATE_HIST_1D(hEnergyM0HBCPU, 1000, 0, 100);
+    CREATE_HIST_1D(hEnergyM0HECPU, 1000, 0, 100);
+    CREATE_HIST_2D(hEnergyM0HBGPUvsCPU, 1000, 0, 100);
+    CREATE_HIST_2D(hEnergyM0HEGPUvsCPU, 1000, 0, 100);
 
     // prep input
     TFile rfin{inFileName.c_str()};
@@ -83,33 +86,57 @@ int main(int argc, char *argv[]) {
             auto const gpu_energy_m0 = gpuProduct.energy[ichgpu];
             auto const cpu_energy_m0 = cpurh.eraw();
 
-            hEnergyM0GPU->Fill(gpu_energy_m0);
-            hEnergyM0CPU->Fill(cpu_energy_m0);
-            hEnergyM0GPUvsCPU->Fill(cpu_energy_m0, gpu_energy_m0);
+            if (did.subdetId() == HcalBarrel) {
+                hEnergyM0HBGPU->Fill(gpu_energy_m0);
+                hEnergyM0HBCPU->Fill(cpu_energy_m0);
+                hEnergyM0HBGPUvsCPU->Fill(cpu_energy_m0, gpu_energy_m0);
+            } else if (did.subdetId() == HcalEndcap){
+                hEnergyM0HEGPU->Fill(gpu_energy_m0);
+                hEnergyM0HECPU->Fill(cpu_energy_m0);
+                hEnergyM0HEGPUvsCPU->Fill(cpu_energy_m0, gpu_energy_m0);
+            }
         }
     }
         
     {
         TCanvas c{"plots", "plots", 4200, 6200};
-        c.Divide(2, 1);
+        c.Divide(2, 2);
         c.cd(1);
         {
             gPad->SetLogy();
-            hEnergyM0CPU->SetLineColor(kBlack);
-            hEnergyM0CPU->SetLineWidth(1.);
-            hEnergyM0CPU->Draw("");
-            hEnergyM0GPU->SetLineColor(kBlue);
-            hEnergyM0GPU->SetLineWidth(1.);
-            hEnergyM0GPU->Draw("sames");
+            hEnergyM0HBCPU->SetLineColor(kBlack);
+            hEnergyM0HBCPU->SetLineWidth(1.);
+            hEnergyM0HBCPU->Draw("");
+            hEnergyM0HBGPU->SetLineColor(kBlue);
+            hEnergyM0HBGPU->SetLineWidth(1.);
+            hEnergyM0HBGPU->Draw("sames");
             gPad->Update();
-            auto stats = (TPaveStats*)hEnergyM0GPU->FindObject("stats");
+            auto stats = (TPaveStats*)hEnergyM0HBGPU->FindObject("stats");
             auto y2 = stats->GetY2NDC();
             auto y1 = stats->GetY1NDC();
             stats->SetY2NDC(y1);
             stats->SetY1NDC(y1 - (y2-y1));
         }
         c.cd(2);
-        hEnergyM0GPUvsCPU->Draw("colz");
+        hEnergyM0HBGPUvsCPU->Draw("colz");
+        c.cd(3);
+        {
+            gPad->SetLogy();
+            hEnergyM0HECPU->SetLineColor(kBlack);
+            hEnergyM0HECPU->SetLineWidth(1.);
+            hEnergyM0HECPU->Draw("");
+            hEnergyM0HEGPU->SetLineColor(kBlue);
+            hEnergyM0HEGPU->SetLineWidth(1.);
+            hEnergyM0HEGPU->Draw("sames");
+            gPad->Update();
+            auto stats = (TPaveStats*)hEnergyM0HEGPU->FindObject("stats");
+            auto y2 = stats->GetY2NDC();
+            auto y1 = stats->GetY1NDC();
+            stats->SetY2NDC(y1);
+            stats->SetY1NDC(y1 - (y2-y1));
+        }
+        c.cd(4);
+        hEnergyM0HEGPUvsCPU->Draw("colz");
         c.SaveAs("plots.pdf");
     }
 

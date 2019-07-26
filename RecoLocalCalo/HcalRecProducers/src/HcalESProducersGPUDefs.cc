@@ -119,6 +119,7 @@ DEFINE_FWK_EVENTSETUP_MODULE(HcalSiPMCharacteristicsGPUESProducer);
 #include "RecoLocalCalo/HcalRecProducers/src/HcalCombinedRecordsGPU.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedEffectivePedestalsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalWidthsGPU.h"
 
 EVENTSETUP_RECORD_REG(HcalConvertedPedestalsRcd);
@@ -130,6 +131,12 @@ using HcalConvertedPedestalsGPUESProducer = HcalESProducerGPUWithDependencies<
     HcalPedestals, HcalQIEData, HcalQIETypes
 >;
 
+using HcalConvertedEffectivePedestalsGPUESProducer = HcalESProducerGPUWithDependencies<
+    HcalConvertedEffectivePedestalsRcd,
+    HcalConvertedEffectivePedestalsGPU,
+    HcalPedestals, HcalQIEData, HcalQIETypes
+>;
+
 using HcalConvertedPedestalWidthsGPUESProducer = HcalESProducerGPUWithDependencies<
     HcalConvertedPedestalWidthsRcd,
     HcalConvertedPedestalWidthsGPU,
@@ -137,4 +144,5 @@ using HcalConvertedPedestalWidthsGPUESProducer = HcalESProducerGPUWithDependenci
 >;
 
 DEFINE_FWK_EVENTSETUP_MODULE(HcalConvertedPedestalsGPUESProducer);
+DEFINE_FWK_EVENTSETUP_MODULE(HcalConvertedEffectivePedestalsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalConvertedPedestalWidthsGPUESProducer);
