@@ -80,15 +80,6 @@ HBHERecHit SimpleHBHEPhase1Algo::reconstruct(const HBHEChannelInfo& info,
         m0E = m0Energy(info, fc_ampl, applyContainment, phasens, nSamplesToAdd);
         m0E *= hbminusCorrectionFactor(channelId, m0E, isData);
         m0t = m0Time(info, fc_ampl, calibs, nSamplesToAdd);
-
-        if (channelId.rawId() == 1160268851) {
-            for (int i=0; i<8; i++)
-                printf("sample = %d adc = %u rawCharge = %f pedesatl = %f gain = %f dFcPerADC = %f\n",
-                    i, static_cast<uint8_t>(info.adc()[i]), info.rawCharge()[i], 
-                    info.pedestal()[i], info.gain()[i], info.dFcPerADC()[i]);
-            printf("method0_energy = %f method0_time = %f\n",
-                m0E, m0t);
-        }
     }
 
     // Run "Method 2"
