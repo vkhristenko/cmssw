@@ -118,7 +118,12 @@ int main(int argc, char *argv[]) {
             stats->SetY1NDC(y1 - (y2-y1));
         }
         c.cd(2);
-        hEnergyM0HBGPUvsCPU->Draw("colz");
+        {
+            gPad->SetLogz();
+            hEnergyM0HBGPUvsCPU->GetXaxis()->SetTitle("cpu");
+            hEnergyM0HBGPUvsCPU->GetYaxis()->SetTitle("gpu");
+            hEnergyM0HBGPUvsCPU->Draw("colz");
+        }
         c.cd(3);
         {
             gPad->SetLogy();
@@ -136,7 +141,12 @@ int main(int argc, char *argv[]) {
             stats->SetY1NDC(y1 - (y2-y1));
         }
         c.cd(4);
-        hEnergyM0HEGPUvsCPU->Draw("colz");
+        {
+            gPad->SetLogz();
+            hEnergyM0HEGPUvsCPU->GetXaxis()->SetTitle("cpu");
+            hEnergyM0HEGPUvsCPU->GetYaxis()->SetTitle("gpu");
+            hEnergyM0HEGPUvsCPU->Draw("colz");
+        }
         c.SaveAs("plots.pdf");
     }
 
