@@ -104,6 +104,20 @@ HcalConvertedPedestalsGPU::HcalConvertedPedestalsGPU(
         values_[off*4 + 3] = unitIsADC 
             ? convert(pedestalEndcapValues[i].getValue(3), 3, qieCoder, qieShape)
             : pedestalEndcapValues[i].getValue(3);
+        
+#ifdef HCAL_MAHI_CPUDEBUG
+        if (pedestalEndcapValues[i].rawId() == 1160268851) {
+            printf("qietype = %d\n", qieType);
+            printf("ped0 = %f ped1 = %f ped2 = %f ped3 = %f\n",
+                pedestalEndcapValues[i].getValue(0),
+                pedestalEndcapValues[i].getValue(1),
+                pedestalEndcapValues[i].getValue(2),
+                pedestalEndcapValues[i].getValue(3));
+            printf("converted: ped0 = %f ped1 = %f ped2 = %f ped3 = %f\n",
+                values_[off*4 ], values_[off*4 + 1], values_[off*4+2],
+                values_[off*4 + 3]);
+        }
+#endif
     }
 }
 
