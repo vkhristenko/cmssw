@@ -465,7 +465,7 @@ void entryPoint(
     int blocks = static_cast<uint32_t>(threadsPerBlock.y) > totalChannels
         ? 1
         : (totalChannels + threadsPerBlock.y - 1) / threadsPerBlock.y;
-    int nbytesShared = (2*f01nsamples + 2)*sizeof(float)*
+    int nbytesShared = ((2*f01nsamples + 1)*sizeof(float) + sizeof(uint64_t) )*
         configParameters.kprep1dChannelsPerBlock;
     kernel_prep1d_sameNumberOfSamples<<<blocks, threadsPerBlock, nbytesShared, cudaStream.id()>>>(
         inputGPU.f01HEDigis.data,
