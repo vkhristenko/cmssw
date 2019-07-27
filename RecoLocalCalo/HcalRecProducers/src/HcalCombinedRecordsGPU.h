@@ -27,4 +27,11 @@ using HcalConvertedPedestalWidthsRcd = HcalCombinedRecord<
     HcalQIETypesRcd
 >;
 
+using HcalConvertedEffectivePedestalWidthsRcd = HcalCombinedRecord<
+    HcalPedestalsRcd,
+    HcalPedestalWidthsRcd,
+    HcalQIEDataRcd,
+    HcalQIETypesRcd
+>;
+
 #endif // RecoLocalCalo_HcalRecProducers_src_HcalCombinedRecordsGPU_h
