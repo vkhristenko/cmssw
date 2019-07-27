@@ -377,7 +377,8 @@ void kernel_prep1d_sameNumberOfSamples(
         ? startSample + nsamplesToAdd
         : nsamples;
     // NOTE: gain is a small number < 10^-3, multiply it last
-    auto const energym0_per_ts = gain*((rawCharge - pedestalToUseForMethod0)*respCorrection);
+    auto const energym0_per_ts = gain*((rawCharge - pedestalToUseForMethod0)*
+        respCorrection);
     // store to shared mem
     shrEnergyM0PerTS[lch*nsamplesExpected + sample] = energym0_per_ts;
 
