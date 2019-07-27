@@ -215,7 +215,7 @@ void kernel_prep1d_sameNumberOfSamples(
     int32_t const nsamplesExpected = blockDim.x;
     auto const lch = threadIdx.y;
     auto const gch = lch + blockDim.y*blockIdx.x;
-    auto const nchannels_per_block = blockDim.x;
+    auto const nchannels_per_block = blockDim.y;
     auto const linearThPerBlock = threadIdx.x + threadIdx.y*blockDim.x;
 
     constexpr uint32_t mantissaMaskQIE8 = 0x1fu;
@@ -440,6 +440,7 @@ void kernel_prep1d_sameNumberOfSamples(
             method0_energy, max_sample, max_energy, time);
 #endif
     }
+
 }
 
 void entryPoint(
