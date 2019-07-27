@@ -65,7 +65,7 @@ HcalConvertedPedestalWidthsGPU::HcalConvertedPedestalWidthsGPU(
 
     for (uint64_t i=0; i<pedestalBarrelValues.size(); ++i) {
         auto const& qieCoder = qieDataBarrelValues[i];
-        auto const qieType = qieTypesBarrelValues[i].getValue();
+        auto const qieType = qieTypesBarrelValues[i].getValue() > 1 ? 1 : 0;
         auto const& qieShape = qieData.getShape(qieType);
 
         values_[i*4] = unitIsADC 
@@ -109,7 +109,7 @@ HcalConvertedPedestalWidthsGPU::HcalConvertedPedestalWidthsGPU(
     auto const offset = pedestalWidthBarrelValues.size();
     for (uint64_t i=0; i<pedestalEndcapValues.size(); ++i) {
         auto const& qieCoder = qieDataEndcapValues[i];
-        auto const qieType = qieTypesEndcapValues[i].getValue();
+        auto const qieType = qieTypesEndcapValues[i].getValue() > 1 ? 1 : 0;
         auto const& qieShape = qieData.getShape(qieType);
         auto const off = offset + i;
 

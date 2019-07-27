@@ -41,6 +41,7 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedEffectivePedestalsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedPedestalWidthsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalConvertedEffectivePedestalWidthsGPU.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/DeclsForKernels.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/MahiGPU.h"
@@ -147,10 +148,22 @@ void HBHERecHitProducerGPU::acquire(
     edm::ESHandle<HcalLUTCorrsGPU> lutCorrsHandle;
     setup.get<HcalLUTCorrsRcd>().get(lutCorrsHandle);
     auto const& lutCorrsProduct = lutCorrsHandle->getProduct(ctx.stream());
-    
+   
+    // use only 1 depending on useEffectivePedestals
     edm::ESHandle<HcalConvertedPedestalWidthsGPU> pedestalWidthsHandle;
-    setup.get<HcalConvertedPedestalWidthsRcd>().get(pedestalWidthsHandle);
-    auto const& pedestalWidthsProduct = pedestalWidthsHandle->getProduct(ctx.stream());
+    edm::ESHandle<HcalConvertedEffectivePedestalWidthsGPU> 
+        effectivePedestalWidthsHandle;
+    if (configParameters_.useEffectivePedestals)
+        setup.get<HcalConvertedEffectivePedestalWidthsRcd>()
+            .get(effectivePedestalWidthsHandle);
+    else
+        setup.get<HcalConvertedPedestalWidthsRcd>()
+            .get(pedestalWidthsHandle);
+    auto const& pedestalWidthsProduct = 
+        configParameters_.useEffectivePedestals
+            ? effectivePedestalWidthsHandle->getProduct(ctx.stream())
+            : pedestalWidthsHandle->getProduct(ctx.stream());
+
     edm::ESHandle<HcalConvertedPedestalsGPU> pedestalsHandle;
     setup.get<HcalConvertedPedestalsRcd>().get(pedestalsHandle);
     auto const& pedestalsProduct = pedestalsHandle->getProduct(ctx.stream());

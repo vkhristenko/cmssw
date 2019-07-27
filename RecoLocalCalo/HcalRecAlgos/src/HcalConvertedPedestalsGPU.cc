@@ -58,7 +58,7 @@ HcalConvertedPedestalsGPU::HcalConvertedPedestalsGPU(
 
     for (uint64_t i=0; i<pedestalBarrelValues.size(); ++i) {
         auto const& qieCoder = qieDataBarrelValues[i];
-        auto const qieType = qieTypesBarrelValues[i].getValue();
+        auto const qieType = qieTypesBarrelValues[i].getValue() > 1 ? 1 : 0;
         auto const& qieShape = qieData.getShape(qieType);
 
         values_[i*4] = unitIsADC 
