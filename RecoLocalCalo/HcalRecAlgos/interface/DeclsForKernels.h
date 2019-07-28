@@ -8,7 +8,7 @@
 #include "Geometry/HcalCommonData/interface/HcalDDDRecConstants.h"
 #include "Geometry/CaloTopology/interface/HcalTopology.h"
 
-#include "RecoLocalCalo/HcalRecAlgos/interface/HcalRecoParamsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalRecoParamsWithPulseShapesGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalGainWidthsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalGainsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalLUTCorrsGPU.h"
@@ -36,7 +36,7 @@ struct ConditionsProducts {
     HcalConvertedPedestalWidthsGPU::Product const& pedestalWidths;
     HcalConvertedPedestalsGPU::Product const& pedestals;
     HcalQIECodersGPU::Product const& qieCoders;
-    HcalRecoParamsGPU::Product const& recoParams;
+    HcalRecoParamsWithPulseShapesGPU::Product const& recoParams;
     HcalRespCorrsGPU::Product const& respCorrs;
     HcalTimeCorrsGPU::Product const& timeCorrs;
     HcalQIETypesGPU::Product const& qieTypes;
