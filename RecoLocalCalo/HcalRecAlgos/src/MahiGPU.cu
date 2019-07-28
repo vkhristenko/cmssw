@@ -187,6 +187,7 @@ void kernel_prep1d_sameNumberOfSamples(
         float const* qieCoderOffsets,
         float const* qieCoderSlopes,
         int const* qieTypes,
+        float const* pedestalWidths,
         float const* pedestals,
         float const* effectivePedestals,
         bool const useEffectivePedestals,
@@ -292,11 +293,19 @@ void kernel_prep1d_sameNumberOfSamples(
         hashedId*HcalQIECodersGPU::numValuesPerChannel;
     auto const* pedestalsForChannel = pedestals +
         hashedId*4;
+    auto const* pedestalWidthsForChannel = pedestalWidths +
+        hashedId*4;
     auto const* gains = gainValues + 
         hashedId*4;
     auto const gain = gains[capid];
     auto const respCorrection = respCorrectionValues[hashedId];
     auto const pedestal = pedestalsForChannel[capid];
+    auto const averagePedestalWidth2 = 0.25 * (
+        pedestalWidthsForChannel[0]*pedestalWidthsForChannel[0] +
+        pedestalWidthsForChannel[1]*pedestalWidthsForChannel[1] +
+        pedestalWidthsForChannel[2]*pedestalWidthsForChannel[2] +
+        pedestalWidthsForChannel[3]*pedestalWidthsForChannel[3]);
+    auto const pedestalWidth = pedestalWidthsForChannel[capid];
     // if needed, only use effective pedestals for f01
     auto const pedestalToUseForMethod0 = useEffectivePedestals && gch < nchannelsf01HE
         ? effectivePedestals[hashedId*4 + capid]
@@ -442,6 +451,16 @@ void kernel_prep1d_sameNumberOfSamples(
 #endif
     }
 
+    //
+    // preparations for mahi fit
+    //
+    auto const amplitude = rawCharge - pedestalToUseForMethod0;
+    auto const noiseADC = (1. / std::sqrt(12)) * dfc;
+    auto const noisePhoto = amplitude > pedestalWidth
+        ? std::sqrt(amplitude * fcByPE)
+        : 0.f;
+    auto const noiseTerm = noiseADC*noiseADC + noisePhoto*noisePhoto + 
+        pedestalWidth*pedestalWidth;
 }
 
 void entryPoint(
@@ -486,6 +505,7 @@ void entryPoint(
         conditions.qieCoders.offsets,
         conditions.qieCoders.slopes,
         conditions.qieTypes.values,
+        conditions.pedestalWidths.values,
         conditions.pedestals.values,
         conditions.convertedEffectivePedestals
             ? conditions.convertedEffectivePedestals->values
