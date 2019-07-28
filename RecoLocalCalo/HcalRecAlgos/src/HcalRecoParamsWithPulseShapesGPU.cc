@@ -1,4 +1,4 @@
-#include "RecoLocalCalo/HcalRecAlgos/interface/HcalRecoParamsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalRecoParamsWithPulseShapesGPU.h"
 
 #include "CondFormats/HcalObjects/interface/HcalRecoParams.h"
 
@@ -6,7 +6,7 @@
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
 
 // FIXME: add proper getters to conditions
-HcalRecoParamsGPU::HcalRecoParamsGPU(HcalRecoParams const& recoParams) 
+HcalRecoParamsWithPulseShapesGPU::HcalRecoParamsWithPulseShapesGPU(HcalRecoParams const& recoParams) 
     : totalChannels_{recoParams.getAllContainers()[0].second.size()
         + recoParams.getAllContainers()[1].second.size()}
     , param1_(totalChannels_)
@@ -28,18 +28,24 @@ HcalRecoParamsGPU::HcalRecoParamsGPU(HcalRecoParams const& recoParams)
         param1_[i + offset] = endcapValues[i].param1();
         param2_[i + offset] = endcapValues[i].param2();
     }
+
+    /*
+#ifdef HCAL_MAHI_CPUDEBUG
+    printf("param1 = %u param2 = %u",
+        param1_[17076])
+#endif*/
 }
 
-HcalRecoParamsGPU::Product::~Product() {
+HcalRecoParamsWithPulseShapesGPU::Product::~Product() {
     // deallocation
     cudaCheck( cudaFree(param1) );
     cudaCheck( cudaFree(param2) );
 }
 
-HcalRecoParamsGPU::Product const& HcalRecoParamsGPU::getProduct(
+HcalRecoParamsWithPulseShapesGPU::Product const& HcalRecoParamsWithPulseShapesGPU::getProduct(
         cuda::stream_t<>& cudaStream) const {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](HcalRecoParamsGPU::Product& product, cuda::stream_t<>& cudaStream){
+        [this](HcalRecoParamsWithPulseShapesGPU::Product& product, cuda::stream_t<>& cudaStream){
             // malloc
             cudaCheck( cudaMalloc((void**)&product.param1, 
                 this->param1_.size() * sizeof(uint32_t)) );
@@ -62,4 +68,4 @@ HcalRecoParamsGPU::Product const& HcalRecoParamsGPU::getProduct(
     return product;
 }
 
-TYPELOOKUP_DATA_REG(HcalRecoParamsGPU);
+TYPELOOKUP_DATA_REG(HcalRecoParamsWithPulseShapesGPU);
