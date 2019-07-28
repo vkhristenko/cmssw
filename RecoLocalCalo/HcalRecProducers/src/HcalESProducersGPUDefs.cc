@@ -27,6 +27,7 @@
 #include "CondFormats/DataRecord/interface/HcalSiPMCharacteristicsRcd.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRecoParamsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalRecoParamsWithPulseShapesGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalPedestalsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalGainsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalLUTCorrsGPU.h"
@@ -44,6 +45,11 @@
 using HcalRecoParamsGPUESProducer = HcalESProducerGPU<
     HcalRecoParamsRcd,
     HcalRecoParamsGPU,
+    HcalRecoParams>;
+
+using HcalRecoParamsWithPulseShapesGPUESProducer = HcalESProducerGPU<
+    HcalRecoParamsRcd,
+    HcalRecoParamsWithPulseShapesGPU,
     HcalRecoParams>;
 
 using HcalPedestalsGPUESProducer = HcalESProducerGPU<
@@ -102,6 +108,7 @@ using HcalSiPMCharacteristicsGPUESProducer = HcalESProducerGPU<
     HcalSiPMCharacteristics>;
 
 DEFINE_FWK_EVENTSETUP_MODULE(HcalRecoParamsGPUESProducer);
+DEFINE_FWK_EVENTSETUP_MODULE(HcalRecoParamsWithPulseShapesGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalPedestalsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalGainsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(HcalLUTCorrsGPUESProducer);

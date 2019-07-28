@@ -28,6 +28,7 @@
 #include "RecoLocalCalo/HcalRecProducers/src/HcalCombinedRecordsGPU.h"
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalRecoParamsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalRecoParamsWithPulseShapesGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalGainWidthsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalGainsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalLUTCorrsGPU.h"
@@ -133,7 +134,7 @@ void HBHERecHitProducerGPU::acquire(
     hcal::mahi::InputDataGPU inputGPU{f01HEDigis, f5HBDigis};
 
     // conditions
-    edm::ESHandle<HcalRecoParamsGPU> recoParamsHandle;
+    edm::ESHandle<HcalRecoParamsWithPulseShapesGPU> recoParamsHandle;
     setup.get<HcalRecoParamsRcd>().get(recoParamsHandle);
     auto const& recoParamsProduct = recoParamsHandle->getProduct(ctx.stream());
     
