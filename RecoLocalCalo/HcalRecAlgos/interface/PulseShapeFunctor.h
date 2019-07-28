@@ -47,7 +47,6 @@ namespace FitterFuncs{
        fillPulseShape = pulse_shape_;
      }
      
-   private:
      std::array<float,HcalConst::maxPSshapeBin> pulse_hist;
      
      int cntNANinfit;
