@@ -1,10 +1,19 @@
 #include "DataFormats/HcalRecHit/interface/HcalSpecialTimes.h"
 
+// nvcc not able to parse this guy (whatever is inlcuded from it)....
+//#include "RecoLocalCalo/HcalRecAlgos/interface/PulseShapeFunctor.h"
+
 #include "RecoLocalCalo/HcalRecAlgos/interface/MahiGPU.h"
 
 #include <cuda/api_wrappers.h>
 
 namespace hcal { namespace mahi {
+
+// FIXME remove duplication...
+constexpr int maxSamples = 10;
+constexpr int maxPSshapeBin = 256;
+constexpr int nsPerBX = 25;
+constexpr float iniTimeShift = 92.5f;
 
 __constant__
 float const qie8shape[129] = {
@@ -171,6 +180,8 @@ float compute_diff_charge_gain(
 // TODO: add/validate restrict (will increase #registers in use by the kernel)
 __global__
 void kernel_prep1d_sameNumberOfSamples(
+        float *amplitudes,
+        float *noiseTerms,
         uint16_t const* dataf01HE,
         uint16_t const* dataf5HB,
         uint32_t const* idsf01HE,
@@ -246,6 +257,10 @@ void kernel_prep1d_sameNumberOfSamples(
         shrMethod0EnergySamplePair[lch] = 
             __float_as_uint(std::numeric_limits<float>::min());
     }
+
+    // offset output
+    auto *amplitudesForChannel = amplitudes + nsamplesExpected * gch;
+    auto *noiseTermsForChannel = noiseTerms + nsamplesExpected * gch;
 
     // get event input quantities
     auto const stride = gch >= nchannelsf01HE
@@ -461,12 +476,174 @@ void kernel_prep1d_sameNumberOfSamples(
         : 0.f;
     auto const noiseTerm = noiseADC*noiseADC + noisePhoto*noisePhoto + 
         pedestalWidth*pedestalWidth;
+
+    // store to global memory
+    amplitudesForChannel[sample] = amplitude;
+    noiseTermsForChannel[sample] = noiseTerm;
+}
+
+// TODO: remove what's not needed
+__forceinline__ __device__
+float compute_pulse_shape_value(
+        float const pulse_time,
+        int const sample,
+        int const shift,
+        float const* acc25nsVec,
+        float const* diff25nsItvlVec,
+        float const* accVarLenIdxMinusOneVec,
+        float const* diffVarItvlIdxMinusOneVec,
+        float const* accVarLenIdxZeroVec,
+        float const* diffVarItvlIdxZeroVec) {
+    // constants
+    constexpr float pulse_height = 1.0f;
+    constexpr float slew = 0.f;
+    constexpr auto ns_per_bx = nsPerBX;
+    constexpr auto num_ns = nsPerBX * maxSamples;
+    constexpr auto num_bx = num_ns / ns_per_bx;
+
+    float const i_start_float = -iniTimeShift - pulse_time - slew > 0.f
+        ? 0.f
+        : std::abs(-iniTimeShift - pulse_time - slew) + 1.f;
+    int i_start = static_cast<int>(i_start_float);
+    float offset_start = i_start_float - iniTimeShift - pulse_time - slew;
+    // FIXME: do we need a check for nan???
+
+    // boundary
+    if (offset_start == 1.0f) {
+        offset_start = 0.f;
+        i_start = -1;
+    }
+
+    int const bin_start = static_cast<int>(offset_start);
+    auto const bin_start_up = offset_start + 0.5;
+    int const bin_0_start = offset_start < bin_start_up
+        ? bin_start-1
+        : bin_start;
+    int const its_start = i_start  / ns_per_bx;
+    int const distTo25ns_start = nsPerBX - 1 - i_start % ns_per_bx;
+    auto const factor = offset_start - static_cast<float>(bin_0_start) - 0.5;
+    auto const sample_over10ts = sample + shift;
+    float value = 0.0f;
+    if (sample_over10ts == its_start) {
+        value = bin_0_start == -1
+            ? accVarLenIdxMinusOneVec[distTo25ns_start] + 
+                factor*diffVarItvlIdxMinusOneVec[distTo25ns_start]
+            : accVarLenIdxZeroVec[distTo25ns_start] + 
+                factor*diffVarItvlIdxZeroVec[distTo25ns_start];
+    } else if (sample_over10ts > its_start) {
+        int const bin_idx = distTo25ns_start + 1 + (sample_over10ts - its_start - 1)
+            * ns_per_bx + bin_0_start;
+        value = acc25nsVec[bin_idx] + factor*diff25nsItvlVec[bin_idx];
+    }
+    value *= pulse_height;
+    return value;
+}
+
+// TODO: need to add an array of offsets for pulses (a la activeBXs...)
+// Assume for now 8 pulses
+__global__
+void kernel_prep_pulseMatrices_sameNumberOfSamples(
+        float *pulseMatrices,
+        float *pulseMatricesM,
+        float *pulseMatricesP,
+        float const* amplitudes,
+        uint32_t const* idsf01HE,
+        uint32_t const* idsf5HB,
+        uint32_t const nchannelsf01HE,
+        uint32_t const nchannelsTotal,
+        uint32_t const* recoPulseShapeIds,
+        float const* acc25nsVecValues,
+        float const* diff25nsItvlVecValues,
+        float const* accVarLenIdxMinusOneVecValues,
+        float const* diffVarItvlIdxMinusOneVecValues,
+        float const* accVarLenIdxZeroVecValues,
+        float const* diffVarItvlIdxZeroVecValues,
+        float const meanTime,
+        float const timeSigmaSiPM,
+        float const timeSigmaHPD,
+        int const maxDepthHB,
+        int const maxDepthHE,
+        int const maxPhiHE,
+        int const firstHBRing,
+        int const lastHBRing,
+        int const firstHERing,
+        int const lastHERing,
+        int const nEtaHB,
+        int const nEtaHE,
+        uint32_t const offsetForHashes) {
+    // indices
+    auto const ipulse = threadIdx.y;
+    auto const npulses = blockDim.y;
+    auto const sample = threadIdx.x;
+    auto const nsamples = blockDim.x;
+    auto const lch = threadIdx.z;
+    auto const gch = lch + blockIdx.x*blockDim.z;
+
+    if (gch >= nchannelsTotal) return;
+
+    // conditions
+    auto const id = gch >= nchannelsf01HE
+        ? idsf5HB[gch - nchannelsf01HE]
+        : idsf01HE[gch];
+    auto const deltaT = gch >= nchannelsf01HE
+        ? timeSigmaHPD
+        : timeSigmaSiPM;
+    auto const did = DetId{id};
+    auto const hashedId = did.subdetId() == HcalBarrel
+        ? did2linearIndexHB(id, maxDepthHB, firstHBRing, lastHBRing, nEtaHB)
+        : did2linearIndexHE(id, maxDepthHE, maxPhiHE, firstHERing, lastHERing, nEtaHE)
+            + offsetForHashes;
+    auto const recoPulseShapeId = recoPulseShapeIds[hashedId];
+    auto const* acc25nsVec = acc25nsVecValues + 
+        recoPulseShapeId*maxPSshapeBin;
+    auto const* diff25nsItvlVec = diff25nsItvlVecValues + 
+        recoPulseShapeId*maxPSshapeBin;
+    auto const* accVarLenIdxMinusOneVec = accVarLenIdxMinusOneVecValues +
+        recoPulseShapeId*nsPerBX;
+    auto const* diffVarItvlIdxMinusOneVec = diffVarItvlIdxMinusOneVecValues + 
+        recoPulseShapeId*nsPerBX;
+    auto const* accVarLenIdxZeroVec = accVarLenIdxZeroVecValues + 
+        recoPulseShapeId*nsPerBX;
+    auto const* diffVarItvlIdxZeroVec = diffVarItvlIdxZeroVecValues + 
+        recoPulseShapeId*nsPerBX;
+
+    // offset output arrays
+    auto* pulseMatrix = pulseMatrices + nsamples*npulses*gch;
+    auto* pulseMatrixM = pulseMatricesM + nsamples*npulses*gch;
+    auto* pulseMatrixP = pulseMatricesP + nsamples*npulses*gch;
+    
+    // amplitude per threadIdx.y
+    auto const amplitude = amplitudes[gch*nsamples + ipulse];
+    // FIXME: need to apply time slew as well
+    auto const t0 = meanTime;
+    auto const t0m = -deltaT + t0;
+    auto const t0p = deltaT + t0;
+    // FIXME: shift should be treated properly, 1 corresponds to 8 time slices
+    auto const value = compute_pulse_shape_value(t0, sample, 1,
+        acc25nsVec, diff25nsItvlVec,
+        accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
+        accVarLenIdxZeroVec, diffVarItvlIdxZeroVec);
+    auto const value_t0m = compute_pulse_shape_value(t0m, sample, 1,
+        acc25nsVec, diff25nsItvlVec,
+        accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
+        accVarLenIdxZeroVec, diffVarItvlIdxZeroVec);
+    auto const value_t0p = compute_pulse_shape_value(t0p, sample, 1,
+        acc25nsVec, diff25nsItvlVec,
+        accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
+        accVarLenIdxZeroVec, diffVarItvlIdxZeroVec);
+
+    // store to global
+    // FIXME: use views, column major assumed
+    pulseMatrix[ipulse*nsamples + sample] = value;
+    pulseMatrixM[ipulse*nsamples + sample] = value_t0m;
+    pulseMatrixP[ipulse*nsamples + sample] = value_t0p;
 }
 
 void entryPoint(
         InputDataGPU const& inputGPU,
         OutputDataGPU& outputGPU,
         ConditionsProducts const& conditions,
+        ScratchDataGPU &scratch,
         ConfigParameters const& configParameters,
         cuda::stream_t<>& cudaStream) {
     auto const totalChannels = inputGPU.f01HEDigis.ndigis + inputGPU.f5HBDigis.ndigis;
@@ -478,6 +655,7 @@ void entryPoint(
 
     // TODO: this can be lifted by implementing a separate kernel
     // similar to the default one, but properly handling the diff in #samples
+    // or modifying existing one
     auto const f01nsamples = compute_nsamples<Flavor01>(inputGPU.f01HEDigis.stride);
     auto const f5nsamples = compute_nsamples<Flavor5>(inputGPU.f5HBDigis.stride);
     assert(f01nsamples == f5nsamples);
@@ -489,6 +667,8 @@ void entryPoint(
     int nbytesShared = ((2*f01nsamples + 1)*sizeof(float) + sizeof(uint64_t) )*
         configParameters.kprep1dChannelsPerBlock;
     kernel_prep1d_sameNumberOfSamples<<<blocks, threadsPerBlock, nbytesShared, cudaStream.id()>>>(
+        scratch.amplitudes,
+        scratch.noiseTerms,
         inputGPU.f01HEDigis.data,
         inputGPU.f5HBDigis.data,
         inputGPU.f01HEDigis.ids,
@@ -538,6 +718,60 @@ void entryPoint(
         configParameters.firstSampleShift,
         conditions.offsetForHashes
     );
+    cudaCheck( cudaGetLastError() );
+
+    // 1024 is the max threads per block for gtx1080
+    // FIXME: take this from cuda service or something like that
+    uint32_t const channelsPerBlock = 1024 / 
+        (f01nsamples * configParameters.pulseOffsets.size());
+    dim3 threadsPerBlock2{f01nsamples, 
+        static_cast<uint32_t>(configParameters.pulseOffsets.size()),
+        channelsPerBlock};
+    int blocks2 = threadsPerBlock2.z > totalChannels
+        ? 1
+        : (totalChannels + threadsPerBlock2.z - 1) / threadsPerBlock2.z;
+
+#ifdef HCAL_MAHI_CPUDEBUG
+    std::cout << "threads: " << threadsPerBlock2.x << " " << threadsPerBlock2.y
+              << "  " << threadsPerBlock2.z << std::endl;
+    std::cout << "blocks: " << blocks2 << std::endl;
+#endif
+
+    kernel_prep_pulseMatrices_sameNumberOfSamples<<<blocks2, threadsPerBlock2, 0, cudaStream.id()>>>(
+        scratch.pulseMatrices,
+        scratch.pulseMatricesM,
+        scratch.pulseMatricesP,
+        scratch.amplitudes,
+        inputGPU.f01HEDigis.ids,
+        inputGPU.f5HBDigis.ids,
+        inputGPU.f01HEDigis.ndigis,
+        totalChannels,
+        conditions.recoParams.ids,
+        conditions.recoParams.acc25nsVec,
+        conditions.recoParams.diff25nsItvlVec,
+        conditions.recoParams.accVarLenIdxMinusOneVec,
+        conditions.recoParams.diffVarItvlIdxMinusOneVec,
+        conditions.recoParams.accVarLenIdxZEROVec,
+        conditions.recoParams.diffVarItvlIdxZEROVec,
+        configParameters.meanTime,
+        configParameters.timeSigmaSiPM,
+        configParameters.timeSigmaHPD,
+        conditions.topology->maxDepthHB(),
+        conditions.topology->maxDepthHE(),
+        conditions.recConstants->getNPhi(1) > IPHI_MAX
+            ? conditions.recConstants->getNPhi(1)
+            : IPHI_MAX,
+        conditions.topology->firstHBRing(),
+        conditions.topology->lastHBRing(),
+        conditions.topology->firstHERing(),
+        conditions.topology->lastHERing(),
+        conditions.recConstants->getEtaRange(0).second - 
+            conditions.recConstants->getEtaRange(0).first + 1,
+        conditions.topology->firstHERing() > conditions.topology->lastHERing() 
+            ? 0
+            : (conditions.topology->lastHERing() - 
+                conditions.topology->firstHERing() + 1),
+        conditions.offsetForHashes);
     cudaCheck( cudaGetLastError() );
 }
 

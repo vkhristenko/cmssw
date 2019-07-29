@@ -68,6 +68,7 @@ private:
 
     hcal::mahi::ConfigParameters configParameters_;
     hcal::mahi::OutputDataGPU outputGPU_;
+    hcal::mahi::ScratchDataGPU scratchGPU_;
     CUDAContextState cudaState_;
 };
 
@@ -83,6 +84,9 @@ HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps)
             ps.getParameter<std::string>("recHitsLabelM0HBHE"))}
 {
     configParameters_.maxChannels = ps.getParameter<uint32_t>("maxChannels");
+    configParameters_.maxTimeSamples = ps.getParameter<uint32_t>("maxTimeSamples");
+    configParameters_.pulseOffsets = ps.getParameter<std::vector<int>>(
+        "pulseOffsets");
     configParameters_.kprep1dChannelsPerBlock = ps.getParameter<uint32_t>(
         "kprep1dChannelsPerBlock");
     configParameters_.sipmQTSShift = ps.getParameter<int>("sipmQTSShift");
@@ -90,16 +94,24 @@ HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps)
     configParameters_.firstSampleShift = ps.getParameter<int>("firstSampleShift");
     configParameters_.useEffectivePedestals = ps.getParameter<bool>("useEffectivePedestals");
 
+    configParameters_.meanTime = ps.getParameter<double>("meanTime");
+    configParameters_.timeSigmaSiPM = ps.getParameter<double>("timeSigmaSiPM");
+    configParameters_.timeSigmaHPD = ps.getParameter<double>("timeSigmaHPD");
+
     outputGPU_.allocate(configParameters_);
+    scratchGPU_.allocate(configParameters_);
 }
 
 HBHERecHitProducerGPU::~HBHERecHitProducerGPU() {
     outputGPU_.deallocate(configParameters_);
+    scratchGPU_.deallocate(configParameters_);
 }
 
 void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cdesc) {
     edm::ParameterSetDescription desc;
     desc.add<uint32_t>("maxChannels", 10000u);
+    desc.add<uint32_t>("maxTimeSamples", 10);
+    desc.add<std::vector<int>>("pulseOffsets", {-3, -2, -1, 0, 1, 2, 3, 4});
     desc.add<uint32_t>("kprep1dChannelsPerBlock", 32);
     desc.add<edm::InputTag>("digisLabelF01HE", 
         edm::InputTag{"hcalRawToDigiGPU", "f01HEDigisGPU"});
@@ -110,6 +122,10 @@ void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cde
     desc.add<int>("sipmQNTStoSum", 3);
     desc.add<int>("firstSampleShift", 0);
     desc.add<bool>("useEffectivePedestals", true);
+
+    desc.add<double>("meanTime", 0.f);
+    desc.add<double>("timeSigmaSiPM", 2.5f);
+    desc.add<double>("timeSigmaHPD", 5.0f);
 
     std::string label = "hbheRecHitProducerGPU";
     cdesc.add(label, desc);
@@ -218,7 +234,7 @@ void HBHERecHitProducerGPU::acquire(
         pedestalsHandle->offsetForHashes()
     };
 
-    hcal::mahi::entryPoint(inputGPU, outputGPU_, conditions,
+    hcal::mahi::entryPoint(inputGPU, outputGPU_, conditions, scratchGPU_,
         configParameters_, ctx.stream());
 
 #ifdef HCAL_MAHI_CPUDEBUG
