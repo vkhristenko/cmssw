@@ -655,9 +655,9 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
 
 template<int NSAMPLES, int NPULSES>
 __forceinline__ __device__
-void update_covariance() {
-    ColMajorMatrix<NSAMPLES, NSAMPLES> covarianceMatrix = 
-        noiseTermsVector.asDiagonal() + averagePedestalWidth2;
+void update_covariance(
+        ColMajorMatrix<NSAMPLES, NSAMPLES> &covarianceMatrix) {
+    covarianceMatrix = noiseTermsVector.asDiagonal() + averagePedestalWidth2;
 
     #pragma unroll
     for (int ipulse=0; ipulse<NPULSES; ipulse++) {
@@ -671,16 +671,173 @@ void update_covariance() {
     }
 }
 
+// TODO: add active bxs
+template<typename MatrixType, typename VectorType, int NSAMPLES>
+__device__
+void fnnls(
+        MatrixType& AtA,
+        VectorType& Atb,
+        VectorType& solution,
+        int& npassive,
+        ColMajorMatrix<NSAMPLES, MatrixType::RowsAtCompileTime> &pulseMatrix,
+        double const eps,
+        int const maxIterations) {
+    // constants
+    constexpr auto NPULSES = MatrixType::RowsAtCompileTime;
+
+    // to keep track of where to terminate if converged
+    Eigen::Index w_max_idx_prev = 0;
+    float w_max_prev = 0;
+    auto eps_to_use = eps;
+
+    // used throughout
+    VectorType w,s;
+
+    int iter = 0;
+    while (true) {
+        if (iter > 0 || npassive==0) {
+            auto const nactive = NPULSES - npassive;
+            // exit if there are no more pulses to constrain
+            if (nactive==0) break;
+
+            // compute the gradient
+            w.tail(nactive) = Atb.tail(nactive) - (AtA * solution).tail(nactive);
+
+            // get the index of max update
+            Eigen::Index w_max_idx;
+            auto const w_max = w.tail(nactive).maxCoeff(&w_max_idx);
+
+            // check for convergence
+            if (w_max<eps_to_use || 
+                w_max_idx==w_max_idx_prev && w_max==w_max_prev)
+                break;
+
+            if (iter >= maxIterations) break;
+
+            w_max_prev = w_max;
+            w_max_idx_prev = w_max_idx;
+
+            // move index to the right part of the vector
+            w_max_idx += npassive;
+
+            // run swaps
+            AtA.col(npassive).swap(w_max_idx);
+            AtA.row(npassive).swap(w_max_idx);
+
+            Eigen::numext::swap(Atb.coeffRef(npassive), Atb.coeffRef(w_max_idx));
+            Eigen::numext::swap(solution.coeffRef(npassive), 
+                solution.coeffRef(w_max_idx));
+            Eigen::numext::swap(activeBxs.coeffRef(npassive),
+                activeBxs.coeffRef(w_max_idx));
+            pulseMatrix.col(npassive).swap(pulseMatrix.col(w_amx_idx));
+            ++npassive;
+        }
+
+        // inner loop
+        while (true) {
+            if (npassive == 0) break;
+
+            s.head(npassive) = 
+                AtA.topLeftCorner(npassive, npassive)
+                    .llt()
+                    .solve(Atb.head(npassive));
+
+            // done if solution values are all positive
+            if (s.head(npassive).minCoeff() > 0.f) {
+                solution.head(npassive) = s.head(npassive);
+                break;
+            }
+
+            auto alpha = std::numeric_limits<float>::max();
+            Eigen::Index alpha_idx = 0;
+            for (int i=0; i<npassive; i++) {
+                if (s[i] <= 0.) {
+                    auto const ratio = solution[i] / (solution[i] - s[i]);
+                    if (ratio < alpha) {
+                        alpha = ratio;
+                        alpha_idx = i;
+                    }
+                }
+            }
+
+            // upadte solution
+            solution.head(npassive) += alpha * 
+                (s.head(npassive) - solution.head(npassive));
+            solution[alpha_idx] = 0;
+            --npassive;
+
+            // run swaps
+            AtA.col(npassive).swap(alpha_idx);
+            AtA.row(npassive).swap(alpha_idx);
+
+            Eigen::numext::swap(Atb.coeffRef(npassive), Atb.coeffRef(alpha_idx));
+            Eigen::numext::swap(solution.coeffRef(npassive), 
+                solution.coeffRef(alpha_idx));
+            Eigen::numext::swap(activeBxs.coeffRef(npassive),
+                activeBxs.coeffRef(alpha_idx));
+            pulseMatrix.col(npassive).swap(pulseMatrix.col(w_amx_idx));
+        }
+
+        // as in cpu 
+        ++iter;
+        if (iter % 10 == 0)
+            eps_to_use *= 10;
+    }
+}
+
 template<int NSAMPLES, int NPULSES>
 __global__
-void kernel_minimize_with_fnnls() {
+void kernel_minimize(
+        float const* inputAmplitudes
+        float* amplitudesForMinimization,
+        float* chi2s,
+        float const* pulseMatrices,
+        float const* pulseMatricesM,
+        float const* pulseMatricesP,
+        float const* noiseTerms,
+        float const* pedestalWidths,
+        uint32_t const* idsf01HE,
+        uint32_t const* idsf5HB,
+        uint32_t const nchannelsTotal) {
     // indices
     auto const gch = threadIdx.x + blockIdx.x * blockDim.x;
     if (gch >= nchannelsTotal) return;
 
+    // conditions for pedestal widths
+    auto const id = gch >= nchannelsf01HE
+        ? idsf5HB[gch - ncahnnels0f1HE]
+        : idsf01HE[gch];
+    auto const did = DetId{id};
+    auto const hashedId = did.subdetId() == HcalBarrel
+        ? did2linearIndexHB(id, maxDepthHB, firstHBRing, lastHBRing, nEtaHB)
+        : did2linearIndexHE(id, maxDepthHE, maxPhiHE, firstHERing, lastHERing, nEtaHE)
+            + offsetForHashes;
+
+    auto const* pedestaWidthsForChannel = pedestalWidths + 
+        hashedId*4;
+    auto const averagePedestalWidth2 = 0.25 * (
+        pedestalWidthsForChannel[0]*pedestalWidthsForChannel[0] +
+        pedestalWidthsForChannel[1]*pedestalWidthsForChannel[1] +
+        pedestalWidthsForChannel[2]*pedestalWidthsForChannel[2] +
+        pedestalWidthsForChannel[3]*pedestalWidthsForChannel[3]);
+
     for (int iter=1; iter<maxMinimeIterations; iter++) {
+        Matrix<NSAMPLES, NSAMPLES> covarianceMatrix;
+        Eigen::LLT<Matrix<NSAMPLES, NSAMPLES>> matrixDecomposition;
+
         // update covariance decomposition matrix
-        update_covariance();
+        update_covariance(covarianceMatrix);
+
+        // obtain AtA and Atb required for fast nnls
+        matrixDecomposition.compute(covarianceMatrix);
+        auto const& A = covarianceDecomposition
+            .matrixL()
+            .solve(pulseMatrixView);
+        auto const& b = covarianceDecomposition
+            .matrixL()
+            .solve(inputAmplitudesView);
+        auto const& AtA = A.transpose() * A;
+        auto const& Atb = A.transpose() * b;
 
         // run fast nnls
         fnnls();
