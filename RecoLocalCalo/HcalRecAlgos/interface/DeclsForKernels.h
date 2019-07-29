@@ -50,11 +50,16 @@ struct ConditionsProducts {
 
 struct ConfigParameters {
     uint32_t maxChannels;
+    uint32_t maxTimeSamples;
+    std::vector<int> pulseOffsets;
     uint32_t kprep1dChannelsPerBlock;
     int sipmQTSShift;
     int sipmQNTStoSum;
     int firstSampleShift;
     bool useEffectivePedestals;
+
+    float meanTime;
+    float timeSigmaSiPM, timeSigmaHPD;
 };
 
 struct OutputDataGPU {
@@ -73,6 +78,38 @@ struct OutputDataGPU {
         cudaCheck( cudaFree(recHits.energy) );
         cudaCheck( cudaFree(recHits.time) );
         cudaCheck( cudaFree(recHits.did) );
+    }
+};
+
+struct ScratchDataGPU {
+    float *amplitudes=nullptr, *noiseTerms=nullptr;
+    float *pulseMatrices=nullptr, *pulseMatricesM=nullptr, 
+          *pulseMatricesP=nullptr;
+
+    void allocate(ConfigParameters const& config) {
+        cudaCheck( cudaMalloc((void**)&amplitudes,
+            sizeof(float) * config.maxChannels * config.maxTimeSamples) );
+        cudaCheck( cudaMalloc((void**)&noiseTerms,
+            sizeof(float) * config.maxChannels * config.maxTimeSamples) );
+        cudaCheck( cudaMalloc((void**)&pulseMatrices,
+            sizeof(float) * config.maxChannels * 
+            config.maxTimeSamples * config.maxTimeSamples) );
+        cudaCheck( cudaMalloc((void**)&pulseMatricesM,
+            sizeof(float) * config.maxChannels * 
+            config.maxTimeSamples * config.maxTimeSamples) );
+        cudaCheck( cudaMalloc((void**)&pulseMatricesP,
+            sizeof(float) * config.maxChannels * 
+            config.maxTimeSamples * config.maxTimeSamples) );
+    }
+
+    void deallocate(ConfigParameters const& config) {
+        if (amplitudes) {
+            cudaCheck( cudaFree(amplitudes) );
+            cudaCheck( cudaFree(noiseTerms) );
+            cudaCheck( cudaFree(pulseMatrices) );
+            cudaCheck( cudaFree(pulseMatricesM) );
+            cudaCheck( cudaFree(pulseMatricesP) );
+        }
     }
 };
 
