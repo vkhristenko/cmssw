@@ -7,7 +7,21 @@
 
 #include <cuda/api_wrappers.h>
 
+#include <Eigen/Dense>
+
 namespace hcal { namespace mahi {
+
+template<int NROWS, int NCOLS>
+using ColMajorMatrix = Eigen::Matrix<float, NROWS, NCOLS, Eigen::ColMajor>;
+
+template<int NROWS, int NCOLS>
+using RowMajorMatrix = Eigen::Matrix<float, NROWS, NCOLS, Eigen::RowMajor>;
+
+template<int SIZE>
+using ColumnVector = Eigen::Matrix<float, SIZE, 1>;
+
+template<int SIZE>
+using RowVector = Eigen::Matrix<float, 1, SIZE>;
 
 // FIXME remove duplication...
 constexpr int maxSamples = 10;
@@ -637,6 +651,54 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
     pulseMatrix[ipulse*nsamples + sample] = value;
     pulseMatrixM[ipulse*nsamples + sample] = value_t0m;
     pulseMatrixP[ipulse*nsamples + sample] = value_t0p;
+}
+
+template<int NSAMPLES, int NPULSES>
+__forceinline__ __device__
+void update_covariance() {
+    ColMajorMatrix<NSAMPLES, NSAMPLES> covarianceMatrix = 
+        noiseTermsVector.asDiagonal() + averagePedestalWidth2;
+
+    #pragma unroll
+    for (int ipulse=0; ipulse<NPULSES; ipulse++) {
+        auto const resultAmplitude = resultAmplitudesVector(ipulse);
+        if (resultAmplitude == 0) continue;
+
+        // FIXME: do this properly
+        auto const offset = ipulse - soi;
+        covarianceMatrix += resultAmplitude * resultAmplitude *
+            pulseCovarianceView(offset + soi);
+    }
+}
+
+template<int NSAMPLES, int NPULSES>
+__global__
+void kernel_minimize_with_fnnls() {
+    // indices
+    auto const gch = threadIdx.x + blockIdx.x * blockDim.x;
+    if (gch >= nchannelsTotal) return;
+
+    for (int iter=1; iter<maxMinimeIterations; iter++) {
+        // update covariance decomposition matrix
+        update_covariance();
+
+        // run fast nnls
+        fnnls();
+
+        // compute chi2 and check that there is no rotation
+        auto const chi2 = compute_chi2();
+        auto const deltaChi2 = std::abs(chi2 - previous_chi2);
+        if (chi2==chi2_2itersback && chi2 < previous_chi2)
+            break;
+
+        // update
+        chi2_2itersback = previous_chi2;
+        previous_chi2 = chi2;
+
+        // exit condition
+        if (deltaChi2 < deltaChi2Threashold)
+            break;
+    }
 }
 
 void entryPoint(
