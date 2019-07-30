@@ -522,10 +522,16 @@ float compute_pulse_shape_value(
     float offset_start = i_start_float - iniTimeShift - pulse_time - slew;
     // FIXME: do we need a check for nan???
 
+#ifdef HCAL_MAHI_GPUDEBUG
+    if (shift==0)
+        printf("i_start_float = %f i_start = %d offset_start = %f\n",
+         i_start_float, i_start, offset_start);
+#endif
+
     // boundary
     if (offset_start == 1.0f) {
         offset_start = 0.f;
-        i_start = -1;
+        i_start -= -1;
     }
 
     int const bin_start = static_cast<int>(offset_start);
@@ -626,29 +632,84 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
     auto* pulseMatrixM = pulseMatricesM + nsamples*npulses*gch;
     auto* pulseMatrixP = pulseMatricesP + nsamples*npulses*gch;
     
-    // amplitude per threadIdx.y
+    // amplitude per ipulse
     auto const amplitude = amplitudes[gch*nsamples + ipulse];
+
+#ifdef HCAL_MAHI_GPUDEBUG
+#ifdef HCAL_MAHI_GPUDEBUG_FILTERDETID
+    if (id != 1160268851) return;
+#endif
+#endif
+
+#ifdef HCAL_MAHI_GPUDEBUG
+    if (sample == 0 && ipulse==0) {
+        for (int i=0; i<8; i++)
+            printf("amplitude(%d) = %f\n", i, amplitudes[gch*nsamples + i]);
+        printf("acc25nsVec and diff25nsItvlVec\n");
+        for (int i=0; i<256; i++) {
+            printf("acc25nsVec(%d) = %f diff25nsItvlVec(%d) = %f\n",
+                i, acc25nsVec[i], i, diff25nsItvlVec[i]);
+        }
+        printf("accVarLenIdxZEROVec and accVarLenIdxMinusOneVec\n");
+        for (int i=0; i<25; i++) {
+            printf("accVarLenIdxZEROVec(%d) = %f accVarLenIdxMinusOneVec(%d) = %f\n",
+                i, accVarLenIdxZeroVec[i], i, accVarLenIdxMinusOneVec[i]);
+        }
+        printf("diffVarItvlIdxZEROVec and diffVarItvlIdxMinusOneVec\n");
+        for (int i=0; i<25; i++) {
+            printf("diffVarItvlIdxZEROVec(%d) = %f diffVarItvlIdxMinusOneVec(%d) = %f\n",
+                i, diffVarItvlIdxZeroVec[i], i, diffVarItvlIdxMinusOneVec[i]);
+        }
+    }
+#endif
+
     // FIXME: need to apply time slew as well
     auto const t0 = meanTime;
     auto const t0m = -deltaT + t0;
     auto const t0p = deltaT + t0;
-    // FIXME: shift should be treated properly, 1 corresponds to 8 time slices
-    auto const value = compute_pulse_shape_value(t0, sample, 1,
-        acc25nsVec, diff25nsItvlVec,
-        accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
-        accVarLenIdxZeroVec, diffVarItvlIdxZeroVec);
-    auto const value_t0m = compute_pulse_shape_value(t0m, sample, 1,
-        acc25nsVec, diff25nsItvlVec,
-        accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
-        accVarLenIdxZeroVec, diffVarItvlIdxZeroVec);
-    auto const value_t0p = compute_pulse_shape_value(t0p, sample, 1,
-        acc25nsVec, diff25nsItvlVec,
-        accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
-        accVarLenIdxZeroVec, diffVarItvlIdxZeroVec);
+
+#ifdef HCAL_MAHI_GPUDEBUG
+    if (sample == 0 && ipulse == 0) {
+        printf("time values: %f %f %f\n", t0, t0m, t0p);
+    }
+
+    if (sample == 0 && ipulse == 0) {
+        for (int i=0; i<10; i++) {
+            auto const value = compute_pulse_shape_value(t0, i, 0,
+                acc25nsVec, diff25nsItvlVec,
+                accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
+                accVarLenIdxZeroVec, diffVarItvlIdxZeroVec);
+            printf("pulse(%d) = %f\n", i, value);
+        }
+    }
+#endif
+
+    // FIXME: shift should be treated properly, 
+    // here assume 8 time slices and 8 samples
+    int const soi = 3;
+    auto const offset = ipulse - soi;
+    auto const idx = sample - offset;
+    auto const value = idx>=0 && idx<=7
+        ? compute_pulse_shape_value(t0, idx, 1,
+            acc25nsVec, diff25nsItvlVec,
+            accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
+            accVarLenIdxZeroVec, diffVarItvlIdxZeroVec)
+        : 0;
+    auto const value_t0m = idx>=0 && idx<=7
+        ? compute_pulse_shape_value(t0m, idx, 1,
+            acc25nsVec, diff25nsItvlVec,
+            accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
+            accVarLenIdxZeroVec, diffVarItvlIdxZeroVec)
+        : 0;
+    auto const value_t0p = idx>=0 && idx<=7
+        ? compute_pulse_shape_value(t0p, idx, 1,
+            acc25nsVec, diff25nsItvlVec,
+            accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
+            accVarLenIdxZeroVec, diffVarItvlIdxZeroVec)
+        : 0;
 
     // store to global
-    // FIXME: use views, column major assumed
-    pulseMatrix[ipulse*nsamples + sample] = value;
+    pulseMatrix[ipulse*nsamples + sample] = value;;
     pulseMatrixM[ipulse*nsamples + sample] = value_t0m;
     pulseMatrixP[ipulse*nsamples + sample] = value_t0p;
 }
@@ -861,6 +922,12 @@ void kernel_minimize(
         pedestalWidthsForChannel[2]*pedestalWidthsForChannel[2] +
         pedestalWidthsForChannel[3]*pedestalWidthsForChannel[3]);
 
+#ifdef HCAL_MAHI_GPUDEBUG
+#ifdef HCAL_MAHI_GPUDEBUG_FILTERDETID
+    if (id != 1160268851) return;
+#endif
+#endif
+
     // TODO: provide from config
     ColumnVector<NPULSES, int> pulseOffsets;
     pulseOffsets << -3, -2, -1, 0, 1, 2, 3, 4;
@@ -883,6 +950,29 @@ void kernel_minimize(
     // TODO: provide this properly
     int const soi = 3;
     constexpr float deltaChi2Threashold = 1e-3;
+
+#ifdef HCAL_MAHI_GPUDEBUG
+    for (int i=0; i<NSAMPLES; i++)
+        printf("inputValues(%d) = %f noiseTerms(%d) = %f\n", 
+            i, inputAmplitudesView(i), i, noiseTermsView(i));
+    for (int i=0; i<NSAMPLES; i++) {
+        for (int j=0; j<NPULSES; j++)
+            printf("%f ", pulseMatrixView(i, j));
+        printf("\n");
+    }
+    printf("\n");
+    for (int i=0; i<NSAMPLES; i++) {
+        for (int j=0; j<NPULSES; j++)
+            printf("%f ", pulseMatrixMView(i, j));
+        printf("\n");
+    }
+    printf("\n");
+    for (int i=0; i<NSAMPLES; i++) {
+        for (int j=0; j<NPULSES; j++)
+            printf("%f ", pulseMatrixPView(i, j));
+        printf("\n");
+    }
+#endif
 
     int npassive = 0;
     float chi2=0, previous_chi2=0.f, chi2_2itersback=0.f;
@@ -945,6 +1035,13 @@ void kernel_minimize(
         if (deltaChi2 < deltaChi2Threashold)
             break;
     }
+
+#ifdef HCAL_MAHI_GPUDEBUG
+    for (int i=0; i<NPULSES; i++)
+        printf("pulseOffsets(%d) = %d outputAmplitudes(%d) = %f\n", 
+            i, pulseOffsets(i), i, resultAmplitudesVector(i));
+    printf("chi2 = %f\n", chi2);
+#endif
 
     outputChi2[gch] = chi2;
     #pragma unroll
