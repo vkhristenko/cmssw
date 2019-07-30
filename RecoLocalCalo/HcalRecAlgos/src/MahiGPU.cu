@@ -653,24 +653,6 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
     pulseMatrixP[ipulse*nsamples + sample] = value_t0p;
 }
 
-template<int NSAMPLES, int NPULSES>
-__forceinline__ __device__
-void update_covariance(
-        ColMajorMatrix<NSAMPLES, NSAMPLES> &covarianceMatrix) {
-    covarianceMatrix = noiseTermsVector.asDiagonal() + averagePedestalWidth2;
-
-    #pragma unroll
-    for (int ipulse=0; ipulse<NPULSES; ipulse++) {
-        auto const resultAmplitude = resultAmplitudesVector(ipulse);
-        if (resultAmplitude == 0) continue;
-
-        // FIXME: do this properly
-        auto const offset = ipulse - soi;
-        covarianceMatrix += resultAmplitude * resultAmplitude *
-            pulseCovarianceView(offset + soi);
-    }
-}
-
 // TODO: add active bxs
 template<typename MatrixType, typename VectorType, int NSAMPLES>
 __device__
@@ -679,7 +661,9 @@ void fnnls(
         VectorType& Atb,
         VectorType& solution,
         int& npassive,
-        ColMajorMatrix<NSAMPLES, MatrixType::RowsAtCompileTime> &pulseMatrix,
+        Eigen::Map<ColMajorMatrix<NSAMPLES, MatrixType::RowsAtCompileTime>> 
+            &pulseMatrix,
+        ColumnVector<MatrixType::RowsAtCompileTime> &pulseOffsets,
         double const eps,
         int const maxIterations) {
     // constants
@@ -727,9 +711,9 @@ void fnnls(
             Eigen::numext::swap(Atb.coeffRef(npassive), Atb.coeffRef(w_max_idx));
             Eigen::numext::swap(solution.coeffRef(npassive), 
                 solution.coeffRef(w_max_idx));
-            Eigen::numext::swap(activeBxs.coeffRef(npassive),
-                activeBxs.coeffRef(w_max_idx));
-            pulseMatrix.col(npassive).swap(pulseMatrix.col(w_amx_idx));
+            Eigen::numext::swap(pulseOffsets.coeffRef(npassive),
+                pulseOffsets.coeffRef(w_max_idx));
+            pulseMatrix.col(npassive).swap(pulseMatrix.col(w_max_idx));
             ++npassive;
         }
 
@@ -773,9 +757,9 @@ void fnnls(
             Eigen::numext::swap(Atb.coeffRef(npassive), Atb.coeffRef(alpha_idx));
             Eigen::numext::swap(solution.coeffRef(npassive), 
                 solution.coeffRef(alpha_idx));
-            Eigen::numext::swap(activeBxs.coeffRef(npassive),
-                activeBxs.coeffRef(alpha_idx));
-            pulseMatrix.col(npassive).swap(pulseMatrix.col(w_amx_idx));
+            Eigen::numext::swap(pulseOffsets.coeffRef(npassive),
+                pulseOffsets.coeffRef(alpha_idx));
+            pulseMatrix.col(npassive).swap(pulseMatrix.col(alpha_idx));
         }
 
         // as in cpu 
@@ -786,26 +770,61 @@ void fnnls(
 }
 
 template<int NSAMPLES, int NPULSES>
+__forceinline__ __device__
+void update_covariance(
+        ColumnVector<NPULSES> const& resultAmplitudesVector,
+        ColMajorMatrix<NSAMPLES, NSAMPLES> &covarianceMatrix,
+        Eigen::Map<const ColumnVector<NSAMPLES>> const& noiseTermsView,
+        float const averagePedestalWidth2,
+        Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixM,
+        Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixP,
+        ColumnVector<NPULSES> const& pulseOffsets,
+        int const soi) {
+    covarianceMatrix.setConstant(averagePedestalWidth2);
+    covarianceMatrix += noiseTermsView.asDiagonal();
+
+    #pragma unroll
+    for (int ipulse=0; ipulse<NPULSES; ipulse++) {
+        auto const resultAmplitude = resultAmplitudesVector(ipulse);
+        if (resultAmplitude == 0) continue;
+
+        auto const offset = pulseOffsets(ipulse);
+        auto const ipulseReal = soi + offset;
+        covarianceMatrix += resultAmplitude * resultAmplitude *
+            pulseCovarianceView(ipulseReal);
+    }
+}
+
+template<int NSAMPLES, int NPULSES>
 __global__
 void kernel_minimize(
-        float const* inputAmplitudes
-        float* amplitudesForMinimization,
-        float* chi2s,
-        float const* pulseMatrices,
+        float const* inputAmplitudes,
+        float* pulseMatrices,
         float const* pulseMatricesM,
         float const* pulseMatricesP,
         float const* noiseTerms,
         float const* pedestalWidths,
         uint32_t const* idsf01HE,
         uint32_t const* idsf5HB,
-        uint32_t const nchannelsTotal) {
+        uint32_t const nchannelsf01HE,
+        uint32_t const nchannelsTotal,
+        uint32_t const offsetForHashes,
+        int const maxDepthHB,
+        int const maxDepthHE,
+        int const maxPhiHE,
+        int const firstHBRing,
+        int const lastHBRing,
+        int const firstHERing,
+        int const lastHERing,
+        int const nEtaHB,
+        int const nEtaHE) {
     // indices
     auto const gch = threadIdx.x + blockIdx.x * blockDim.x;
     if (gch >= nchannelsTotal) return;
 
     // conditions for pedestal widths
     auto const id = gch >= nchannelsf01HE
-        ? idsf5HB[gch - ncahnnels0f1HE]
+        ? idsf5HB[gch - nchannelsf01HE]
         : idsf01HE[gch];
     auto const did = DetId{id};
     auto const hashedId = did.subdetId() == HcalBarrel
@@ -813,7 +832,7 @@ void kernel_minimize(
         : did2linearIndexHE(id, maxDepthHE, maxPhiHE, firstHERing, lastHERing, nEtaHE)
             + offsetForHashes;
 
-    auto const* pedestaWidthsForChannel = pedestalWidths + 
+    auto const* pedestalWidthsForChannel = pedestalWidths + 
         hashedId*4;
     auto const averagePedestalWidth2 = 0.25 * (
         pedestalWidthsForChannel[0]*pedestalWidthsForChannel[0] +
@@ -821,29 +840,75 @@ void kernel_minimize(
         pedestalWidthsForChannel[2]*pedestalWidthsForChannel[2] +
         pedestalWidthsForChannel[3]*pedestalWidthsForChannel[3]);
 
-    for (int iter=1; iter<maxMinimeIterations; iter++) {
-        Matrix<NSAMPLES, NSAMPLES> covarianceMatrix;
-        Eigen::LLT<Matrix<NSAMPLES, NSAMPLES>> matrixDecomposition;
+    // TODO: provide from config
+    ColumnVector<NPULSES> pulseOffsets;
+    pulseOffsets << -3, -2, -1, 0, 1, 2, 3, 4;
 
-        // update covariance decomposition matrix
-        update_covariance(covarianceMatrix);
+    // output amplitudes/weights
+    ColumnVector<NPULSES> resultAmplitudesVector = ColumnVector<NPULSES>::Zero();
+
+    // map views
+    Eigen::Map<const ColumnVector<NSAMPLES>> 
+        inputAmplitudesView{inputAmplitudes + gch*NSAMPLES};
+    Eigen::Map<const ColumnVector<NSAMPLES>> 
+        noiseTermsView{noiseTerms + gch*NSAMPLES};
+    Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> 
+        pulseMatrixMView{pulseMatricesM + gch*NSAMPLES*NPULSES};
+    Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>>
+        pulseMatrixPView{pulseMatricesP + gch*NSAMPLES*NPULSES};
+    Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> pulseMatrixView{
+        pulseMatrices + gch*NSAMPLES*NPULSES};
+
+    // TODO: provide this properly
+    int const soi = 3;
+    constexpr float deltaChi2Threashold = 1e-3;
+
+    int npassive = 0;
+    float previous_chi2=0.f, chi2_2itersback=0.f;
+    // TOOD: provide constants from configuration
+    for (int iter=1; iter<50; iter++) {
+        ColMajorMatrix<NSAMPLES, NSAMPLES> covarianceMatrix;
+        Eigen::LLT<ColMajorMatrix<NSAMPLES, NSAMPLES>> matrixDecomposition;
+
+        // update covariance matrix
+        update_covariance(
+            resultAmplitudesVector,
+            covarianceMatrix,
+            noiseTermsView,
+            averagePedestalWidth2,
+            pulseMatrixMView,
+            pulseMatrixPView,
+            pulseOffsets,
+            soi);
 
         // obtain AtA and Atb required for fast nnls
         matrixDecomposition.compute(covarianceMatrix);
-        auto const& A = covarianceDecomposition
+        auto const& A = matrixDecomposition
             .matrixL()
             .solve(pulseMatrixView);
-        auto const& b = covarianceDecomposition
+        auto const& b = matrixDecomposition
             .matrixL()
             .solve(inputAmplitudesView);
         auto const& AtA = A.transpose() * A;
         auto const& Atb = A.transpose() * b;
 
         // run fast nnls
-        fnnls();
+        // FIXME: provide values from config
+        fnnls(
+            AtA,
+            Atb,
+            resultAmplitudesVector,
+            npassive,
+            pulseMatrixView,
+            pulseOffsets,
+            1e-11,
+            500);
 
         // compute chi2 and check that there is no rotation
-        auto const chi2 = compute_chi2();
+        auto const chi2 = matrixDecomposition
+            .matrixL()
+            .solve(pulseMatrixView * resultAmplitudesVector - inputAmplitudesView)
+            .squaredNorm();
         auto const deltaChi2 = std::abs(chi2 - previous_chi2);
         if (chi2==chi2_2itersback && chi2 < previous_chi2)
             break;
@@ -992,6 +1057,48 @@ void entryPoint(
                 conditions.topology->firstHERing() + 1),
         conditions.offsetForHashes);
     cudaCheck( cudaGetLastError() );
+
+    if (f01nsamples==8 && configParameters.pulseOffsets.size() == 8u) {
+        // FIXME: provide constants from configuration
+        uint32_t threadsPerBlock = 16;
+        uint32_t blocks = threadsPerBlock > totalChannels
+            ? 1
+            : (totalChannels + threadsPerBlock - 1) / threadsPerBlock;
+        kernel_minimize<8, 8><<<blocks, threadsPerBlock, 0, cudaStream.id()>>>(
+            scratch.amplitudes,
+            scratch.pulseMatrices,
+            scratch.pulseMatricesM,
+            scratch.pulseMatricesP,
+            scratch.noiseTerms,
+            conditions.pedestalWidths.values,
+            inputGPU.f01HEDigis.ids,
+            inputGPU.f5HBDigis.ids,
+            inputGPU.f01HEDigis.ndigis,
+            totalChannels,
+            conditions.offsetForHashes,
+            conditions.topology->maxDepthHB(),
+            conditions.topology->maxDepthHE(),
+            conditions.recConstants->getNPhi(1) > IPHI_MAX
+                ? conditions.recConstants->getNPhi(1)
+                : IPHI_MAX,
+            conditions.topology->firstHBRing(),
+            conditions.topology->lastHBRing(),
+            conditions.topology->firstHERing(),
+            conditions.topology->lastHERing(),
+            conditions.recConstants->getEtaRange(0).second - 
+                conditions.recConstants->getEtaRange(0).first + 1,
+            conditions.topology->firstHERing() > conditions.topology->lastHERing() 
+                ? 0
+                : (conditions.topology->lastHERing() - 
+                    conditions.topology->firstHERing() + 1)
+            );
+    } else {
+        throw cms::Exception("Invalid MahiGPU configuration")
+            << "Currently support only 8 pulses and 8 time samples and provided: " 
+            << f01nsamples << " samples and " << configParameters.pulseOffsets.size()
+            << " pulses"
+            << std::endl; 
+    }
 }
 
 }}
