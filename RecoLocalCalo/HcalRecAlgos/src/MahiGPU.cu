@@ -817,6 +817,8 @@ void update_covariance(
 template<int NSAMPLES, int NPULSES>
 __global__
 void kernel_minimize(
+        float* outputEnergy,
+        float* outputChi2,
         float const* inputAmplitudes,
         float* pulseMatrices,
         float* pulseMatricesM, // should be const but Eigen complains
@@ -883,7 +885,7 @@ void kernel_minimize(
     constexpr float deltaChi2Threashold = 1e-3;
 
     int npassive = 0;
-    float previous_chi2=0.f, chi2_2itersback=0.f;
+    float chi2=0, previous_chi2=0.f, chi2_2itersback=0.f;
     // TOOD: provide constants from configuration
     for (int iter=1; iter<50; iter++) {
         ColMajorMatrix<NSAMPLES, NSAMPLES> covarianceMatrix;
@@ -927,7 +929,7 @@ void kernel_minimize(
             500);
 
         // compute chi2 and check that there is no rotation
-        auto const chi2 = matrixDecomposition
+        chi2 = matrixDecomposition
             .matrixL()
             .solve(pulseMatrixView * resultAmplitudesVector - inputAmplitudesView)
             .squaredNorm();
@@ -943,6 +945,12 @@ void kernel_minimize(
         if (deltaChi2 < deltaChi2Threashold)
             break;
     }
+
+    outputChi2[gch] = chi2;
+    #pragma unroll
+    for (int i=0; i<NPULSES; i++)
+        if (pulseOffsets[i] == 0)
+            outputEnergy[gch] = resultAmplitudesVector(i);
 }
 
 void entryPoint(
@@ -982,8 +990,8 @@ void entryPoint(
         inputGPU.f01HEDigis.stride,
         inputGPU.f5HBDigis.stride,
         inputGPU.f01HEDigis.ndigis,
-        outputGPU.recHits.energy,
-        outputGPU.recHits.time,
+        outputGPU.recHits.energyM0,
+        outputGPU.recHits.timeM0,
         outputGPU.recHits.did,
         totalChannels,
         conditions.recoParams.param1,
@@ -1087,6 +1095,8 @@ void entryPoint(
             ? 1
             : (totalChannels + threadsPerBlock - 1) / threadsPerBlock;
         kernel_minimize<8, 8><<<blocks, threadsPerBlock, 0, cudaStream.id()>>>(
+            outputGPU.recHits.energy,
+            outputGPU.recHits.chi2,
             scratch.amplitudes,
             scratch.pulseMatrices,
             scratch.pulseMatricesM,

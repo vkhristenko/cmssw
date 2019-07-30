@@ -48,14 +48,18 @@ struct RecHitCollection : public Detail::Base<L> {
     RecHitCollection& operator=(RecHitCollection&&) = default;
 
     typename type_wrapper<float, L>::type energy;
-    typename type_wrapper<float, L>::type time;
+    typename type_wrapper<float, L>::type chi2;
+    typename type_wrapper<float, L>::type energyM0;
+    typename type_wrapper<float, L>::type timeM0;
     typename type_wrapper<uint32_t, L>::type did;
 
     template<typename U = L>
     typename std::enable_if<std::is_same<U, Tag::soa>::value, void>::type 
     resize(size_t size) {
         energy.resize(size);
-        time.resize(size);
+        chi2.resize(size);
+        energyM0.resize(size);
+        timeM0.resize(size);
         did.resize(size);
     }
 };

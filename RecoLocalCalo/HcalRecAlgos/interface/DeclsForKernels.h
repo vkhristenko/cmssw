@@ -68,7 +68,11 @@ struct OutputDataGPU {
     void allocate(ConfigParameters const& config) {
         cudaCheck( cudaMalloc((void**)&recHits.energy,
             config.maxChannels * sizeof(float)) );
-        cudaCheck( cudaMalloc((void**)&recHits.time,
+        cudaCheck( cudaMalloc((void**)&recHits.chi2,
+            config.maxChannels * sizeof(float)) );
+        cudaCheck( cudaMalloc((void**)&recHits.energyM0,
+            config.maxChannels * sizeof(float)) );
+        cudaCheck( cudaMalloc((void**)&recHits.timeM0,
             config.maxChannels * sizeof(float)) );
         cudaCheck( cudaMalloc((void**)&recHits.did,
             config.maxChannels * sizeof(uint32_t)) );
@@ -76,7 +80,9 @@ struct OutputDataGPU {
 
     void deallocate(ConfigParameters const& config) {
         cudaCheck( cudaFree(recHits.energy) );
-        cudaCheck( cudaFree(recHits.time) );
+        cudaCheck( cudaFree(recHits.chi2) );
+        cudaCheck( cudaFree(recHits.energyM0) );
+        cudaCheck( cudaFree(recHits.timeM0) );
         cudaCheck( cudaFree(recHits.did) );
     }
 };

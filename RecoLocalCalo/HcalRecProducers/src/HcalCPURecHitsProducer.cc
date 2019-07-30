@@ -36,7 +36,7 @@ private:
         recHitsM0TokenOut_;
 
     // to pass from acquire to produce
-    hcal::RecHitCollection<hcal::Tag::soa> tmpRecHits;
+    hcal::RecHitCollection<hcal::Tag::soa> tmpRecHits_;
 };
 
 void HcalCPURecHitsProducer::fillDescriptions(
@@ -68,12 +68,12 @@ void HcalCPURecHitsProducer::acquire(
         edm::WaitingTaskWithArenaHolder taskHolder) 
 {
     // retrieve data/ctx
-    auto const& recHitsM0Product = event.get(recHitsM0TokenIn_);
-    CUDAScopedContextAcquire ctx{recHitsM0Product, std::move(taskHolder)};
-    auto const& recHitsM0 = ctx.get(recHitsM0Product);
+    auto const& recHitsProduct = event.get(recHitsM0TokenIn_);
+    CUDAScopedContextAcquire ctx{recHitsProduct, std::move(taskHolder)};
+    auto const& recHits = ctx.get(recHitsProduct);
 
     // resize tmp buffers
-    tmpRecHits.resize(recHitsM0.size);
+    tmpRecHits_.resize(recHits.size);
 
     auto lambdaToTransfer = [&ctx](auto& dest, auto* src) {
         using vector_type = typename std::remove_reference<decltype(dest)>::type;
@@ -85,33 +85,11 @@ void HcalCPURecHitsProducer::acquire(
                                    ctx.stream().id()) );
     };
 
-    lambdaToTransfer(tmpRecHits.energy, recHitsM0.energy);
-    lambdaToTransfer(tmpRecHits.time, recHitsM0.time);
-    lambdaToTransfer(tmpRecHits.did, recHitsM0.did);
-
-    // enqeue transfers
-    /*
-    cudaCheck( cudaMemcpyAsync(dataf01he.data(),
-                               f01HERecHits.data,
-                               dataf01he.size() * sizeof(uint16_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream().id()) );
-    cudaCheck( cudaMemcpyAsync(dataf5hb.data(),
-                               f5HBRecHits.data,
-                               dataf5hb.size() * sizeof(uint16_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream().id()) );
-    cudaCheck( cudaMemcpyAsync(idsf01he.data(),
-                               f01HERecHits.ids,
-                               idsf01he.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream().id()) );
-    cudaCheck( cudaMemcpyAsync(idsf5hb.data(),
-                               f5HBRecHits.ids,
-                               idsf5hb.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream().id()) );
-                               */
+    lambdaToTransfer(tmpRecHits_.energy, recHits.energy);
+    lambdaToTransfer(tmpRecHits_.chi2, recHits.chi2);
+    lambdaToTransfer(tmpRecHits_.energyM0, recHits.energyM0);
+    lambdaToTransfer(tmpRecHits_.timeM0, recHits.timeM0);
+    lambdaToTransfer(tmpRecHits_.did, recHits.did);
 }
 
 void HcalCPURecHitsProducer::produce(
@@ -120,33 +98,7 @@ void HcalCPURecHitsProducer::produce(
 {
     event.put(recHitsM0TokenOut_, 
         std::make_unique<hcal::RecHitCollection<hcal::Tag::soa>>(
-            std::move(tmpRecHits)));
-
-    // output collections
-    /*
-    auto f01he = std::make_unique<edm::DataFrameContainer>(
-        stridef01he, HcalEndcap, idsf01he.size());
-    auto f5hb = std::make_unique<edm::DataFrameContainer>(
-        stridef5hb, HcalBarrel, idsf5hb.size());
-    
-    // cast constness away
-    // use pointers to buffers instead of move operator= semantics (or swap)
-    // cause we have different allocators in there...
-    auto *dataf01hetmp = const_cast<uint16_t*>(f01he->data().data());
-    auto *dataf5hbtmp = const_cast<uint16_t*>(f5hb->data().data());
-
-    auto *idsf01hetmp = const_cast<uint32_t*>(f01he->ids().data());
-    auto idsf5hbtmp = const_cast<uint32_t*>(f5hb->ids().data());
-
-    // copy data
-    std::memcpy(dataf01hetmp, dataf01he.data(), dataf01he.size() * sizeof(uint16_t));
-    std::memcpy(dataf5hbtmp, dataf5hb.data(), dataf5hb.size() * sizeof(uint16_t));
-    std::memcpy(idsf01hetmp, idsf01he.data(), idsf01he.size() * sizeof(uint32_t));
-    std::memcpy(idsf5hbtmp, idsf5hb.data(), idsf5hb.size() * sizeof(uint32_t));
-
-    event.put(digisF01HETokenOut_, std::move(f01he));
-    event.put(digisF5HBTokenOut_, std::move(f5hb));
-    */
+            std::move(tmpRecHits_)));
 }
 
 DEFINE_FWK_MODULE(HcalCPURecHitsProducer);
