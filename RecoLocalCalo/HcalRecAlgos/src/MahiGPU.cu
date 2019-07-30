@@ -17,11 +17,11 @@ using ColMajorMatrix = Eigen::Matrix<float, NROWS, NCOLS, Eigen::ColMajor>;
 template<int NROWS, int NCOLS>
 using RowMajorMatrix = Eigen::Matrix<float, NROWS, NCOLS, Eigen::RowMajor>;
 
-template<int SIZE>
-using ColumnVector = Eigen::Matrix<float, SIZE, 1>;
+template<int SIZE, typename T = float>
+using ColumnVector = Eigen::Matrix<T, SIZE, 1>;
 
-template<int SIZE>
-using RowVector = Eigen::Matrix<float, 1, SIZE>;
+template<int SIZE, typename T = float>
+using RowVector = Eigen::Matrix<T, 1, SIZE>;
 
 // FIXME remove duplication...
 constexpr int maxSamples = 10;
@@ -663,7 +663,7 @@ void fnnls(
         int& npassive,
         Eigen::Map<ColMajorMatrix<NSAMPLES, MatrixType::RowsAtCompileTime>> 
             &pulseMatrix,
-        ColumnVector<MatrixType::RowsAtCompileTime> &pulseOffsets,
+        ColumnVector<MatrixType::RowsAtCompileTime, int> &pulseOffsets,
         double const eps,
         int const maxIterations) {
     // constants
@@ -705,8 +705,8 @@ void fnnls(
             w_max_idx += npassive;
 
             // run swaps
-            AtA.col(npassive).swap(w_max_idx);
-            AtA.row(npassive).swap(w_max_idx);
+            AtA.col(npassive).swap(AtA.col(w_max_idx));
+            AtA.row(npassive).swap(AtA.row(w_max_idx));
 
             Eigen::numext::swap(Atb.coeffRef(npassive), Atb.coeffRef(w_max_idx));
             Eigen::numext::swap(solution.coeffRef(npassive), 
@@ -751,8 +751,8 @@ void fnnls(
             --npassive;
 
             // run swaps
-            AtA.col(npassive).swap(alpha_idx);
-            AtA.row(npassive).swap(alpha_idx);
+            AtA.col(npassive).swap(AtA.col(alpha_idx));
+            AtA.row(npassive).swap(AtA.row(alpha_idx));
 
             Eigen::numext::swap(Atb.coeffRef(npassive), Atb.coeffRef(alpha_idx));
             Eigen::numext::swap(solution.coeffRef(npassive), 
@@ -776,12 +776,14 @@ void update_covariance(
         ColMajorMatrix<NSAMPLES, NSAMPLES> &covarianceMatrix,
         Eigen::Map<const ColumnVector<NSAMPLES>> const& noiseTermsView,
         float const averagePedestalWidth2,
-        Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixM,
-        Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixP,
-        ColumnVector<NPULSES> const& pulseOffsets,
+        Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrix,
+        Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixM,
+        Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixP,
+        ColumnVector<NPULSES, int> const& pulseOffsets,
         int const soi) {
     covarianceMatrix.setConstant(averagePedestalWidth2);
     covarianceMatrix += noiseTermsView.asDiagonal();
+    constexpr int NSAMPLES2 = NSAMPLES * NSAMPLES;
 
     #pragma unroll
     for (int ipulse=0; ipulse<NPULSES; ipulse++) {
@@ -790,8 +792,25 @@ void update_covariance(
 
         auto const offset = pulseOffsets(ipulse);
         auto const ipulseReal = soi + offset;
-        covarianceMatrix += resultAmplitude * resultAmplitude *
-            pulseCovarianceView(ipulseReal);
+
+        // in order not to build matrcies  for pulseP/M
+        auto const ampl2 = resultAmplitude * resultAmplitude;
+        #pragma unroll
+        for (int counter=0; counter<NSAMPLES2; counter++) {
+            int const i = counter / NSAMPLES;
+            int const j = counter % NSAMPLES;
+            float const valueP_i = pulseMatrixP(i, ipulseReal);
+            float const valueP_j = pulseMatrixP(j, ipulseReal);
+            float const value_i = pulseMatrix(i, ipulse);
+            float const value_j = pulseMatrix(j, ipulse);
+            float const valueM_i = pulseMatrixM(i, ipulseReal);
+            float const valueM_j = pulseMatrixM(j, ipulseReal);
+            auto const covValue = 0.5 * (
+                (valueP_i - value_i) * (valueP_j - value_j) +
+                (valueM_i - value_i) * (valueM_j - value_j));
+            covarianceMatrix(i, j) += ampl2 * covValue;
+
+        }
     }
 }
 
@@ -800,8 +819,8 @@ __global__
 void kernel_minimize(
         float const* inputAmplitudes,
         float* pulseMatrices,
-        float const* pulseMatricesM,
-        float const* pulseMatricesP,
+        float* pulseMatricesM, // should be const but Eigen complains
+        float* pulseMatricesP, // hsould be const but eigen complains
         float const* noiseTerms,
         float const* pedestalWidths,
         uint32_t const* idsf01HE,
@@ -841,7 +860,7 @@ void kernel_minimize(
         pedestalWidthsForChannel[3]*pedestalWidthsForChannel[3]);
 
     // TODO: provide from config
-    ColumnVector<NPULSES> pulseOffsets;
+    ColumnVector<NPULSES, int> pulseOffsets;
     pulseOffsets << -3, -2, -1, 0, 1, 2, 3, 4;
 
     // output amplitudes/weights
@@ -852,12 +871,12 @@ void kernel_minimize(
         inputAmplitudesView{inputAmplitudes + gch*NSAMPLES};
     Eigen::Map<const ColumnVector<NSAMPLES>> 
         noiseTermsView{noiseTerms + gch*NSAMPLES};
-    Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> 
+    Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> 
         pulseMatrixMView{pulseMatricesM + gch*NSAMPLES*NPULSES};
-    Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>>
+    Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>>
         pulseMatrixPView{pulseMatricesP + gch*NSAMPLES*NPULSES};
-    Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> pulseMatrixView{
-        pulseMatrices + gch*NSAMPLES*NPULSES};
+    Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> 
+        pulseMatrixView{pulseMatrices + gch*NSAMPLES*NPULSES};
 
     // TODO: provide this properly
     int const soi = 3;
@@ -876,6 +895,7 @@ void kernel_minimize(
             covarianceMatrix,
             noiseTermsView,
             averagePedestalWidth2,
+            pulseMatrixView,
             pulseMatrixMView,
             pulseMatrixPView,
             pulseOffsets,
@@ -889,8 +909,10 @@ void kernel_minimize(
         auto const& b = matrixDecomposition
             .matrixL()
             .solve(inputAmplitudesView);
-        auto const& AtA = A.transpose() * A;
-        auto const& Atb = A.transpose() * b;
+        // TODO: we do not really need to change these matrcies
+        // will be fixed in the optimized version
+        ColMajorMatrix<NPULSES, NPULSES> AtA = A.transpose() * A;
+        ColumnVector<NPULSES> Atb = A.transpose() * b;
 
         // run fast nnls
         // FIXME: provide values from config
