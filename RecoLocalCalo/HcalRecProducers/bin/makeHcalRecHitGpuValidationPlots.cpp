@@ -39,6 +39,22 @@ int main(int argc, char *argv[]) {
     CREATE_HIST_1D(hEnergyM0HEGPU, 1000, 0, 100);
     CREATE_HIST_1D(hEnergyM0HBCPU, 1000, 0, 100);
     CREATE_HIST_1D(hEnergyM0HECPU, 1000, 0, 100);
+
+    CREATE_HIST_1D(hEnergyHBGPU, 1000, 0, 100);
+    CREATE_HIST_1D(hEnergyHBCPU, 1000, 0, 100);
+    CREATE_HIST_1D(hEnergyHEGPU, 1000, 0, 100);
+    CREATE_HIST_1D(hEnergyHECPU, 1000, 0, 100);
+    
+    CREATE_HIST_1D(hChi2HBGPU, 1000, 0, 1000);
+    CREATE_HIST_1D(hChi2HBCPU, 1000, 0, 1000);
+    CREATE_HIST_1D(hChi2HEGPU, 1000, 0, 1000);
+    CREATE_HIST_1D(hChi2HECPU, 1000, 0, 1000);
+
+    CREATE_HIST_2D(hEnergyHBGPUvsCPU, 1000, 0, 100);
+    CREATE_HIST_2D(hEnergyHEGPUvsCPU, 1000, 0, 100);
+    CREATE_HIST_2D(hChi2HBGPUvsCPU, 1000, 0, 1000);
+    CREATE_HIST_2D(hChi2HEGPUvsCPU, 1000, 0, 1000);
+
     CREATE_HIST_2D(hEnergyM0HBGPUvsCPU, 1000, 0, 100);
     CREATE_HIST_2D(hEnergyM0HEGPUvsCPU, 1000, 0, 100);
 
@@ -83,24 +99,43 @@ int main(int argc, char *argv[]) {
             assert(*iter2idgpu == did.rawId());
 
             auto const ichgpu = iter2idgpu - gpuProduct.did.begin();
-            auto const gpu_energy_m0 = gpuProduct.energy[ichgpu];
+            auto const gpu_energy_m0 = gpuProduct.energyM0[ichgpu];
             auto const cpu_energy_m0 = cpurh.eraw();
+            auto const gpu_energy = gpuProduct.energy[ichgpu];
+            auto const cpu_energy = cpurh.energy();
+            auto const gpu_chi2 = gpuProduct.chi2[ichgpu];
+            auto const cpu_chi2 = cpurh.chi2();
 
             if (did.subdetId() == HcalBarrel) {
                 hEnergyM0HBGPU->Fill(gpu_energy_m0);
                 hEnergyM0HBCPU->Fill(cpu_energy_m0);
                 hEnergyM0HBGPUvsCPU->Fill(cpu_energy_m0, gpu_energy_m0);
+
+                hEnergyHBGPU->Fill(gpu_energy);
+                hEnergyHBCPU->Fill(cpu_energy);
+                hEnergyHBGPUvsCPU->Fill(cpu_energy, gpu_energy);
+                hChi2HBGPU->Fill(gpu_chi2);
+                hChi2HBCPU->Fill(cpu_chi2);
+                hChi2HBGPUvsCPU->Fill(cpu_chi2, gpu_chi2);
             } else if (did.subdetId() == HcalEndcap){
                 hEnergyM0HEGPU->Fill(gpu_energy_m0);
                 hEnergyM0HECPU->Fill(cpu_energy_m0);
                 hEnergyM0HEGPUvsCPU->Fill(cpu_energy_m0, gpu_energy_m0);
+                
+                hEnergyHEGPU->Fill(gpu_energy);
+                hEnergyHECPU->Fill(cpu_energy);
+                hEnergyHEGPUvsCPU->Fill(cpu_energy, gpu_energy);
+                
+                hChi2HEGPU->Fill(gpu_chi2);
+                hChi2HECPU->Fill(cpu_chi2);
+                hChi2HEGPUvsCPU->Fill(cpu_chi2, gpu_chi2);
             }
         }
     }
         
     {
         TCanvas c{"plots", "plots", 4200, 6200};
-        c.Divide(2, 2);
+        c.Divide(4, 3);
         c.cd(1);
         {
             gPad->SetLogy();
@@ -146,6 +181,98 @@ int main(int argc, char *argv[]) {
             hEnergyM0HEGPUvsCPU->GetXaxis()->SetTitle("cpu");
             hEnergyM0HEGPUvsCPU->GetYaxis()->SetTitle("gpu");
             hEnergyM0HEGPUvsCPU->Draw("colz");
+        }
+        c.cd(5);
+        {
+            gPad->SetLogy();
+            hEnergyHBCPU->SetLineColor(kBlack);
+            hEnergyHBCPU->SetLineWidth(1.);
+            hEnergyHBCPU->Draw("");
+            hEnergyHBGPU->SetLineColor(kBlue);
+            hEnergyHBGPU->SetLineWidth(1.);
+            hEnergyHBGPU->Draw("sames");
+            gPad->Update();
+            auto stats = (TPaveStats*)hEnergyHBGPU->FindObject("stats");
+            auto y2 = stats->GetY2NDC();
+            auto y1 = stats->GetY1NDC();
+            stats->SetY2NDC(y1);
+            stats->SetY1NDC(y1 - (y2-y1));
+        }
+        c.cd(6);
+        {
+            gPad->SetLogz();
+            hEnergyHBGPUvsCPU->GetXaxis()->SetTitle("cpu");
+            hEnergyHBGPUvsCPU->GetYaxis()->SetTitle("gpu");
+            hEnergyHBGPUvsCPU->Draw("colz");
+        }
+        c.cd(7);
+        {
+            gPad->SetLogy();
+            hEnergyHECPU->SetLineColor(kBlack);
+            hEnergyHECPU->SetLineWidth(1.);
+            hEnergyHECPU->Draw("");
+            hEnergyHEGPU->SetLineColor(kBlue);
+            hEnergyHEGPU->SetLineWidth(1.);
+            hEnergyHEGPU->Draw("sames");
+            gPad->Update();
+            auto stats = (TPaveStats*)hEnergyHEGPU->FindObject("stats");
+            auto y2 = stats->GetY2NDC();
+            auto y1 = stats->GetY1NDC();
+            stats->SetY2NDC(y1);
+            stats->SetY1NDC(y1 - (y2-y1));
+        }
+        c.cd(8);
+        {
+            gPad->SetLogz();
+            hEnergyHEGPUvsCPU->GetXaxis()->SetTitle("cpu");
+            hEnergyHEGPUvsCPU->GetYaxis()->SetTitle("gpu");
+            hEnergyHEGPUvsCPU->Draw("colz");
+        }
+        c.cd(9);
+        {
+            gPad->SetLogy();
+            hChi2HBCPU->SetLineColor(kBlack);
+            hChi2HBCPU->SetLineWidth(1.);
+            hChi2HBCPU->Draw("");
+            hChi2HBGPU->SetLineColor(kBlue);
+            hChi2HBGPU->SetLineWidth(1.);
+            hChi2HBGPU->Draw("sames");
+            gPad->Update();
+            auto stats = (TPaveStats*)hChi2HBGPU->FindObject("stats");
+            auto y2 = stats->GetY2NDC();
+            auto y1 = stats->GetY1NDC();
+            stats->SetY2NDC(y1);
+            stats->SetY1NDC(y1 - (y2-y1));
+        }
+        c.cd(10);
+        {
+            gPad->SetLogz();
+            hChi2HBGPUvsCPU->GetXaxis()->SetTitle("cpu");
+            hChi2HBGPUvsCPU->GetYaxis()->SetTitle("gpu");
+            hChi2HBGPUvsCPU->Draw("colz");
+        }
+        c.cd(11);
+        {
+            gPad->SetLogy();
+            hChi2HECPU->SetLineColor(kBlack);
+            hChi2HECPU->SetLineWidth(1.);
+            hChi2HECPU->Draw("");
+            hChi2HEGPU->SetLineColor(kBlue);
+            hChi2HEGPU->SetLineWidth(1.);
+            hChi2HEGPU->Draw("sames");
+            gPad->Update();
+            auto stats = (TPaveStats*)hChi2HEGPU->FindObject("stats");
+            auto y2 = stats->GetY2NDC();
+            auto y1 = stats->GetY1NDC();
+            stats->SetY2NDC(y1);
+            stats->SetY1NDC(y1 - (y2-y1));
+        }
+        c.cd(12);
+        {
+            gPad->SetLogz();
+            hChi2HEGPUvsCPU->GetXaxis()->SetTitle("cpu");
+            hChi2HEGPUvsCPU->GetYaxis()->SetTitle("gpu");
+            hChi2HEGPUvsCPU->Draw("colz");
         }
         c.SaveAs("plots.pdf");
     }

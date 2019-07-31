@@ -75,6 +75,10 @@ void HcalCPURecHitsProducer::acquire(
     // resize tmp buffers
     tmpRecHits_.resize(recHits.size);
 
+#ifdef HCAL_MAHI_CPUDEBUG
+    std::cout << "num rec Hits = " << recHits.size << std::endl;
+#endif
+
     auto lambdaToTransfer = [&ctx](auto& dest, auto* src) {
         using vector_type = typename std::remove_reference<decltype(dest)>::type;
         using type = typename vector_type::value_type;

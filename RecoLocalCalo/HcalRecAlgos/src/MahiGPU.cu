@@ -196,6 +196,8 @@ __global__
 void kernel_prep1d_sameNumberOfSamples(
         float *amplitudes,
         float *noiseTerms,
+        float *outputEnergy,
+        float *outputChi2,
         uint16_t const* dataf01HE,
         uint16_t const* dataf5HB,
         uint32_t const* idsf01HE,
@@ -250,6 +252,15 @@ void kernel_prep1d_sameNumberOfSamples(
     // remove 
     if (gch >= nchannels) return;
 
+    // initialize all output buffers
+    if (sample==0) {
+        outputdid[gch] = 0;
+        method0Energy[gch] = 0;
+        method0Time[gch] = 0;
+        outputEnergy[gch] = 0;
+        outputChi2[gch] = 0;
+    }
+
 #ifdef HCAL_MAHI_GPUDEBUG
 #ifdef HCAL_MAHI_GPUDEBUG_SINGLECHANNEL
     if (gch > 0) return;
@@ -300,6 +311,7 @@ void kernel_prep1d_sameNumberOfSamples(
         ? capid_for_sample<Flavor5>(
             dataf5HB + stride*(gch - nchannelsf01HE), sample)
         : capid_for_sample<Flavor01>(dataf01HE + stride*gch, sample);
+
 
 #ifdef HCAL_MAHI_GPUDEBUG
 #ifdef HCAL_MAHI_GPUDEBUG_FILTERDETID
@@ -515,13 +527,13 @@ float compute_pulse_shape_value(
     constexpr auto num_ns = nsPerBX * maxSamples;
     constexpr auto num_bx = num_ns / ns_per_bx;
 
+    // FIXME: clean up all the rounding... this is coming from original cpu version
     float const i_start_float = -iniTimeShift - pulse_time - slew > 0.f
         ? 0.f
         : std::abs(-iniTimeShift - pulse_time - slew) + 1.f;
     int i_start = static_cast<int>(i_start_float);
-    float offset_start = i_start_float - iniTimeShift - pulse_time - slew;
+    float offset_start = static_cast<float>(i_start) - iniTimeShift - pulse_time - slew;
     // FIXME: do we need a check for nan???
-
 #ifdef HCAL_MAHI_GPUDEBUG
     if (shift==0)
         printf("i_start_float = %f i_start = %d offset_start = %f\n",
@@ -535,7 +547,7 @@ float compute_pulse_shape_value(
     }
 
     int const bin_start = static_cast<int>(offset_start);
-    auto const bin_start_up = offset_start + 0.5;
+    auto const bin_start_up = static_cast<float>(bin_start) + 0.5f;
     int const bin_0_start = offset_start < bin_start_up
         ? bin_start-1
         : bin_start;
@@ -888,6 +900,8 @@ void kernel_minimize(
         float const* pedestalWidths,
         uint32_t const* idsf01HE,
         uint32_t const* idsf5HB,
+        float const* gainValues,
+        float const* respCorrectionValues,
         uint32_t const nchannelsf01HE,
         uint32_t const nchannelsTotal,
         uint32_t const offsetForHashes,
@@ -921,6 +935,11 @@ void kernel_minimize(
         pedestalWidthsForChannel[1]*pedestalWidthsForChannel[1] +
         pedestalWidthsForChannel[2]*pedestalWidthsForChannel[2] +
         pedestalWidthsForChannel[3]*pedestalWidthsForChannel[3]);
+    auto const* gains = gainValues + 
+        hashedId*4;
+    // FIXME on cpu ts 0 capid was used - does it make any difference
+    auto const gain = gains[0];
+    auto const respCorrection = respCorrectionValues[hashedId];
 
 #ifdef HCAL_MAHI_GPUDEBUG
 #ifdef HCAL_MAHI_GPUDEBUG_FILTERDETID
@@ -1047,7 +1066,8 @@ void kernel_minimize(
     #pragma unroll
     for (int i=0; i<NPULSES; i++)
         if (pulseOffsets[i] == 0)
-            outputEnergy[gch] = resultAmplitudesVector(i);
+            // NOTE: gain is a number < 10^-3/4, multiply first to avoid stab issues
+            outputEnergy[gch] = (gain*resultAmplitudesVector(i))*respCorrection;
 }
 
 void entryPoint(
@@ -1080,6 +1100,8 @@ void entryPoint(
     kernel_prep1d_sameNumberOfSamples<<<blocks, threadsPerBlock, nbytesShared, cudaStream.id()>>>(
         scratch.amplitudes,
         scratch.noiseTerms,
+        outputGPU.recHits.energy,
+        outputGPU.recHits.chi2,
         inputGPU.f01HEDigis.data,
         inputGPU.f5HBDigis.data,
         inputGPU.f01HEDigis.ids,
@@ -1202,6 +1224,8 @@ void entryPoint(
             conditions.pedestalWidths.values,
             inputGPU.f01HEDigis.ids,
             inputGPU.f5HBDigis.ids,
+            conditions.gains.values,
+            conditions.respCorrs.values,
             inputGPU.f01HEDigis.ndigis,
             totalChannels,
             conditions.offsetForHashes,
