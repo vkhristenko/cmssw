@@ -170,16 +170,14 @@ void HBHERecHitProducerGPU::acquire(
     edm::ESHandle<HcalConvertedPedestalWidthsGPU> pedestalWidthsHandle;
     edm::ESHandle<HcalConvertedEffectivePedestalWidthsGPU> 
         effectivePedestalWidthsHandle;
-    if (configParameters_.useEffectivePedestals)
-        setup.get<HcalConvertedEffectivePedestalWidthsRcd>()
-            .get(effectivePedestalWidthsHandle);
-    else
-        setup.get<HcalConvertedPedestalWidthsRcd>()
-            .get(pedestalWidthsHandle);
+    setup.get<HcalConvertedEffectivePedestalWidthsRcd>()
+        .get(effectivePedestalWidthsHandle);
+    setup.get<HcalConvertedPedestalWidthsRcd>()
+        .get(pedestalWidthsHandle);
     auto const& pedestalWidthsProduct = 
-        configParameters_.useEffectivePedestals
-            ? effectivePedestalWidthsHandle->getProduct(ctx.stream())
-            : pedestalWidthsHandle->getProduct(ctx.stream());
+        pedestalWidthsHandle->getProduct(ctx.stream());
+    auto const& effectivePedestalWidthsProduct = 
+        effectivePedestalWidthsHandle->getProduct(ctx.stream());
 
     edm::ESHandle<HcalConvertedPedestalsGPU> pedestalsHandle;
     setup.get<HcalConvertedPedestalsRcd>().get(pedestalsHandle);
@@ -224,7 +222,7 @@ void HBHERecHitProducerGPU::acquire(
     // bundle up conditions
     hcal::mahi::ConditionsProducts conditions{
         gainWidthsProduct, gainsProduct, lutCorrsProduct,
-        pedestalWidthsProduct, pedestalsProduct,
+        pedestalWidthsProduct, effectivePedestalWidthsProduct, pedestalsProduct,
         qieCodersProduct, recoParamsProduct,
         respCorrsProduct, timeCorrsProduct,
         qieTypesProduct, 

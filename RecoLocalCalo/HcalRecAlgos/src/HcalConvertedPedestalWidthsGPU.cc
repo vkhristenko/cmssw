@@ -137,12 +137,20 @@ HcalConvertedPedestalWidthsGPU::HcalConvertedPedestalWidthsGPU(
                 pedestalWidthEndcapValues[i].getWidth(3),
                 3, qieCoder, qieShape)
             : pedestalWidthEndcapValues[i].getWidth(3);
+
+#ifdef HCAL_MAHI_CPUDEBUG
+        if (pedestalEndcapValues[i].rawId() == DETID_TO_DEBUG) {
+            for (int i=0; i<4; i++)
+                printf("pedestalWidth(%d) = %f original pedestalWidth(%d) = %f\n", 
+                    i, values_[off*4+i], i, pedestalWidthEndcapValues[i].getWidth(3));
+        }
+#endif
     }
 }
 
 HcalConvertedPedestalWidthsGPU::Product::~Product() {
     // deallocation
-    cudaCheck( cudaFree(values) );    
+    cudaCheck( cudaFree(values) ); 
 }
 
 HcalConvertedPedestalWidthsGPU::Product const& HcalConvertedPedestalWidthsGPU::getProduct(

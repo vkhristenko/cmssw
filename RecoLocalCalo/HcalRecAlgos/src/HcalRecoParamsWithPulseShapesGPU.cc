@@ -7,7 +7,7 @@
 #include "FWCore/Utilities/interface/typelookup.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
 
-#include <unordered_set>
+#include <unordered_map>
 
 // FIXME: add proper getters to conditions
 HcalRecoParamsWithPulseShapesGPU::HcalRecoParamsWithPulseShapesGPU(HcalRecoParams const& recoParams) 
@@ -17,10 +17,14 @@ HcalRecoParamsWithPulseShapesGPU::HcalRecoParamsWithPulseShapesGPU(HcalRecoParam
     , param2_(totalChannels_)
     , ids_(totalChannels_)
 {
+#ifdef HCAL_MAHI_CPUDEBUG
+    printf("hello from a reco params with pulse shapes\n");
+#endif
+
     auto const& containers = recoParams.getAllContainers();
     
     HcalPulseShapes pulseShapes;
-    std::unordered_set<unsigned int> idCache; 
+    std::unordered_map<unsigned int, uint32_t> idCache; 
 
     // fill in eb
     auto const& barrelValues = containers[0].second;
@@ -39,6 +43,7 @@ HcalRecoParamsWithPulseShapesGPU::HcalRecoParamsWithPulseShapesGPU(HcalRecoParam
         if (auto const iter = idCache.find(pulseShapeId); iter == idCache.end()) {
             // new guy
             auto const newId = idCache.size();
+            idCache[pulseShapeId] = newId;
             // this will be the id
             ids_[i] = newId;
 
@@ -61,25 +66,36 @@ HcalRecoParamsWithPulseShapesGPU::HcalRecoParamsWithPulseShapesGPU(HcalRecoParam
                 functor{pulseShape, false, false, false, 1, 0, 0, 10};
             auto const offset256 = newId*HcalConst::maxPSshapeBin;
             auto const offset25 = newId*HcalConst::nsPerBX;
+            auto const numShapes = newId;
             for (int i=0; i<HcalConst::maxPSshapeBin; i++) {
-                acc25nsVec_[offset256 + i] = functor.acc25nsVec[i];
-                diff25nsItvlVec_[offset256 + i] = functor.diff25nsItvlVec[i];
+                acc25nsVec_[offset256*numShapes + i] = functor.acc25nsVec[i];
+                diff25nsItvlVec_[offset256*numShapes + i] = functor.diff25nsItvlVec[i];
             }
 
             for (int i=0; i<HcalConst::nsPerBX; i++) {
-                accVarLenIdxMinusOneVec_[offset25 + i] = 
+                accVarLenIdxMinusOneVec_[offset25*numShapes + i] = 
                     functor.accVarLenIdxMinusOneVec[i];
-                diffVarItvlIdxMinusOneVec_[offset25 + i] = 
+                diffVarItvlIdxMinusOneVec_[offset25*numShapes + i] = 
                     functor.diffVarItvlIdxMinusOneVec[i];
-                accVarLenIdxZEROVec_[offset25 + i] = 
+                accVarLenIdxZEROVec_[offset25*numShapes + i] = 
                     functor.accVarLenIdxZEROVec[i];
-                diffVarItvlIdxZEROVec_[offset25 + i] = 
+                diffVarItvlIdxZEROVec_[offset25*numShapes + i] = 
                     functor.diffVarItvlIdxZEROVec[i];
+            }
+            for (int i=0; i<HcalConst::maxPSshapeBin; i++) {
+                printf("acc25nsVec(%d) = %f diff25nsItvlVec(%d) = %f\n",
+                    i, functor.acc25nsVec[i], i, functor.diff25nsItvlVec[i]);
             }
         } else {
             // already recorded this pulse shape, just set id
-            ids_[i] = *iter;
+            ids_[i] = iter->second;
         }
+#ifdef HCAL_MAHI_CPUDEBUG
+        if (barrelValues[i].rawId() == DETID_TO_DEBUG) {
+            printf("recoShapeId = %u myid = %u\n",
+                pulseShapeId, ids_[i]);
+        }
+#endif
     }
 
     // fill in ee
@@ -94,14 +110,15 @@ HcalRecoParamsWithPulseShapesGPU::HcalRecoParamsWithPulseShapesGPU(HcalRecoParam
         // although comments state that 0 is reserved, 
         // HcalPulseShapes::getShape throws on 0!
         if (pulseShapeId == 0) {
-            ids_[i] = 0;
+            ids_[i + offset] = 0;
             continue;
         }
         if (auto const iter = idCache.find(pulseShapeId); iter == idCache.end()) {
             // new guy
             auto const newId = idCache.size();
+            idCache[pulseShapeId] = newId;
             // this will be the id
-            ids_[i] = newId;
+            ids_[i + offset] = newId;
 
             // resize value arrays
             acc25nsVec_.resize(acc25nsVec_.size() + HcalConst::maxPSshapeBin);
@@ -122,26 +139,32 @@ HcalRecoParamsWithPulseShapesGPU::HcalRecoParamsWithPulseShapesGPU(HcalRecoParam
                 functor{pulseShape, false, false, false, 1, 0, 0, 10};
             auto const offset256 = newId*HcalConst::maxPSshapeBin;
             auto const offset25 = newId*HcalConst::nsPerBX;
+            auto const numShapes = newId;
             for (int i=0; i<HcalConst::maxPSshapeBin; i++) {
-                acc25nsVec_[offset256 + i] = functor.acc25nsVec[i];
-                diff25nsItvlVec_[offset256 + i] = functor.diff25nsItvlVec[i];
+                acc25nsVec_[offset256*numShapes + i] = functor.acc25nsVec[i];
+                diff25nsItvlVec_[offset256*numShapes + i] = functor.diff25nsItvlVec[i];
             }
 
             for (int i=0; i<HcalConst::nsPerBX; i++) {
-                accVarLenIdxMinusOneVec_[offset25 + i] = 
+                accVarLenIdxMinusOneVec_[offset25*numShapes + i] = 
                     functor.accVarLenIdxMinusOneVec[i];
-                diffVarItvlIdxMinusOneVec_[offset25 + i] = 
+                diffVarItvlIdxMinusOneVec_[offset25*numShapes + i] = 
                     functor.diffVarItvlIdxMinusOneVec[i];
-                accVarLenIdxZEROVec_[offset25 + i] = 
+                accVarLenIdxZEROVec_[offset25*numShapes + i] = 
                     functor.accVarLenIdxZEROVec[i];
-                diffVarItvlIdxZEROVec_[offset25 + i] = 
+                diffVarItvlIdxZEROVec_[offset25*numShapes + i] = 
                     functor.diffVarItvlIdxZEROVec[i];
             }
         } else {
             // already recorded this pulse shape, just set id
-            ids_[i] = *iter;
+            ids_[i + offset] = iter->second;
         }
     }
+
+#ifdef HCAL_MAHI_CPUDEBUG
+    for (auto const& p : idCache) 
+        printf("recoPulseShapeId = %u id = %u\n", p.first, p.second);
+#endif
 }
 
 HcalRecoParamsWithPulseShapesGPU::Product::~Product() {
