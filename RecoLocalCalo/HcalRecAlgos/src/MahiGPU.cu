@@ -9,6 +9,10 @@
 
 #include <Eigen/Dense>
 
+#ifdef HCAL_MAHI_GPUDEBUG
+#define DETID_TO_DEBUG 1125652531
+#endif
+
 namespace hcal { namespace mahi {
 
 template<int NROWS, int NCOLS>
@@ -191,6 +195,7 @@ float compute_diff_charge_gain(
     }
 }
 
+
 // TODO: add/validate restrict (will increase #registers in use by the kernel)
 __global__
 void kernel_prep1d_sameNumberOfSamples(
@@ -215,6 +220,7 @@ void kernel_prep1d_sameNumberOfSamples(
         float const* qieCoderSlopes,
         int const* qieTypes,
         float const* pedestalWidths,
+        float const* effectivePedestalWidths,
         float const* pedestals,
         float const* effectivePedestals,
         bool const useEffectivePedestals,
@@ -283,6 +289,7 @@ void kernel_prep1d_sameNumberOfSamples(
             __float_as_uint(std::numeric_limits<float>::min());
     }
 
+
     // offset output
     auto *amplitudesForChannel = amplitudes + nsamplesExpected * gch;
     auto *noiseTermsForChannel = noiseTerms + nsamplesExpected * gch;
@@ -312,10 +319,9 @@ void kernel_prep1d_sameNumberOfSamples(
             dataf5HB + stride*(gch - nchannelsf01HE), sample)
         : capid_for_sample<Flavor01>(dataf01HE + stride*gch, sample);
 
-
 #ifdef HCAL_MAHI_GPUDEBUG
 #ifdef HCAL_MAHI_GPUDEBUG_FILTERDETID
-    if (id != 1160268851) return;
+    if (id != DETID_TO_DEBUG) return;
 #endif
 #endif
 
@@ -334,18 +340,14 @@ void kernel_prep1d_sameNumberOfSamples(
         hashedId*HcalQIECodersGPU::numValuesPerChannel;
     auto const* pedestalsForChannel = pedestals +
         hashedId*4;
-    auto const* pedestalWidthsForChannel = pedestalWidths +
-        hashedId*4;
+    auto const* pedestalWidthsForChannel = useEffectivePedestals && gch < nchannelsf01HE
+        ? effectivePedestalWidths + hashedId*4
+        : pedestalWidths + hashedId*4;
     auto const* gains = gainValues + 
         hashedId*4;
     auto const gain = gains[capid];
     auto const respCorrection = respCorrectionValues[hashedId];
     auto const pedestal = pedestalsForChannel[capid];
-    auto const averagePedestalWidth2 = 0.25 * (
-        pedestalWidthsForChannel[0]*pedestalWidthsForChannel[0] +
-        pedestalWidthsForChannel[1]*pedestalWidthsForChannel[1] +
-        pedestalWidthsForChannel[2]*pedestalWidthsForChannel[2] +
-        pedestalWidthsForChannel[3]*pedestalWidthsForChannel[3]);
     auto const pedestalWidth = pedestalWidthsForChannel[capid];
     // if needed, only use effective pedestals for f01
     auto const pedestalToUseForMethod0 = useEffectivePedestals && gch < nchannelsf01HE
@@ -503,6 +505,13 @@ void kernel_prep1d_sameNumberOfSamples(
     auto const noiseTerm = noiseADC*noiseADC + noisePhoto*noisePhoto + 
         pedestalWidth*pedestalWidth;
 
+#ifdef HCAL_MAHI_GPUDEBUG
+    printf("charrge(%d) = %f pedestal(%d) = %f dfc(%d) = %f pedestalWidth(%d) = %f noiseADC(%d) = %f noisPhoto(%d) = %f\n",
+        sample, rawCharge, sample, pedestalToUseForMethod0,
+        sample, dfc, sample, pedestalWidth, sample, noiseADC,
+        sample, noisePhoto);
+#endif
+
     // store to global memory
     amplitudesForChannel[sample] = amplitude;
     noiseTermsForChannel[sample] = noiseTerm;
@@ -543,8 +552,14 @@ float compute_pulse_shape_value(
     // boundary
     if (offset_start == 1.0f) {
         offset_start = 0.f;
-        i_start -= -1;
+        i_start -= 1;
     }
+
+#ifdef HCAL_MAHI_GPUDEBUG
+    if (shift==0)
+        printf("i_start_float = %f i_start = %d offset_start = %f\n",
+         i_start_float, i_start, offset_start);
+#endif
 
     int const bin_start = static_cast<int>(offset_start);
     auto const bin_start_up = static_cast<float>(bin_start) + 0.5f;
@@ -554,6 +569,14 @@ float compute_pulse_shape_value(
     int const its_start = i_start  / ns_per_bx;
     int const distTo25ns_start = nsPerBX - 1 - i_start % ns_per_bx;
     auto const factor = offset_start - static_cast<float>(bin_0_start) - 0.5;
+
+#ifdef HCAL_MAHI_GPUDEBUG
+    if (shift == 0) {
+        printf("bin_start = %d bin_0_start = %d its_start = %d distTo25ns_start = %d factor = %f\n",
+            bin_start, bin_0_start, its_start, distTo25ns_start, factor);
+    }
+#endif
+
     auto const sample_over10ts = sample + shift;
     float value = 0.0f;
     if (sample_over10ts == its_start) {
@@ -649,7 +672,7 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
 
 #ifdef HCAL_MAHI_GPUDEBUG
 #ifdef HCAL_MAHI_GPUDEBUG_FILTERDETID
-    if (id != 1160268851) return;
+    if (id != DETID_TO_DEBUG) return;
 #endif
 #endif
 
@@ -657,7 +680,8 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
     if (sample == 0 && ipulse==0) {
         for (int i=0; i<8; i++)
             printf("amplitude(%d) = %f\n", i, amplitudes[gch*nsamples + i]);
-        printf("acc25nsVec and diff25nsItvlVec\n");
+        printf("acc25nsVec and diff25nsItvlVec for recoPulseShapeId = %u\n",
+            recoPulseShapeId);
         for (int i=0; i<256; i++) {
             printf("acc25nsVec(%d) = %f diff25nsItvlVec(%d) = %f\n",
                 i, acc25nsVec[i], i, diff25nsItvlVec[i]);
@@ -692,6 +716,22 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
                 accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
                 accVarLenIdxZeroVec, diffVarItvlIdxZeroVec);
             printf("pulse(%d) = %f\n", i, value);
+        }
+        printf("\n");
+        for (int i=0; i<10; i++) {
+            auto const value = compute_pulse_shape_value(t0p, i, 0,
+                acc25nsVec, diff25nsItvlVec,
+                accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
+                accVarLenIdxZeroVec, diffVarItvlIdxZeroVec);
+            printf("pulseP(%d) = %f\n", i, value);
+        }
+        printf("\n");
+        for (int i=0; i<10; i++) {
+            auto const value = compute_pulse_shape_value(t0m, i, 0,
+                acc25nsVec, diff25nsItvlVec,
+                accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
+                accVarLenIdxZeroVec, diffVarItvlIdxZeroVec);
+            printf("pulseM(%d) = %f\n", i, value);
         }
     }
 #endif
@@ -796,7 +836,7 @@ void fnnls(
 
             s.head(npassive) = 
                 AtA.topLeftCorner(npassive, npassive)
-                    .llt()
+                    .ldlt()
                     .solve(Atb.head(npassive));
 
             // done if solution values are all positive
@@ -866,6 +906,11 @@ void update_covariance(
         auto const offset = pulseOffsets(ipulse);
         auto const ipulseReal = soi + offset;
 
+#ifdef HCAL_MAHI_GPUDEBUG
+        printf("pulse cov array for ibx = %d and offset %d\n",
+            ipulse, offset);
+#endif
+
         // in order not to build matrcies  for pulseP/M
         auto const ampl2 = resultAmplitude * resultAmplitude;
         #pragma unroll
@@ -883,6 +928,11 @@ void update_covariance(
                 (valueM_i - value_i) * (valueM_j - value_j));
             covarianceMatrix(i, j) += ampl2 * covValue;
 
+#ifdef HCAL_MAHI_GPUDEBUG
+            printf("%f ", covValue);
+            if ((counter+1) % NSAMPLES == 0)
+                printf("\n");
+#endif
         }
     }
 }
@@ -898,6 +948,8 @@ void kernel_minimize(
         float* pulseMatricesP, // hsould be const but eigen complains
         float const* noiseTerms,
         float const* pedestalWidths,
+        float const* effectivePedestalWidths,
+        bool const useEffectivePedestals,
         uint32_t const* idsf01HE,
         uint32_t const* idsf5HB,
         float const* gainValues,
@@ -928,8 +980,9 @@ void kernel_minimize(
         : did2linearIndexHE(id, maxDepthHE, maxPhiHE, firstHERing, lastHERing, nEtaHE)
             + offsetForHashes;
 
-    auto const* pedestalWidthsForChannel = pedestalWidths + 
-        hashedId*4;
+    auto const* pedestalWidthsForChannel = useEffectivePedestals && gch < nchannelsf01HE
+        ? effectivePedestalWidths + hashedId*4
+        : pedestalWidths + hashedId*4;
     auto const averagePedestalWidth2 = 0.25 * (
         pedestalWidthsForChannel[0]*pedestalWidthsForChannel[0] +
         pedestalWidthsForChannel[1]*pedestalWidthsForChannel[1] +
@@ -943,7 +996,7 @@ void kernel_minimize(
 
 #ifdef HCAL_MAHI_GPUDEBUG
 #ifdef HCAL_MAHI_GPUDEBUG_FILTERDETID
-    if (id != 1160268851) return;
+    if (id != DETID_TO_DEBUG) return;
 #endif
 #endif
 
@@ -969,6 +1022,7 @@ void kernel_minimize(
     // TODO: provide this properly
     int const soi = 3;
     constexpr float deltaChi2Threashold = 1e-3;
+
 
 #ifdef HCAL_MAHI_GPUDEBUG
     for (int i=0; i<NSAMPLES; i++)
@@ -1012,6 +1066,15 @@ void kernel_minimize(
             pulseOffsets,
             soi);
 
+#ifdef HCAL_MAHI_GPUDEBUG
+        printf("covariance matrix\n");
+        for (int i=0; i<8; i++) {
+            for (int j=0; j<8; j++)
+                printf("%f ", covarianceMatrix(i, j));
+            printf("\n");
+        }
+#endif
+
         // obtain AtA and Atb required for fast nnls
         matrixDecomposition.compute(covarianceMatrix);
         auto const& A = matrixDecomposition
@@ -1025,6 +1088,23 @@ void kernel_minimize(
         ColMajorMatrix<NPULSES, NPULSES> AtA = A.transpose() * A;
         ColumnVector<NPULSES> Atb = A.transpose() * b;
 
+#ifdef HCAL_MAHI_GPUDEBUG
+        printf("AtA\n");
+        for (int i=0; i<8; i++) {
+            for (int j=0; j<8; j++)
+                printf("%f ", AtA(i, j));
+            printf("\n");
+        }
+        printf("Atb\n");
+        for (int i=0; i<8; i++)
+            printf("%f ", Atb(i));
+        printf("\n");
+        printf("result Amplitudes before nnls\n");
+        for (int i=0; i<8; i++)
+            printf("%f ", resultAmplitudesVector(i));
+        printf("\n");
+#endif
+
         // run fast nnls
         // FIXME: provide values from config
         fnnls(
@@ -1036,6 +1116,12 @@ void kernel_minimize(
             pulseOffsets,
             1e-11,
             500);
+
+#ifdef HCAL_MAHI_GPUDEBUG
+        printf("result Amplitudes\n");
+        for (int i=0; i<8; i++)
+            printf("resultAmplitudes(%d) = %f\n", i, resultAmplitudesVector(i));
+#endif
 
         // compute chi2 and check that there is no rotation
         chi2 = matrixDecomposition
@@ -1119,6 +1205,7 @@ void entryPoint(
         conditions.qieCoders.slopes,
         conditions.qieTypes.values,
         conditions.pedestalWidths.values,
+        conditions.effectivePedestalWidths.values,
         conditions.pedestals.values,
         conditions.convertedEffectivePedestals
             ? conditions.convertedEffectivePedestals->values
@@ -1222,6 +1309,8 @@ void entryPoint(
             scratch.pulseMatricesP,
             scratch.noiseTerms,
             conditions.pedestalWidths.values,
+            conditions.effectivePedestalWidths.values,
+            configParameters.useEffectivePedestals,
             inputGPU.f01HEDigis.ids,
             inputGPU.f5HBDigis.ids,
             conditions.gains.values,

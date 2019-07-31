@@ -106,7 +106,7 @@ HcalConvertedPedestalsGPU::HcalConvertedPedestalsGPU(
             : pedestalEndcapValues[i].getValue(3);
         
 #ifdef HCAL_MAHI_CPUDEBUG
-        if (pedestalEndcapValues[i].rawId() == 1160268851) {
+        if (pedestalEndcapValues[i].rawId() == DETID_TO_DEBUG) {
             printf("qietype = %d\n", qieType);
             printf("ped0 = %f ped1 = %f ped2 = %f ped3 = %f\n",
                 pedestalEndcapValues[i].getValue(0),
