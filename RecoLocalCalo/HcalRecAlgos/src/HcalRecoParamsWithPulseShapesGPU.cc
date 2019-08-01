@@ -82,10 +82,6 @@ HcalRecoParamsWithPulseShapesGPU::HcalRecoParamsWithPulseShapesGPU(HcalRecoParam
                 diffVarItvlIdxZEROVec_[offset25*numShapes + i] = 
                     functor.diffVarItvlIdxZEROVec[i];
             }
-            for (int i=0; i<HcalConst::maxPSshapeBin; i++) {
-                printf("acc25nsVec(%d) = %f diff25nsItvlVec(%d) = %f\n",
-                    i, functor.acc25nsVec[i], i, functor.diff25nsItvlVec[i]);
-            }
         } else {
             // already recorded this pulse shape, just set id
             ids_[i] = iter->second;
