@@ -62,6 +62,7 @@ struct ConfigParameters {
 
     float meanTime;
     float timeSigmaSiPM, timeSigmaHPD;
+    float ts4Thresh;
 };
 
 struct OutputDataGPU {

@@ -10,7 +10,7 @@
 #include <Eigen/Dense>
 
 #ifdef HCAL_MAHI_GPUDEBUG
-#define DETID_TO_DEBUG 1125652531
+#define DETID_TO_DEBUG 1125647428
 #endif
 
 namespace hcal { namespace mahi {
@@ -243,7 +243,8 @@ void kernel_prep1d_sameNumberOfSamples(
         int const sipmQTSShift,
         int const sipmQNTStoSum,
         int const firstSampleShift,
-        uint32_t const offsetForHashes) {
+        uint32_t const offsetForHashes,
+        float const ts4Thresh) {
     // indices + runtime constants
     auto const sample = threadIdx.x;
     int32_t const nsamplesExpected = blockDim.x;
@@ -280,13 +281,15 @@ void kernel_prep1d_sameNumberOfSamples(
         nsamplesExpected*nchannels_per_block;
     float *shrMethod0EnergyAccum = shrChargeMinusPedestal + 
         nsamplesExpected*nchannels_per_block;
+    float *shrEnergyM0TotalAccum = shrMethod0EnergyAccum + nchannels_per_block;
     unsigned long long int *shrMethod0EnergySamplePair = 
         reinterpret_cast<unsigned long long int*>(
-            shrMethod0EnergyAccum + nchannels_per_block);
+            shrEnergyM0TotalAccum + nchannels_per_block);
     if (sample == 0) {
         shrMethod0EnergyAccum[lch] = 0;
         shrMethod0EnergySamplePair[lch] = 
             __float_as_uint(std::numeric_limits<float>::min());
+        shrEnergyM0TotalAccum[lch] = 0;
     }
 
 
@@ -346,6 +349,7 @@ void kernel_prep1d_sameNumberOfSamples(
     auto const* gains = gainValues + 
         hashedId*4;
     auto const gain = gains[capid];
+    auto const gain0 = gains[0];
     auto const respCorrection = respCorrectionValues[hashedId];
     auto const pedestal = pedestalsForChannel[capid];
     auto const pedestalWidth = pedestalWidthsForChannel[capid];
@@ -372,7 +376,6 @@ void kernel_prep1d_sameNumberOfSamples(
 
     // TODO: this should be properly treated
     int32_t soi = 3;
-   
 
     // 
     // compute various quantities (raw charge and tdc stuff)
@@ -431,8 +434,11 @@ void kernel_prep1d_sameNumberOfSamples(
     // NOTE: gain is a small number < 10^-3, multiply it last
     auto const energym0_per_ts = gain*((rawCharge - pedestalToUseForMethod0)*
         respCorrection);
+    auto const energym0_per_ts_gain0 = gain0*((rawCharge - pedestalToUseForMethod0)*
+        respCorrection);
     // store to shared mem
     shrEnergyM0PerTS[lch*nsamplesExpected + sample] = energym0_per_ts;
+    atomicAdd(&shrEnergyM0TotalAccum[lch], energym0_per_ts_gain0);
 
 #ifdef HCAL_MAHI_GPUDEBUG
     printf("id = %u sample = %d gch = %d hashedId = %u adc = %u capid = %u\n"
@@ -467,7 +473,8 @@ void kernel_prep1d_sameNumberOfSamples(
     }
     __syncthreads();
 
-    if (sample == 0) {
+    // NOTE: must take soi, as values for that thread are used...
+    if (sample == soi) {
         auto const method0_energy = shrMethod0EnergyAccum[lch];
         auto const val = shrMethod0EnergySamplePair[lch];
         int const max_sample = (val >> 32) & 0xffffffff;
@@ -487,6 +494,22 @@ void kernel_prep1d_sameNumberOfSamples(
         outputdid[gch] = id;
         method0Energy[gch] = method0_energy;
         method0Time[gch] = time;
+
+#ifdef HCAL_MAHI_GPUDEBUG
+        printf("tsTOT = %f tstrig = %f ts4Thresh = %f\n",
+            shrEnergyM0TotalAccum[lch], energym0_per_ts_gain0, ts4Thresh);
+#endif
+
+        // check as in cpu version if mahi is not needed
+        // FIXME: KNOWN ISSUE: observed a problem when rawCharge and pedestal
+        // are basically equal and generate -0.00000...
+        // needs to be treated properly
+        if (!(shrEnergyM0TotalAccum[lch] > 0 && 
+            energym0_per_ts_gain0 >= ts4Thresh)) {
+            // do not need to run mahi minimization
+            //outputEnergy[gch] = 0; energy already inited to 0
+            outputChi2[gch] = -9999.f;
+        }
 
 #ifdef HCAL_MAHI_GPUDEBUG
         printf("method0_energy = %f max_sample = %d max_energy = %f time = %f\n",
@@ -970,6 +993,10 @@ void kernel_minimize(
     auto const gch = threadIdx.x + blockIdx.x * blockDim.x;
     if (gch >= nchannelsTotal) return;
 
+    // if chi2 is set to -9999 do not run minimization
+    if (outputChi2[gch] == -9999.f)
+        return;
+
     // conditions for pedestal widths
     auto const id = gch >= nchannelsf01HE
         ? idsf5HB[gch - nchannelsf01HE]
@@ -1181,7 +1208,7 @@ void entryPoint(
     int blocks = static_cast<uint32_t>(threadsPerBlock.y) > totalChannels
         ? 1
         : (totalChannels + threadsPerBlock.y - 1) / threadsPerBlock.y;
-    int nbytesShared = ((2*f01nsamples + 1)*sizeof(float) + sizeof(uint64_t) )*
+    int nbytesShared = ((2*f01nsamples + 2)*sizeof(float) + sizeof(uint64_t) )*
         configParameters.kprep1dChannelsPerBlock;
     kernel_prep1d_sameNumberOfSamples<<<blocks, threadsPerBlock, nbytesShared, cudaStream.id()>>>(
         scratch.amplitudes,
@@ -1236,7 +1263,8 @@ void entryPoint(
         configParameters.sipmQTSShift,
         configParameters.sipmQNTStoSum,
         configParameters.firstSampleShift,
-        conditions.offsetForHashes
+        conditions.offsetForHashes,
+        configParameters.ts4Thresh
     );
     cudaCheck( cudaGetLastError() );
 
