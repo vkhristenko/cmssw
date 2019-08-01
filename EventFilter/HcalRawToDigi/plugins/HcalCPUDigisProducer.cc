@@ -44,6 +44,7 @@ private:
     // FIXME better way to pass pointers from acquire to produce?
     std::vector<uint32_t, CUDAHostAllocator<uint32_t>> idsf01he, idsf5hb;
     std::vector<uint16_t, CUDAHostAllocator<uint16_t>> dataf01he, dataf5hb;
+    std::vector<uint8_t, CUDAHostAllocator<uint8_t>> npresamplesf5hb;
     uint32_t stridef01he, stridef5hb;
 };
 
@@ -92,6 +93,7 @@ void HcalCPUDigisProducer::acquire(
     idsf01he.resize(f01HEDigis.ndigis);
     dataf01he.resize(f01HEDigis.ndigis * f01HEDigis.stride);
     idsf5hb.resize(f5HBDigis.ndigis);
+    npresamplesf5hb.resize(f5HBDigis.ndigis);
     dataf5hb.resize(f5HBDigis.ndigis * f5HBDigis.stride);
     stridef01he = f01HEDigis.stride;
     stridef5hb = f5HBDigis.stride;
@@ -117,6 +119,11 @@ void HcalCPUDigisProducer::acquire(
                                idsf5hb.size() * sizeof(uint32_t),
                                cudaMemcpyDeviceToHost,
                                ctx.stream().id()) );
+    cudaCheck( cudaMemcpyAsync(npresamplesf5hb.data(),
+                               f5HBDigis.npresamples,
+                               npresamplesf5hb.size() * sizeof(uint8_t),
+                               cudaMemcpyDeviceToHost,
+                               ctx.stream.id()) );
 }
 
 void HcalCPUDigisProducer::produce(

@@ -1,0 +1,4 @@
+<lcgdict>
+    <class name="hcal::common::AddSize<hcal::common::Tag::Ptr>"/>
+    <class name="hcal::common::AddSize<hcal::common::Tag::SoA>"/>
+</lcgdict>

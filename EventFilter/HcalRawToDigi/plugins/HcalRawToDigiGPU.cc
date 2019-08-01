@@ -43,10 +43,12 @@ private:
 
 private:
     edm::EDGetTokenT<FEDRawDataCollection> rawDataToken_;
-    edm::EDPutTokenT<CUDAProduct<hcal::DigiCollection<hcal::Flavor01>>> 
-        digisF01HEToken_;
-    edm::EDPutTokenT<CUDAProduct<hcal::DigiCollection<hcal::Flavor5>>> 
-        digisF5HBToken_;
+    using ProductTypef01 = 
+        CUDAProduct<hcal::DigiCollection<hcal::Flavor01, hcal::common::Tag::Ptr>>; 
+    edm::EDPutTokenT<ProductTypef01> digisF01HEToken_;
+    using ProductTypef5 = 
+        CUDAProduct<hcal::DigiCollection<hcal::Flavor5, hcal::common::Tag::Ptr>>;
+    edm::EDPutTokenT<ProductTypef5> digisF5HBToken_;
 
     CUDAContextState cudaState_;
 
@@ -86,9 +88,9 @@ HcalRawToDigiGPU::HcalRawToDigiGPU(
         const edm::ParameterSet& ps) 
     : rawDataToken_{consumes<FEDRawDataCollection>(ps.getParameter<edm::InputTag>(
         "InputLabel"))}
-    , digisF01HEToken_{produces<CUDAProduct<hcal::DigiCollection<hcal::Flavor01>>>(
+    , digisF01HEToken_{produces<ProductTypef01>(
         ps.getParameter<std::string>("digisLabelF01HE"))}
-    , digisF5HBToken_{produces<CUDAProduct<hcal::DigiCollection<hcal::Flavor5>>>(
+    , digisF5HBToken_{produces<ProductTypef5>(
         ps.getParameter<std::string>("digisLabelF5HB"))}
     , fedsToUnpack_{ps.getParameter<std::vector<int>>("FEDs")}
 {
@@ -178,19 +180,24 @@ void HcalRawToDigiGPU::produce(
         outputCPU_.nchannels[hcal::raw::OutputF5HB]);
 #endif
 
-    // get the number of channels
+    // the reason for not using size of collections directly is to have 1 cuda memcpy
+    // get the number of channels and set those to the view
     auto const nchannelsF01HE = outputCPU_.nchannels[hcal::raw::OutputF01HE];
     auto const nchannelsF5HB = outputCPU_.nchannels[hcal::raw::OutputF5HB];
+    outputGPU_.digisF01HE.size = nchannelsF01HE;
+    outputGPU_.digisF5HB.size = nchannelsF5HB;
 
+    /*
     hcal::DigiCollection<hcal::Flavor01> digisF01HE{outputGPU_.idsF01HE,
         outputGPU_.digisF01HE, nchannelsF01HE, 
         hcal::compute_stride<hcal::Flavor01>(config_.nsamplesF01HE)};
     hcal::DigiCollection<hcal::Flavor5> digisF5HB{outputGPU_.idsF5HB,
-        outputGPU_.digisF5HB, nchannelsF5HB, 
+        outputGPU_.digisF5HB, outputGPU_.npresamplesF5HB, nchannelsF5HB, 
         hcal::compute_stride<hcal::Flavor5>(config_.nsamplesF5HB)};
+        */
 
-    ctx.emplace(event, digisF01HEToken_, std::move(digisF01HE));
-    ctx.emplace(event, digisF5HBToken_, std::move(digisF5HB));
+    ctx.emplace(event, digisF01HEToken_, std::move(outputGPU_.digisF01HE));
+    ctx.emplace(event, digisF5HBToken_, std::move(outputGPU_.digisF5HB));
 }
 
 DEFINE_FWK_MODULE(HcalRawToDigiGPU);
