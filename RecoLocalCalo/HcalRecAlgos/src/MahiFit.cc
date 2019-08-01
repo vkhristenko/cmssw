@@ -100,6 +100,7 @@ void MahiFit::phase1Apply(const HBHEChannelInfo& channelData,
   useTriple=false;
   if(tstrig >= ts4Thresh_ && tsTOT > 0) {
     // only do pre-fit with 1 pulse if chiSq threshold is positive
+    /*
     if (chiSqSwitch_>0) {
       doFit(reconstructedVals,1);
       if (reconstructedVals[2]>chiSqSwitch_) {
@@ -111,6 +112,9 @@ void MahiFit::phase1Apply(const HBHEChannelInfo& channelData,
       doFit(reconstructedVals,0);
       useTriple=true;
     }
+    */
+      doFit(reconstructedVals,0);
+      useTriple=true;
   }
   else{
     reconstructedVals.at(0) = 0.; //energy
@@ -255,10 +259,11 @@ void MahiFit::updatePulseShape(double itQ, FullSampleVector &pulseShape, FullSam
   
   float t0=meanTime_;
 
+  /*
   if(applyTimeSlew_) {
     if(itQ<=1.0) t0+=tsDelay1GeV_;
     else t0+=hcalTimeSlewDelay_->delay(float(itQ),slewFlavor_);
-  }
+  }*/
 
   std::array<double, MaxSVSize> pulseN;
   std::array<double, MaxSVSize> pulseM;
@@ -292,8 +297,8 @@ void MahiFit::updatePulseShape(double itQ, FullSampleVector &pulseShape, FullSam
     pulseShape.coeffRef(iTS+nnlsWork_.maxoffset) = pulseN[iTS+delta];
     pulseDeriv.coeffRef(iTS+nnlsWork_.maxoffset) = (pulseM[iTS+delta]-pulseP[iTS+delta])*invDt;
 
-    pulseM[iTS] -= pulseN[iTS];
-    pulseP[iTS] -= pulseN[iTS];
+    pulseM[iTS+delta] -= pulseN[iTS+delta];
+    pulseP[iTS+delta] -= pulseN[iTS+delta];
   }
 
   for (unsigned int iTS=0; iTS<nnlsWork_.tsSize; ++iTS) {
@@ -373,7 +378,7 @@ void MahiFit::nnls() const {
   double wmax = 0.0;
   double threshold = nnlsThresh_;
 
-  nnlsWork_.nP=0;
+//  nnlsWork_.nP=0;
   
   while (true) {    
     if (iter>0 || nnlsWork_.nP==0) {
