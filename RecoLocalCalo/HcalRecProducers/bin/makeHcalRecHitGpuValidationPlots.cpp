@@ -45,10 +45,10 @@ int main(int argc, char *argv[]) {
     CREATE_HIST_1D(hEnergyHEGPU, 1000, 0, 100);
     CREATE_HIST_1D(hEnergyHECPU, 1000, 0, 100);
     
-    CREATE_HIST_1D(hChi2HBGPU, 1000, 0, 1000);
-    CREATE_HIST_1D(hChi2HBCPU, 1000, 0, 1000);
-    CREATE_HIST_1D(hChi2HEGPU, 1000, 0, 1000);
-    CREATE_HIST_1D(hChi2HECPU, 1000, 0, 1000);
+    CREATE_HIST_1D(hChi2HBGPU, 1000, 0, 100);
+    CREATE_HIST_1D(hChi2HBCPU, 1000, 0, 100);
+    CREATE_HIST_1D(hChi2HEGPU, 1000, 0, 100);
+    CREATE_HIST_1D(hChi2HECPU, 1000, 0, 100);
 
     CREATE_HIST_2D(hEnergyHBGPUvsCPU, 1000, 0, 100);
     CREATE_HIST_2D(hEnergyHEGPUvsCPU, 1000, 0, 100);
@@ -105,6 +105,14 @@ int main(int argc, char *argv[]) {
             auto const cpu_energy = cpurh.energy();
             auto const gpu_chi2 = gpuProduct.chi2[ichgpu];
             auto const cpu_chi2 = cpurh.chi2();
+
+            auto const diff = std::abs(gpu_energy - cpu_energy);
+            if (diff > 1e-2)
+                std::cout << ie << "  " << did << "  " << did.rawId() << std::endl
+                          << gpu_energy << "  " << cpu_energy << "  " << diff
+                          << std::endl
+                          << gpu_chi2 << "  " << cpu_chi2
+                          << std::endl;
 
             if (did.subdetId() == HcalBarrel) {
                 hEnergyM0HBGPU->Fill(gpu_energy_m0);

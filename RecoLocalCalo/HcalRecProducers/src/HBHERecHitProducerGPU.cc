@@ -97,6 +97,7 @@ HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps)
     configParameters_.meanTime = ps.getParameter<double>("meanTime");
     configParameters_.timeSigmaSiPM = ps.getParameter<double>("timeSigmaSiPM");
     configParameters_.timeSigmaHPD = ps.getParameter<double>("timeSigmaHPD");
+    configParameters_.ts4Thresh = ps.getParameter<double>("ts4Thresh");
 
     outputGPU_.allocate(configParameters_);
     scratchGPU_.allocate(configParameters_);
@@ -126,6 +127,7 @@ void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cde
     desc.add<double>("meanTime", 0.f);
     desc.add<double>("timeSigmaSiPM", 2.5f);
     desc.add<double>("timeSigmaHPD", 5.0f);
+    desc.add<double>("ts4Thresh", 0.0);
 
     std::string label = "hbheRecHitProducerGPU";
     cdesc.add(label, desc);
