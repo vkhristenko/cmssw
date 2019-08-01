@@ -67,35 +67,44 @@ struct ScratchDataGPU {
 };
 
 struct OutputDataGPU {
+    DigiCollection<Flavor01, common::Tag::Ptr> digisF01HE;
+    DigiCollectoin<Flavor5, common::Tag::Ptr> digisf5HB;
+
     // qie 11 HE
+    /*
     uint16_t *digisF01HE = nullptr;
     uint32_t *idsF01HE = nullptr;
 
     // qie 8 HB
     uint16_t *digisF5HB = nullptr;
     uint32_t *idsF5HB = nullptr;
+    uint8_t *npresamplesF5HB = nullptr
+    */
 
     void allocate(ConfigurationParameters const& config) {
-        cudaCheck( cudaMalloc((void**)&digisF01HE,
+        cudaCheck( cudaMalloc((void**)&digisF01HE.data,
             config.maxChannelsF01HE * sizeof(uint16_t) *
             compute_stride<Flavor01>(config.nsamplesF01HE)) );
-        cudaCheck( cudaMalloc((void**)&idsF01HE,
+        cudaCheck( cudaMalloc((void**)&digisF01HE.ids,
             sizeof(uint32_t) * config.maxChannelsF01HE) );
 
-        cudaCheck( cudaMalloc((void**)&digisF5HB,
+        cudaCheck( cudaMalloc((void**)&digisF5HB.data,
             config.maxChannelsF5HB * sizeof(uint16_t) *
             compute_stride<Flavor5>(config.nsamplesF5HB)) );
-        cudaCheck( cudaMalloc((void**)&idsF5HB,
+        cudaCheck( cudaMalloc((void**)&digisF5HB.ids,
             sizeof(uint32_t) * config.maxChannelsF5HB) );
+        cudaCheck( cudaMalloc((void**)&digisF5HB.npresamples,
+            sizeof(uint8_t) * config.maxChannelsf5HB) );
     }
 
     void deallocate(ConfigurationParameters const& config) {
         if (digisF01HE) {
-            cudaCheck( cudaFree(digisF01HE) );
-            cudaCheck( cudaFree(idsF01HE) );
+            cudaCheck( cudaFree(digisF01HE.data) );
+            cudaCheck( cudaFree(digisF01HE.ids) );
 
-            cudaCheck( cudaFree(digisF5HB) );
-            cudaCheck( cudaFree(idsF5HB) );
+            cudaCheck( cudaFree(digisF5HB.data) );
+            cudaCheck( cudaFree(digisF5HB.ids) );
+            cudaCheck( cudaFree(digisF5HB.npresamples) );
         }    
     }
 };

@@ -451,8 +451,6 @@ void kernel_prep1d_sameNumberOfSamples(
         startSample, endSample, recoParam1, recoParam2);
 #endif
 
-    // FIXME: do we need to provide a global memory atomics
-    // alternative for the Kepler arch?
     if (sample>=startSample && sample<endSample) {
         atomicAdd(&shrMethod0EnergyAccum[lch], energym0_per_ts);
         // pack sample, energy as 64 bit value

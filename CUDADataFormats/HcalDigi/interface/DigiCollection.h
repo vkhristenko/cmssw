@@ -1,6 +1,8 @@
 #ifndef CUDADataFormats_HcalDigi_interface_DigiCollection_h
 #define CUDADataFormats_HcalDigi_interface_DigiCollection_h
 
+#include "CUDADataFormats/HcalCommon/interface/Traits.h"
+
 namespace hcal {
 
 struct Flavor01 {
@@ -98,26 +100,45 @@ constexpr uint32_t compute_nsamples<Flavor5>(uint32_t const nwords) {
 }
 
 //
-// this is basically a view 
-// it does not own the actual memory -> does not reclaim
-//
-template<typename Flavor>
-struct DigiCollection {
+template<typename StoragePolicy>
+struct DigiCollectionBase : public common::AddSize<StoragePolicty::TagValue> {
+    DigiCollectionBase() = default;
+    DigiCollectionBase(DigiCollectionBase const&) = default;
+    DigiCollectionBase& operator=(DigiCollectionBase const&) = default;
+
+    DigiCollectionBase(DigiCollectionBase&&) = default;
+    DigiCollectionBase& operator=(DigiCollectionBase&&) = default;
+
+    typename StoragePolicy::template StorageSelector<uint32_t>::type ids;
+    typename StoragePolicy::template StorageSelector<uint16_t>::type data;
+    uint32_t stride;
+};
+
+template<typename Flavor, typename StoragePolicy>
+struct DigiCollection : public DigiCollectionBase<StoragePolicy> {
+    using DigiCollectionBase<StoragePolicy>::DigiCollectionBase;
+};
+
+// NOTE: base ctors will not be available
+template<typename StoragePolicy>
+struct DigiCollection<Flavor5, StoragePolicy> 
+        : public DigiCollectionBase<StoragePolicy> 
+{
     DigiCollection() = default;
-    DigiCollection(uint32_t *ids, uint16_t *data, uint32_t ndigis, uint32_t stride)
-        : ids{ids}, data{data}, ndigis{ndigis}, stride{stride}
-    {}
+    //DigiCollection(
+    //        uint32_t *ids, uint16_t *data, uint8_t *presamples, 
+    //        uint32_t ndigis, uint32_t stride)
+    //    : DigiCollectionBase(ids, data, ndigis, stride)
+    //    , npresamples{npresamples}
+    //{}
     DigiCollection(DigiCollection const&) = default;
     DigiCollection& operator=(DigiCollection const&) = default;
 
     DigiCollection(DigiCollection&&) = default;
     DigiCollection& operator=(DigiCollection&&) = default;
 
-    // stride is statically known
-    uint32_t *ids=nullptr;
-    uint16_t *data=nullptr;
-    uint32_t ndigis;
-    uint32_t stride;
+    // add npresamples member
+    typename StoragePolicy::template StorageSelector<uint8_t>::type npresamples;
 };
 
 }

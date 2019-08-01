@@ -55,6 +55,7 @@ void kernel_rawdecode_test(
         uint32_t *idsF01HE,
         uint16_t *digisF5HB,
         uint32_t *idsF5HB,
+        uint8_t *npresamplesF5HB,
         uint32_t *pChannelsCounters,
         uint32_t const nsamplesF01HE,
         uint32_t const nsamplesF5HB,
@@ -372,6 +373,7 @@ void kernel_rawdecode_test(
 
             // store to global mem words for this digi
             idsF5HB[pos] = did.rawId();
+            npresamplesF5HB[pos] = presamples;
             for (uint32_t iword=0; iword<expected_words; iword++)
                 digisF5HB[pos*expected_words + iword] = 
                     channel_header_word[iword];
@@ -458,10 +460,11 @@ void entryPoint(
         inputGPU.feds,
         conditions.eMappingProduct.eid2did,
         conditions.eMappingProduct.eid2tid,
-        outputGPU.digisF01HE,
-        outputGPU.idsF01HE,
-        outputGPU.digisF5HB,
-        outputGPU.idsF5HB,
+        outputGPU.digisF01HE.data,
+        outputGPU.digisF01HE.ids,
+        outputGPU.digisF5HB.data,
+        outputGPU.digisF5HB.ids,
+        outputGPU.digisF5HB.npresamples,
         scratchGPU.pChannelsCounters,
         config.nsamplesF01HE,
         config.nsamplesF5HB,
