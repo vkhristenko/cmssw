@@ -67,8 +67,8 @@ struct ScratchDataGPU {
 };
 
 struct OutputDataGPU {
-    DigiCollection<Flavor01, common::Tag::Ptr> digisF01HE;
-    DigiCollectoin<Flavor5, common::Tag::Ptr> digisf5HB;
+    DigiCollection<Flavor01, common::ViewStoragePolicy> digisF01HE;
+    DigiCollection<Flavor5, common::ViewStoragePolicy> digisF5HB;
 
     // qie 11 HE
     /*
@@ -94,11 +94,11 @@ struct OutputDataGPU {
         cudaCheck( cudaMalloc((void**)&digisF5HB.ids,
             sizeof(uint32_t) * config.maxChannelsF5HB) );
         cudaCheck( cudaMalloc((void**)&digisF5HB.npresamples,
-            sizeof(uint8_t) * config.maxChannelsf5HB) );
+            sizeof(uint8_t) * config.maxChannelsF5HB) );
     }
 
     void deallocate(ConfigurationParameters const& config) {
-        if (digisF01HE) {
+        if (digisF01HE.data) {
             cudaCheck( cudaFree(digisF01HE.data) );
             cudaCheck( cudaFree(digisF01HE.ids) );
 

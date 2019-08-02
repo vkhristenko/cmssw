@@ -1,7 +1,7 @@
 #ifndef CUDADataFormats_HcalDigi_interface_DigiCollection_h
 #define CUDADataFormats_HcalDigi_interface_DigiCollection_h
 
-#include "CUDADataFormats/HcalCommon/interface/Traits.h"
+#include "CUDADataFormats/HcalCommon/interface/Common.h"
 
 namespace hcal {
 
@@ -101,7 +101,7 @@ constexpr uint32_t compute_nsamples<Flavor5>(uint32_t const nwords) {
 
 //
 template<typename StoragePolicy>
-struct DigiCollectionBase : public common::AddSize<StoragePolicty::TagValue> {
+struct DigiCollectionBase : public common::AddSize<typename StoragePolicy::TagType> {
     DigiCollectionBase() = default;
     DigiCollectionBase(DigiCollectionBase const&) = default;
     DigiCollectionBase& operator=(DigiCollectionBase const&) = default;
@@ -109,6 +109,13 @@ struct DigiCollectionBase : public common::AddSize<StoragePolicty::TagValue> {
     DigiCollectionBase(DigiCollectionBase&&) = default;
     DigiCollectionBase& operator=(DigiCollectionBase&&) = default;
 
+    template<typename T = typename StoragePolicy::TagType>
+    typename std::enable_if<std::is_same<T, common::tags::Vec>::value, void>::type
+    resize(std::size_t size) {
+        ids.resize(size);
+        data.resize(size * stride);
+    }
+    
     typename StoragePolicy::template StorageSelector<uint32_t>::type ids;
     typename StoragePolicy::template StorageSelector<uint16_t>::type data;
     uint32_t stride;
@@ -136,6 +143,13 @@ struct DigiCollection<Flavor5, StoragePolicy>
 
     DigiCollection(DigiCollection&&) = default;
     DigiCollection& operator=(DigiCollection&&) = default;
+
+    template<typename T = typename StoragePolicy::TagType>
+    typename std::enable_if<std::is_same<T, common::tags::Vec>::value, void>::type
+    resize(std::size_t size) {
+        DigiCollectionBase<StoragePolicy>::resize(size);
+        npresamples.resize(size);
+    }
 
     // add npresamples member
     typename StoragePolicy::template StorageSelector<uint8_t>::type npresamples;

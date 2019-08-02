@@ -1188,7 +1188,7 @@ void entryPoint(
         ScratchDataGPU &scratch,
         ConfigParameters const& configParameters,
         cuda::stream_t<>& cudaStream) {
-    auto const totalChannels = inputGPU.f01HEDigis.ndigis + inputGPU.f5HBDigis.ndigis;
+    auto const totalChannels = inputGPU.f01HEDigis.size + inputGPU.f5HBDigis.size;
 
     // FIXME: may be move this assignment to emphasize this more clearly
     // FIXME: number of channels for output might change given that 
@@ -1219,7 +1219,7 @@ void entryPoint(
         inputGPU.f5HBDigis.ids,
         inputGPU.f01HEDigis.stride,
         inputGPU.f5HBDigis.stride,
-        inputGPU.f01HEDigis.ndigis,
+        inputGPU.f01HEDigis.size,
         outputGPU.recHits.energyM0,
         outputGPU.recHits.timeM0,
         outputGPU.recHits.did,
@@ -1290,7 +1290,7 @@ void entryPoint(
         scratch.amplitudes,
         inputGPU.f01HEDigis.ids,
         inputGPU.f5HBDigis.ids,
-        inputGPU.f01HEDigis.ndigis,
+        inputGPU.f01HEDigis.size,
         totalChannels,
         conditions.recoParams.ids,
         conditions.recoParams.acc25nsVec,
@@ -1341,7 +1341,7 @@ void entryPoint(
             inputGPU.f5HBDigis.ids,
             conditions.gains.values,
             conditions.respCorrs.values,
-            inputGPU.f01HEDigis.ndigis,
+            inputGPU.f01HEDigis.size,
             totalChannels,
             conditions.offsetForHashes,
             conditions.topology->maxDepthHB(),

@@ -30,13 +30,13 @@ private:
     void produce(edm::Event&, edm::EventSetup const&) override;
 
 private:
-    edm::EDGetTokenT<CUDAProduct<hcal::RecHitCollection<hcal::Tag::ptr>>> 
-        recHitsM0TokenIn_;
-    edm::EDPutTokenT<hcal::RecHitCollection<hcal::Tag::soa>> 
-        recHitsM0TokenOut_;
+    using IProductType = CUDAProduct<hcal::RecHitCollection<hcal::common::ViewStoragePolicy>>;
+    edm::EDGetTokenT<IProductType> recHitsM0TokenIn_;
+    using OProductType = hcal::RecHitCollection<hcal::common::VecStoragePolicy<hcal::CUDAHostAllocatorAlias>>;
+    edm::EDPutTokenT<OProductType> recHitsM0TokenOut_;
 
     // to pass from acquire to produce
-    hcal::RecHitCollection<hcal::Tag::soa> tmpRecHits_;
+    OProductType tmpRecHits_;
 };
 
 void HcalCPURecHitsProducer::fillDescriptions(
@@ -54,10 +54,10 @@ void HcalCPURecHitsProducer::fillDescriptions(
 HcalCPURecHitsProducer::HcalCPURecHitsProducer(
         const edm::ParameterSet& ps) 
     : recHitsM0TokenIn_{
-        consumes<CUDAProduct<hcal::RecHitCollection<hcal::Tag::ptr>>>(
+        consumes<IProductType>(
             ps.getParameter<edm::InputTag>("recHitsM0LabelIn"))}
     , recHitsM0TokenOut_{
-        produces<hcal::RecHitCollection<hcal::Tag::soa>>("recHitsM0LabelOut")}
+        produces<OProductType>("recHitsM0LabelOut")}
 {}
 
 HcalCPURecHitsProducer::~HcalCPURecHitsProducer() {}
@@ -101,7 +101,7 @@ void HcalCPURecHitsProducer::produce(
         edm::EventSetup const& setup) 
 {
     event.put(recHitsM0TokenOut_, 
-        std::make_unique<hcal::RecHitCollection<hcal::Tag::soa>>(
+        std::make_unique<OProductType>(
             std::move(tmpRecHits_)));
 }
 
