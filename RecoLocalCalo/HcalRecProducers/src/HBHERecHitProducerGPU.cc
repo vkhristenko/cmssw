@@ -60,11 +60,18 @@ private:
                  edm::WaitingTaskWithArenaHolder) override;
     void produce(edm::Event&, edm::EventSetup const&) override;
 
-    edm::EDGetTokenT<CUDAProduct<hcal::DigiCollection<hcal::Flavor01>>> 
-        digisTokenF01HE_;
-    edm::EDGetTokenT<CUDAProduct<hcal::DigiCollection<hcal::Flavor5>>> 
-        digisTokenF5HB_;
-    edm::EDPutTokenT<CUDAProduct<hcal::RecHitCollection<hcal::Tag::ptr>>> rechitsM0Token_;
+    using IProductTypef01 =
+        CUDAProduct<hcal::DigiCollection<hcal::Flavor01,
+                    hcal::common::ViewStoragePolicy>>;
+    edm::EDGetTokenT<IProductTypef01> digisTokenF01HE_;
+
+    using IProductTypef5 =
+        CUDAProduct<hcal::DigiCollection<hcal::Flavor5,
+                    hcal::common::ViewStoragePolicy>>;
+    edm::EDGetTokenT<IProductTypef5> digisTokenF5HB_;
+    using RecHitType = hcal::RecHitCollection<hcal::common::ViewStoragePolicy>;
+    using OProductType = CUDAProduct<RecHitType>;
+    edm::EDPutTokenT<OProductType> rechitsM0Token_;
 
     hcal::mahi::ConfigParameters configParameters_;
     hcal::mahi::OutputDataGPU outputGPU_;
@@ -74,13 +81,13 @@ private:
 
 HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps) 
     : digisTokenF01HE_{
-        consumes<CUDAProduct<hcal::DigiCollection<hcal::Flavor01>>>(
+        consumes<IProductTypef01>(
             ps.getParameter<edm::InputTag>("digisLabelF01HE"))}
     , digisTokenF5HB_{
-        consumes<CUDAProduct<hcal::DigiCollection<hcal::Flavor5>>>(
+        consumes<IProductTypef5>(
             ps.getParameter<edm::InputTag>("digisLabelF5HB"))}
     , rechitsM0Token_{
-        produces<CUDAProduct<hcal::RecHitCollection<hcal::Tag::ptr>>>(
+        produces<OProductType>(
             ps.getParameter<std::string>("recHitsLabelM0HBHE"))}
 {
     configParameters_.maxChannels = ps.getParameter<uint32_t>("maxChannels");
@@ -249,10 +256,7 @@ void HBHERecHitProducerGPU::produce(
         edm::EventSetup const& setup) 
 {
     CUDAScopedContextProduce ctx{cudaState_};
-
-    // copy construct a new guy/view and place cuda product into the event
-    hcal::RecHitCollection<hcal::Tag::ptr> recHits = outputGPU_.recHits;
-    ctx.emplace(event, rechitsM0Token_, std::move(recHits));
+    ctx.emplace(event, rechitsM0Token_, std::move(outputGPU_.recHits));
 }
 
 DEFINE_FWK_MODULE(HBHERecHitProducerGPU);

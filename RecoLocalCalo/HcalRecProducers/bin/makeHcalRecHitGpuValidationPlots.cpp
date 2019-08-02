@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
     
     // branches to use
     edm::Wrapper<HBHERecHitCollection> *wcpu=nullptr;
-    edm::Wrapper<hcal::RecHitCollection<hcal::Tag::soa>> *wgpu=nullptr;
+    edm::Wrapper<hcal::RecHitCollection<hcal::common::VecStoragePolicy<hcal::CUDAHostAllocatorAlias>>> *wgpu=nullptr;
 
     // prep output 
     TFile rfout{outFileName.c_str(), "recreate"};
@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
     // prep input
     TFile rfin{inFileName.c_str()};
     TTree *rt = (TTree*)rfin.Get("Events");
-    rt->SetBranchAddress("hcalTagsoahcalRecHitCollection_hcalCPURecHitsProducer_recHitsM0LabelOut_RECO.", &wgpu);
+    rt->SetBranchAddress("hcalCUDAHostAllocatorAliashcalcommonVecStoragePolicyhcalRecHitCollection_hcalCPURecHitsProducer_recHitsM0LabelOut_RECO.", &wgpu);
     rt->SetBranchAddress("HBHERecHitsSorted_hbheprereco__RECO.", &wcpu);
 
     // accumulate

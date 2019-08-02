@@ -42,7 +42,18 @@ int main(int argc, char *argv[]) {
     }
     
     // branches to use
-    edm::Wrapper<edm::DataFrameContainer> *wgpuf01he=nullptr, *wgpuf5hb=nullptr;
+    using Collectionf01 = 
+        hcal::DigiCollection<
+            hcal::Flavor01, 
+            hcal::common::VecStoragePolicy<hcal::CUDAHostAllocatorAlias>
+        >;
+    using Collectionf5 = 
+        hcal::DigiCollection<
+            hcal::Flavor5, 
+            hcal::common::VecStoragePolicy<hcal::CUDAHostAllocatorAlias>
+        >;
+    edm::Wrapper<Collectionf01> *wgpuf01he=nullptr;
+    edm::Wrapper<Collectionf5> *wgpuf5hb=nullptr;
     edm::Wrapper<QIE11DigiCollection> *wcpuf01he=nullptr;
     edm::Wrapper<HBHEDigiCollection> *wcpuf5hb=nullptr;
 
@@ -90,10 +101,10 @@ int main(int argc, char *argv[]) {
     rt->SetBranchAddress("QIE11DataFrameHcalDataFrameContainer_hcalDigis__RECO.",
         &wcpuf01he);
     rt->SetBranchAddress("HBHEDataFramesSorted_hcalDigis__RECO.", &wcpuf5hb);
-    rt->SetBranchAddress("edmDataFrameContainer_hcalCPUDigisProducer_f5HBDigis_RECO.",
+    rt->SetBranchAddress("hcalFlavor5hcalCUDAHostAllocatorAliashcalcommonVecStoragePolicyhcalDigiCollection_hcalCPUDigisProducer_f5HBDigis_RECO.",
         &wgpuf5hb);
     rt->SetBranchAddress(
-        "edmDataFrameContainer_hcalCPUDigisProducer_f01HEDigis_RECO.",
+        "hcalFlavor01hcalCUDAHostAllocatorAliashcalcommonVecStoragePolicyhcalDigiCollection_hcalCPUDigisProducer_f01HEDigis_RECO.",
         &wgpuf01he);
 
     // accumulate
@@ -108,8 +119,8 @@ int main(int argc, char *argv[]) {
         auto const qie11Filtered = filterQIE11(qie11Product);
         auto const& qie8Product = wcpuf5hb->bareProduct();
 
-        auto const ngpuf01he = f01HEProduct.size();
-        auto const ngpuf5hb = f5HBProduct.size();
+        auto const ngpuf01he = f01HEProduct.ids.size();
+        auto const ngpuf5hb = f5HBProduct.ids.size();
         auto const ncpuf01he = qie11Product.size();
         auto const ncpuf5hb = qie8Product.size();
 
@@ -130,8 +141,8 @@ int main(int argc, char *argv[]) {
         }
 
         {
-            auto const& idsgpu = f01HEProduct.ids();
-            auto const& datagpu = f01HEProduct.data();
+            auto const& idsgpu = f01HEProduct.ids;
+            auto const& datagpu = f01HEProduct.data;
 
             for (uint32_t ich=0; ich<ncpuf01he; ich++) {
                 auto const cpudf = QIE11DataFrame{qie11Product[ich]};
@@ -148,12 +159,12 @@ int main(int argc, char *argv[]) {
 
                 auto const ptrdiff = iter2idgpu - idsgpu.begin();
                 auto const nsamples_gpu = hcal::compute_nsamples<hcal::Flavor01>(
-                    f01HEProduct.stride());
+                    f01HEProduct.stride);
                 auto const nsamples_cpu = qie11Product.samples();
                 assert(static_cast<uint32_t>(nsamples_cpu) == nsamples_gpu);
 
                 uint32_t ichgpu = ptrdiff;
-                uint32_t offset = ichgpu * f01HEProduct.stride();
+                uint32_t offset = ichgpu * f01HEProduct.stride;
                 uint16_t const* df_start = datagpu.data() + offset;
                 for (uint32_t sample=0u; sample<nsamples_gpu; sample++) {
                     auto const cpuadc = cpudf[sample].adc();
@@ -188,8 +199,8 @@ int main(int argc, char *argv[]) {
         }
 
         {
-            auto const& idsgpu = f5HBProduct.ids();
-            auto const& datagpu = f5HBProduct.data();
+            auto const& idsgpu = f5HBProduct.ids;
+            auto const& datagpu = f5HBProduct.data;
             for (uint32_t i=0; i<ncpuf5hb; i++) {
                 auto const cpudf = qie8Product[i];
                 auto const cpuid = cpudf.id().rawId();
@@ -203,11 +214,11 @@ int main(int argc, char *argv[]) {
 
                 auto const ptrdiff = iter2idgpu - idsgpu.begin();
                 auto const nsamples_gpu = hcal::compute_nsamples<hcal::Flavor5>(
-                    f5HBProduct.stride());
+                    f5HBProduct.stride);
                 auto const nsamples_cpu = qie8Product[0].size();
                 assert(static_cast<uint32_t>(nsamples_cpu) == nsamples_gpu);
 
-                uint32_t offset = ptrdiff * f5HBProduct.stride();
+                uint32_t offset = ptrdiff * f5HBProduct.stride;
                 uint16_t const* df_start = datagpu.data() + offset;
                 for (uint32_t sample=0u; sample<nsamples_gpu; sample++) {
                     auto const cpuadc = cpudf.sample(sample).adc();

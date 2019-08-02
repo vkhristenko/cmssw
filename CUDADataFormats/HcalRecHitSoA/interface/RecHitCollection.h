@@ -3,43 +3,14 @@
 
 #include <vector>
 
+#include "CUDADataFormats/HcalCommon/interface/Common.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
 
 namespace hcal {
 
-namespace Tag {
-
-struct soa {};
-struct ptr {};
-
-}
-
-template<typename T, typename L = Tag::soa>
-struct type_wrapper {
-    using type = std::vector<T, CUDAHostAllocator<T>>;
-};
-
-template<typename T>
-struct type_wrapper<T, Tag::ptr> {
-    using type = T*;
-};
-
-namespace Detail {
-
-// empty base 
-template<typename T>
-struct Base {};
-
-// add number of values for ptr case
-template<>
-struct Base<::hcal::Tag::ptr> {
-    uint32_t size;
-};
-
-}
-
-template<typename L = Tag::soa>
-struct RecHitCollection : public Detail::Base<L> {
+template<typename StoragePolicy>
+struct RecHitCollection 
+        : public common::AddSize<typename StoragePolicy::TagType> {
     RecHitCollection() = default;
     RecHitCollection(const RecHitCollection&) = default;
     RecHitCollection& operator=(const RecHitCollection&) = default;
@@ -47,14 +18,14 @@ struct RecHitCollection : public Detail::Base<L> {
     RecHitCollection(RecHitCollection&&) = default;
     RecHitCollection& operator=(RecHitCollection&&) = default;
 
-    typename type_wrapper<float, L>::type energy;
-    typename type_wrapper<float, L>::type chi2;
-    typename type_wrapper<float, L>::type energyM0;
-    typename type_wrapper<float, L>::type timeM0;
-    typename type_wrapper<uint32_t, L>::type did;
+    typename StoragePolicy::template StorageSelector<float>::type energy;
+    typename StoragePolicy::template StorageSelector<float>::type chi2;
+    typename StoragePolicy::template StorageSelector<float>::type energyM0;
+    typename StoragePolicy::template StorageSelector<float>::type timeM0;
+    typename StoragePolicy::template StorageSelector<uint32_t>::type did;
 
-    template<typename U = L>
-    typename std::enable_if<std::is_same<U, Tag::soa>::value, void>::type 
+    template<typename U = typename StoragePolicy::TagType>
+    typename std::enable_if<std::is_same<U, common::tags::Vec>::value, void>::type 
     resize(size_t size) {
         energy.resize(size);
         chi2.resize(size);

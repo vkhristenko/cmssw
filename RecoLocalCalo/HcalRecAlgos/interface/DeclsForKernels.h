@@ -66,7 +66,7 @@ struct ConfigParameters {
 };
 
 struct OutputDataGPU {
-    RecHitCollection<Tag::ptr> recHits;
+    RecHitCollection<common::ViewStoragePolicy> recHits;
 
     void allocate(ConfigParameters const& config) {
         cudaCheck( cudaMalloc((void**)&recHits.energy,
@@ -124,8 +124,8 @@ struct ScratchDataGPU {
 };
 
 struct InputDataGPU {
-    DigiCollection<Flavor01> const& f01HEDigis;
-    DigiCollection<Flavor5> const& f5HBDigis;
+    DigiCollection<Flavor01, common::ViewStoragePolicy> const& f01HEDigis;
+    DigiCollection<Flavor5, common::ViewStoragePolicy> const& f5HBDigis;
 };
 
 }}
