@@ -94,6 +94,7 @@ struct ScratchDataGPU {
     float *amplitudes=nullptr, *noiseTerms=nullptr;
     float *pulseMatrices=nullptr, *pulseMatricesM=nullptr, 
           *pulseMatricesP=nullptr;
+    int8_t *soiSamples=nullptr;
 
     // TODO: properly allocate for NSAMPLES VS NPULSES
     void allocate(ConfigParameters const& config) {
@@ -110,6 +111,8 @@ struct ScratchDataGPU {
         cudaCheck( cudaMalloc((void**)&pulseMatricesP,
             sizeof(float) * config.maxChannels * 
             config.maxTimeSamples * config.maxTimeSamples) );
+        cudaCheck( cudaMalloc((void**)&soiSamples,
+            sizeof(int8_t) * config.maxChannels) );
     }
 
     void deallocate(ConfigParameters const& config) {
@@ -119,6 +122,7 @@ struct ScratchDataGPU {
             cudaCheck( cudaFree(pulseMatrices) );
             cudaCheck( cudaFree(pulseMatricesM) );
             cudaCheck( cudaFree(pulseMatricesP) );
+            cudaCheck( cudaFree(soiSamples) );
         }
     }
 };

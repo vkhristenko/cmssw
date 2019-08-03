@@ -8,6 +8,7 @@ namespace hcal {
 struct Flavor01 {
     using adc_type = uint8_t;
     using tdc_type = uint8_t;
+    using soibit_type = uint8_t;
 
     static constexpr int WORDS_PER_SAMPLE = 1;
     static constexpr int HEADER_WORDS = 1;
@@ -18,6 +19,10 @@ struct Flavor01 {
 
     static constexpr tdc_type tdc(uint16_t const* const sample_start) {
         return (*sample_start >> 8) & 0x3f;
+    }
+
+    static constexpr soibit_type soibit(uint16_t const* const sample_start) {
+        return (*sample_start >> 14) & 0x1;
     }
 };
 
@@ -55,6 +60,14 @@ uint8_t capid_for_sample(
         uint16_t const* const dfstart, uint32_t const sample) {
     auto const capid_first = (*dfstart >> 8) & 0x3;
     return (capid_first + sample) & 0x3; // same as % 4
+}
+
+template<typename Flavor>
+constexpr
+typename Flavor::soibit_type soibit_for_sample(
+        uint16_t const* const dfstart, uint32_t const sample) {
+    return Flavor::soibit(dfstart + 
+        Flavor::HEADER_WORDS + sample*Flavor::WORDS_PER_SAMPLE);
 }
 
 template<typename Flavor>
