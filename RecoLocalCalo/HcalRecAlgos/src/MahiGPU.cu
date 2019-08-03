@@ -195,7 +195,7 @@ float compute_diff_charge_gain(
     }
 }
 
-
+// Assume: same number of samples for HB and HE
 // TODO: add/validate restrict (will increase #registers in use by the kernel)
 __global__
 void kernel_prep1d_sameNumberOfSamples(
@@ -210,6 +210,8 @@ void kernel_prep1d_sameNumberOfSamples(
         uint32_t const stridef01HE,
         uint32_t const stridef5HB,
         uint32_t const nchannelsf01HE,
+        uint8_t const* npresamplesf5HB,
+        int8_t *soiSamples,
         float *method0Energy,
         float *method0Time,
         uint32_t *outputdid,
@@ -370,12 +372,23 @@ void kernel_prep1d_sameNumberOfSamples(
     auto const charge = compute_coder_charge(
         qieType, adc, capid, qieOffsets, qieSlopes);
 
-    // NOTE: this synching is really only needed for flavor 01 channels
     shrChargeMinusPedestal[linearThPerBlock] = charge - pedestal;
+    if (gch < nchannelsf01HE) {
+        // NOTE: assume that soi is high only for a single guy!
+        //   which must be the case. cpu version does not check for that
+        //   if that is not the case, we will see that with cuda mmecheck
+        auto const soibit = soibit_for_sample<Flavor01>(dataf01HE + stride*gch, 
+            sample);
+        if (soibit==1)
+            soiSamples[gch] = sample;
+    }
     __syncthreads();
-
-    // TODO: this should be properly treated
-    int32_t soi = 3;
+    int32_t const soi = gch >= nchannelsf01HE
+        ? npresamplesf5HB[gch - nchannelsf01HE]
+        : soiSamples[gch];
+    // this is here just to make things uniform...
+    if (gch >= nchannelsf01HE && sample==0)
+        soiSamples[gch] = npresamplesf5HB[gch - nchannelsf01HE];
 
     // 
     // compute various quantities (raw charge and tdc stuff)
@@ -627,6 +640,7 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
         uint32_t const* idsf5HB,
         uint32_t const nchannelsf01HE,
         uint32_t const nchannelsTotal,
+        int8_t const* soiSamples,
         uint32_t const* recoPulseShapeIds,
         float const* acc25nsVecValues,
         float const* diff25nsItvlVecValues,
@@ -759,23 +773,24 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
 
     // FIXME: shift should be treated properly, 
     // here assume 8 time slices and 8 samples
-    int const soi = 3;
+    int const soi = soiSamples[gch];
+    auto const shift = 4 - soi; // as in cpu version!
     auto const offset = ipulse - soi;
     auto const idx = sample - offset;
     auto const value = idx>=0 && idx<=7
-        ? compute_pulse_shape_value(t0, idx, 1,
+        ? compute_pulse_shape_value(t0, idx, shift,
             acc25nsVec, diff25nsItvlVec,
             accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
             accVarLenIdxZeroVec, diffVarItvlIdxZeroVec)
         : 0;
     auto const value_t0m = idx>=0 && idx<=7
-        ? compute_pulse_shape_value(t0m, idx, 1,
+        ? compute_pulse_shape_value(t0m, idx, shift,
             acc25nsVec, diff25nsItvlVec,
             accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
             accVarLenIdxZeroVec, diffVarItvlIdxZeroVec)
         : 0;
     auto const value_t0p = idx>=0 && idx<=7
-        ? compute_pulse_shape_value(t0p, idx, 1,
+        ? compute_pulse_shape_value(t0p, idx, shift,
             acc25nsVec, diff25nsItvlVec,
             accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
             accVarLenIdxZeroVec, diffVarItvlIdxZeroVec)
@@ -968,6 +983,7 @@ void kernel_minimize(
         float* pulseMatricesM, // should be const but Eigen complains
         float* pulseMatricesP, // hsould be const but eigen complains
         float const* noiseTerms,
+        int8_t const* soiSamples,
         float const* pedestalWidths,
         float const* effectivePedestalWidths,
         bool const useEffectivePedestals,
@@ -1045,7 +1061,7 @@ void kernel_minimize(
         pulseMatrixView{pulseMatrices + gch*NSAMPLES*NPULSES};
 
     // TODO: provide this properly
-    int const soi = 3;
+    int const soi = soiSamples[gch];
     constexpr float deltaChi2Threashold = 1e-3;
 
 
@@ -1220,6 +1236,8 @@ void entryPoint(
         inputGPU.f01HEDigis.stride,
         inputGPU.f5HBDigis.stride,
         inputGPU.f01HEDigis.size,
+        inputGPU.f5HBDigis.npresamples,
+        scratch.soiSamples,
         outputGPU.recHits.energyM0,
         outputGPU.recHits.timeM0,
         outputGPU.recHits.did,
@@ -1292,6 +1310,7 @@ void entryPoint(
         inputGPU.f5HBDigis.ids,
         inputGPU.f01HEDigis.size,
         totalChannels,
+        scratch.soiSamples,
         conditions.recoParams.ids,
         conditions.recoParams.acc25nsVec,
         conditions.recoParams.diff25nsItvlVec,
@@ -1334,6 +1353,7 @@ void entryPoint(
             scratch.pulseMatricesM,
             scratch.pulseMatricesP,
             scratch.noiseTerms,
+            scratch.soiSamples,
             conditions.pedestalWidths.values,
             conditions.effectivePedestalWidths.values,
             configParameters.useEffectivePedestals,
