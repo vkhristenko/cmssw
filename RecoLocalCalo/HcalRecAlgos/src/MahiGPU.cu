@@ -511,6 +511,10 @@ void kernel_prep1d_sameNumberOfSamples(
             ? max_sample - soi
             : max_sample;
         auto const sum = max_energy + max_energy_1;
+        // FIXME: for full comparison with cpu method 0  timing,
+        // need to correct by slew
+        // requires an accumulator -> more shared mem -> omit here unless
+        // really needed
         float const time = max_energy>0.f && max_energy_1>0.f
             ? 25.f * (position + max_energy_1 / sum)
             : 25.f * position;
