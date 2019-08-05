@@ -108,11 +108,21 @@ HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps)
 
     outputGPU_.allocate(configParameters_);
     scratchGPU_.allocate(configParameters_);
+
+    // FIXME: use default device and default stream
+    cudaCheck( cudaMalloc((void**)&configParameters_.pulseOffsetsDevice,
+        sizeof(int) * configParameters_.pulseOffsets.size()) );
+    cudaCheck( cudaMemcpy(configParameters_.pulseOffsetsDevice,
+                          configParameters_.pulseOffsets.data(),
+                          configParameters_.pulseOffsets.size() * sizeof(int),
+                          cudaMemcpyHostToDevice) );
 }
 
 HBHERecHitProducerGPU::~HBHERecHitProducerGPU() {
     outputGPU_.deallocate(configParameters_);
     scratchGPU_.deallocate(configParameters_);
+
+    cudaCheck( cudaFree(configParameters_.pulseOffsetsDevice) );
 }
 
 void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cdesc) {
