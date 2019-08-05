@@ -33,6 +33,20 @@ constexpr int maxPSshapeBin = 256;
 constexpr int nsPerBX = 25;
 constexpr float iniTimeShift = 92.5f;
 
+__forceinline__ __device__
+float compute_time_slew_delay(
+        float const fC,
+        float const tzero,
+        float const slope,
+        float const tmax) {
+    auto const rawDelay = tzero + slope * std::log(fC);
+    return rawDelay < 0
+        ? 0
+        : (rawDelay > tmax
+            ? tmax
+            : rawDelay);
+}
+
 __constant__
 float const qie8shape[129] = {
     -1, 0, 1, 2, 3, 4, 5, 6, 
@@ -661,7 +675,11 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
         int const lastHERing,
         int const nEtaHB,
         int const nEtaHE,
-        uint32_t const offsetForHashes) {
+        uint32_t const offsetForHashes,
+        bool const applyTimeSlew,
+        float const tzeroTimeSlew,
+        float const slopeTimeSlew,
+        float const tmaxTimeSlew) {
     // indices
     auto const ipulse = threadIdx.y;
     auto const npulses = blockDim.y;
@@ -706,7 +724,6 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
     // amplitude per ipulse
     int const soi = soiSamples[gch];
     int const pulseOffset = pulseOffsets[ipulse]; 
-//    auto const amplitude = amplitudes[gch*nsamples + ipulse];
     auto const amplitude = amplitudes[gch*nsamples + pulseOffset + soi];
 
 #ifdef HCAL_MAHI_GPUDEBUG
@@ -738,8 +755,15 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
     }
 #endif
 
-    // FIXME: need to apply time slew as well
-    auto const t0 = meanTime;
+    auto t0 = meanTime;
+    if (applyTimeSlew) {
+        if (amplitude <= 1.0f) 
+            t0 += compute_time_slew_delay(1.0, 
+                tzeroTimeSlew, slopeTimeSlew, tmaxTimeSlew);
+        else 
+            t0 += compute_time_slew_delay(amplitude,
+                tzeroTimeSlew, slopeTimeSlew, tmaxTimeSlew);
+    }
     auto const t0m = -deltaT + t0;
     auto const t0p = deltaT + t0;
 
@@ -1343,7 +1367,11 @@ void entryPoint(
             ? 0
             : (conditions.topology->lastHERing() - 
                 conditions.topology->firstHERing() + 1),
-        conditions.offsetForHashes);
+        conditions.offsetForHashes,
+        configParameters.applyTimeSlew,
+        configParameters.tzeroTimeSlew,
+        configParameters.slopeTimeSlew,
+        configParameters.tmaxTimeSlew);
     cudaCheck( cudaGetLastError() );
 
     if (f01nsamples==8 && configParameters.pulseOffsets.size() == 8u) {

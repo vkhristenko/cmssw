@@ -25,6 +25,8 @@
 
 #include "CUDADataFormats/HcalRecHitSoA/interface/RecHitCollection.h"
 
+#include "CalibCalorimetry/HcalAlgos/interface/HcalTimeSlew.h"
+
 #include <optional>
 #include <functional>
 
@@ -65,6 +67,13 @@ struct ConfigParameters {
     
     std::vector<int> pulseOffsets;
     int* pulseOffsetsDevice=nullptr;
+
+    // FIXME: 
+    //   - add "getters" to HcalTimeSlew calib formats
+    //   - add ES Producer to consume what is produced above not to replicate.
+    //   which ones to use is hardcoded, therefore no need to send those to the device
+    bool applyTimeSlew;
+    float tzeroTimeSlew, slopeTimeSlew, tmaxTimeSlew;
 };
 
 struct OutputDataGPU {
