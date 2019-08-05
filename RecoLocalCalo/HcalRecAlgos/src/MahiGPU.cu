@@ -986,6 +986,7 @@ void kernel_minimize(
         float* pulseMatrices,
         float* pulseMatricesM, // should be const but Eigen complains
         float* pulseMatricesP, // hsould be const but eigen complains
+        int const* pulseOffsetValues,
         float const* noiseTerms,
         int8_t const* soiSamples,
         float const* pedestalWidths,
@@ -1045,9 +1046,10 @@ void kernel_minimize(
 #endif
 #endif
 
-    // TODO: provide from config
     ColumnVector<NPULSES, int> pulseOffsets;
-    pulseOffsets << -3, -2, -1, 0, 1, 2, 3, 4;
+    #pragma unroll
+    for (int i=0; i<NPULSES; ++i)
+        pulseOffsets(i) = pulseOffsetValues[i];
 
     // output amplitudes/weights
     ColumnVector<NPULSES> resultAmplitudesVector = ColumnVector<NPULSES>::Zero();
@@ -1357,6 +1359,7 @@ void entryPoint(
             scratch.pulseMatrices,
             scratch.pulseMatricesM,
             scratch.pulseMatricesP,
+            configParameters.pulseOffsetsDevice,
             scratch.noiseTerms,
             scratch.soiSamples,
             conditions.pedestalWidths.values,
