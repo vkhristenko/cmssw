@@ -53,7 +53,6 @@ struct ConditionsProducts {
 struct ConfigParameters {
     uint32_t maxChannels;
     uint32_t maxTimeSamples;
-    std::vector<int> pulseOffsets;
     uint32_t kprep1dChannelsPerBlock;
     int sipmQTSShift;
     int sipmQNTStoSum;
@@ -63,6 +62,9 @@ struct ConfigParameters {
     float meanTime;
     float timeSigmaSiPM, timeSigmaHPD;
     float ts4Thresh;
+    
+    std::vector<int> pulseOffsets;
+    int* pulseOffsetsDevice=nullptr;
 };
 
 struct OutputDataGPU {

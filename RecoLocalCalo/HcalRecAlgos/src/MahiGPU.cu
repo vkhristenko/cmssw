@@ -635,6 +635,7 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
         float *pulseMatrices,
         float *pulseMatricesM,
         float *pulseMatricesP,
+        int const* pulseOffsets,
         float const* amplitudes,
         uint32_t const* idsf01HE,
         uint32_t const* idsf5HB,
@@ -703,7 +704,10 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
     auto* pulseMatrixP = pulseMatricesP + nsamples*npulses*gch;
     
     // amplitude per ipulse
-    auto const amplitude = amplitudes[gch*nsamples + ipulse];
+    int const soi = soiSamples[gch];
+    int const pulseOffset = pulseOffsets[ipulse]; 
+//    auto const amplitude = amplitudes[gch*nsamples + ipulse];
+    auto const amplitude = amplitudes[gch*nsamples + pulseOffset + soi];
 
 #ifdef HCAL_MAHI_GPUDEBUG
 #ifdef HCAL_MAHI_GPUDEBUG_FILTERDETID
@@ -773,23 +777,23 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
 
     // FIXME: shift should be treated properly, 
     // here assume 8 time slices and 8 samples
-    int const soi = soiSamples[gch];
     auto const shift = 4 - soi; // as in cpu version!
-    auto const offset = ipulse - soi;
-    auto const idx = sample - offset;
-    auto const value = idx>=0 && idx<=7
+//    auto const offset = ipulse - soi;
+//    auto const idx = sample - offset;
+    auto const idx = sample - pulseOffset;
+    auto const value = idx>=0 && idx<=nsamples
         ? compute_pulse_shape_value(t0, idx, shift,
             acc25nsVec, diff25nsItvlVec,
             accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
             accVarLenIdxZeroVec, diffVarItvlIdxZeroVec)
         : 0;
-    auto const value_t0m = idx>=0 && idx<=7
+    auto const value_t0m = idx>=0 && idx<=nsamples
         ? compute_pulse_shape_value(t0m, idx, shift,
             acc25nsVec, diff25nsItvlVec,
             accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
             accVarLenIdxZeroVec, diffVarItvlIdxZeroVec)
         : 0;
-    auto const value_t0p = idx>=0 && idx<=7
+    auto const value_t0p = idx>=0 && idx<=nsamples
         ? compute_pulse_shape_value(t0p, idx, shift,
             acc25nsVec, diff25nsItvlVec,
             accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
@@ -1305,6 +1309,7 @@ void entryPoint(
         scratch.pulseMatrices,
         scratch.pulseMatricesM,
         scratch.pulseMatricesP,
+        configParameters.pulseOffsetsDevice,
         scratch.amplitudes,
         inputGPU.f01HEDigis.ids,
         inputGPU.f5HBDigis.ids,
