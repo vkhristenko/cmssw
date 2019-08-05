@@ -106,6 +106,18 @@ HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps)
     configParameters_.timeSigmaHPD = ps.getParameter<double>("timeSigmaHPD");
     configParameters_.ts4Thresh = ps.getParameter<double>("ts4Thresh");
 
+    configParameters_.applyTimeSlew = ps.getParameter<bool>("applyTimeSlew");
+    auto const tzeroValues = ps.getParameter<std::vector<double>>(
+        "tzeroTimeSlewParameters");
+    auto const slopeValues = ps.getParameter<std::vector<double>>(
+        "slopeTimeSlewParameters");
+    auto const tmaxValues = ps.getParameter<std::vector<double>>(
+        "tmaxTimeSlewParameters");
+
+    configParameters_.tzeroTimeSlew = tzeroValues[HcalTimeSlew::Medium];
+    configParameters_.slopeTimeSlew = slopeValues[HcalTimeSlew::Medium];
+    configParameters_.tmaxTimeSlew = tmaxValues[HcalTimeSlew::Medium];
+
     outputGPU_.allocate(configParameters_);
     scratchGPU_.allocate(configParameters_);
 
@@ -145,6 +157,14 @@ void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cde
     desc.add<double>("timeSigmaSiPM", 2.5f);
     desc.add<double>("timeSigmaHPD", 5.0f);
     desc.add<double>("ts4Thresh", 0.0);
+
+    desc.add<bool>("applyTimeSlew", true);
+    desc.add<std::vector<double>>("tzeroTimeSlewParameters", 
+        {23.960177, 11.977461, 9.109694});
+    desc.add<std::vector<double>>("slopeTimeSlewParameters", 
+        {-3.178648, -1.5610227, -1.075824});
+    desc.add<std::vector<double>>("tmaxTimeSlewParameters", 
+        {16.00, 10.00, 6.25});
 
     std::string label = "hbheRecHitProducerGPU";
     cdesc.add(label, desc);
