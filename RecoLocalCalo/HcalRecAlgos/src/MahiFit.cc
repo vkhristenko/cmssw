@@ -259,11 +259,10 @@ void MahiFit::updatePulseShape(double itQ, FullSampleVector &pulseShape, FullSam
   
   float t0=meanTime_;
 
-  /*
   if(applyTimeSlew_) {
     if(itQ<=1.0) t0+=tsDelay1GeV_;
     else t0+=hcalTimeSlewDelay_->delay(float(itQ),slewFlavor_);
-  }*/
+  }
 
   std::array<double, MaxSVSize> pulseN;
   std::array<double, MaxSVSize> pulseM;
