@@ -781,19 +781,19 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
 //    auto const offset = ipulse - soi;
 //    auto const idx = sample - offset;
     auto const idx = sample - pulseOffset;
-    auto const value = idx>=0 && idx<=nsamples
+    auto const value = idx>=0 && idx<nsamples
         ? compute_pulse_shape_value(t0, idx, shift,
             acc25nsVec, diff25nsItvlVec,
             accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
             accVarLenIdxZeroVec, diffVarItvlIdxZeroVec)
         : 0;
-    auto const value_t0m = idx>=0 && idx<=nsamples
+    auto const value_t0m = idx>=0 && idx<nsamples
         ? compute_pulse_shape_value(t0m, idx, shift,
             acc25nsVec, diff25nsItvlVec,
             accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
             accVarLenIdxZeroVec, diffVarItvlIdxZeroVec)
         : 0;
-    auto const value_t0p = idx>=0 && idx<=nsamples
+    auto const value_t0p = idx>=0 && idx<nsamples
         ? compute_pulse_shape_value(t0p, idx, shift,
             acc25nsVec, diff25nsItvlVec,
             accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
