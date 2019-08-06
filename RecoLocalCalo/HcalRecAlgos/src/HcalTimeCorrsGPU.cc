@@ -10,7 +10,7 @@ HcalTimeCorrsGPU::HcalTimeCorrsGPU(HcalTimeCorrs const& timecorrs)
     : value_(timecorrs.getAllContainers()[0].second.size()
         + timecorrs.getAllContainers()[1].second.size())
 {
-    auto const& containers = timecorrs.getAllContainers();
+    auto const containers = timecorrs.getAllContainers();
 
     // fill in eb
     auto const& barrelValues = containers[0].second;

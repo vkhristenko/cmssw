@@ -21,7 +21,7 @@ HcalRecoParamsWithPulseShapesGPU::HcalRecoParamsWithPulseShapesGPU(HcalRecoParam
     printf("hello from a reco params with pulse shapes\n");
 #endif
 
-    auto const& containers = recoParams.getAllContainers();
+    auto const containers = recoParams.getAllContainers();
     
     HcalPulseShapes pulseShapes;
     std::unordered_map<unsigned int, uint32_t> idCache; 
