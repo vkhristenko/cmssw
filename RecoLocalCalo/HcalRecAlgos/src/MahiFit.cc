@@ -670,6 +670,7 @@ void MahiFit::resetWorkspace() const {
   nnlsWork_.bxOffset=0;
   nnlsWork_.maxoffset=0;
   nnlsWork_.dt=0;
+  nnlsWork_.nP = 0;
 
   nnlsWork_.amplitudes.setZero();
   nnlsWork_.noiseTerms.setZero();
