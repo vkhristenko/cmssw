@@ -18,7 +18,7 @@ HcalPedestalsGPU::HcalPedestalsGPU(HcalPedestals const& pedestals)
     std::cout << "unitIsADC = " << unitIsADC_ << std::endl;
 #endif
 
-    auto const& containers = pedestals.getAllContainers();
+    auto const containers = pedestals.getAllContainers();
 
     // fill in eb
     auto const& barrelValues = containers[0].second;

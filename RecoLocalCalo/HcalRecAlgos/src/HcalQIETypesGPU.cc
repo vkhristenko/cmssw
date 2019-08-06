@@ -10,7 +10,7 @@ HcalQIETypesGPU::HcalQIETypesGPU(HcalQIETypes const& parameters)
     : values_(parameters.getAllContainers()[0].second.size()
         + parameters.getAllContainers()[1].second.size())
 {
-    auto const& containers = parameters.getAllContainers();
+    auto const containers = parameters.getAllContainers();
 
     // fill in eb
     auto const& barrelValues = containers[0].second;

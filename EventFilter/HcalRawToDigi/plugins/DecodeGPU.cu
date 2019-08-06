@@ -124,8 +124,8 @@ void kernel_rawdecode_test(
     //int const amcSize = (word >> 32) & 0xffffff;
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
-    printf("fed = %d amcid = %u slot = %d amcBlockNumber = %d amcSize = %d\n",
-        fed, amcid, slot, amcBlockNumber, amcSize);
+    printf("fed = %d amcid = %u slot = %d amcBlockNumber = %d\n",
+        fed, amcid, slot, amcBlockNumber);
 #endif
 
     bool const amcmore = ((word >> 61) & 0x1) != 0;
