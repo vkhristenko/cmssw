@@ -14,7 +14,7 @@ HcalSiPMParametersGPU::HcalSiPMParametersGPU(HcalSiPMParameters const& parameter
     , darkCurrent_(totalChannels_)
     , auxi2_(totalChannels_)
 {
-    auto const& containers = parameters.getAllContainers();
+    auto const containers = parameters.getAllContainers();
 
     // fill in eb
     auto const& barrelValues = containers[0].second;

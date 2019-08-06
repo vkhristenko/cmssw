@@ -27,7 +27,7 @@ HcalPedestalWidthsGPU::HcalPedestalWidthsGPU(HcalPedestalWidths const& pedestals
     , sigma32_(totalChannels_)
     , sigma33_(totalChannels_)
 {
-    auto const& containers = pedestals.getAllContainers();
+    auto const containers = pedestals.getAllContainers();
 
     // fill in hb
     auto const& barrelValues = containers[0].second;

@@ -14,7 +14,7 @@ HcalGainWidthsGPU::HcalGainWidthsGPU(HcalGainWidths const& gains)
     , value2_(totalChannels_)
     , value3_(totalChannels_)
 {
-    auto const& gainContainers = gains.getAllContainers();
+    auto const gainContainers = gains.getAllContainers();
 
     // fill in eb
     auto const& barrelValues = gainContainers[0].second;

@@ -10,7 +10,7 @@ HcalLUTCorrsGPU::HcalLUTCorrsGPU(HcalLUTCorrs const& lutcorrs)
     : value_(lutcorrs.getAllContainers()[0].second.size()
         + lutcorrs.getAllContainers()[1].second.size())
 {
-    auto const& containers = lutcorrs.getAllContainers();
+    auto const containers = lutcorrs.getAllContainers();
 
     // fill in eb
     auto const& barrelValues = containers[0].second;

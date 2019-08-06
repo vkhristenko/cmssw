@@ -9,7 +9,7 @@ HcalQIECodersGPU::HcalQIECodersGPU(HcalQIEData const& qiedata)
     , offsets_(totalChannels_ * numValuesPerChannel)
     , slopes_(totalChannels_ * numValuesPerChannel)
 {
-    auto const& containers = qiedata.getAllContainers();
+    auto const containers = qiedata.getAllContainers();
 
     // fill in hb
     auto const& barrelValues = containers[0].second;

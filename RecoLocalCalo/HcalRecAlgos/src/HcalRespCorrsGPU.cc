@@ -10,7 +10,7 @@ HcalRespCorrsGPU::HcalRespCorrsGPU(HcalRespCorrs const& respcorrs)
     : values_(respcorrs.getAllContainers()[0].second.size()
         + respcorrs.getAllContainers()[1].second.size())
 {
-    auto const& containers = respcorrs.getAllContainers();
+    auto const containers = respcorrs.getAllContainers();
 
     // fill in eb
     auto const& barrelValues = containers[0].second;
