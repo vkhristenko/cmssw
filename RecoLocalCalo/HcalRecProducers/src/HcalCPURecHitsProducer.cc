@@ -14,6 +14,7 @@
 
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
 #include "CUDADataFormats/HcalRecHitSoA/interface/RecHitCollection.h"
+#include "DataFormats/HcalRecHit/interface/HcalRecHitCollections.h"
 
 class HcalCPURecHitsProducer
     : public edm::stream::EDProducer<edm::ExternalWork>
@@ -34,6 +35,7 @@ private:
     edm::EDGetTokenT<IProductType> recHitsM0TokenIn_;
     using OProductType = hcal::RecHitCollection<hcal::common::VecStoragePolicy<hcal::CUDAHostAllocatorAlias>>;
     edm::EDPutTokenT<OProductType> recHitsM0TokenOut_;
+    edm::EDPutTokenT<HBHERecHitCollection> recHitsLegacyTokenOut_;
 
     // to pass from acquire to produce
     OProductType tmpRecHits_;
@@ -46,6 +48,7 @@ void HcalCPURecHitsProducer::fillDescriptions(
     desc.add<edm::InputTag>("recHitsM0LabelIn", 
         edm::InputTag{"hbheRecHitProducerGPU", "recHitsM0HBHE"});
     desc.add<std::string>("recHitsM0LabelOut", "recHitsM0HBHE");
+    desc.add<std::string>("recHitsLegacyLabelOut", "recHitsLegacyHBHE");
 
     std::string label = "hcalCPURecHitsProducer";
     confDesc.add(label, desc);
@@ -58,6 +61,8 @@ HcalCPURecHitsProducer::HcalCPURecHitsProducer(
             ps.getParameter<edm::InputTag>("recHitsM0LabelIn"))}
     , recHitsM0TokenOut_{
         produces<OProductType>("recHitsM0LabelOut")}
+    , recHitsLegacyTokenOut_{
+        produces<HBHERecHitCollection>("recHitsLegacyLabelOut")}
 {}
 
 HcalCPURecHitsProducer::~HcalCPURecHitsProducer() {}
@@ -100,6 +105,26 @@ void HcalCPURecHitsProducer::produce(
         edm::Event& event, 
         edm::EventSetup const& setup) 
 {
+    // populate the legacy collection
+    auto recHitsLegacy = std::make_unique<HBHERecHitCollection>();
+    // did not set size with ctor as there is no setter for did
+    recHitsLegacy->reserve(tmpRecHits_.did.size());
+    for (uint32_t i=0; i<tmpRecHits_.did.size(); i++) {
+        recHitsLegacy->emplace_back(
+            HcalDetId{tmpRecHits_.did[i]},
+            tmpRecHits_.energy[i],
+            0 // timeRising
+        );
+
+        // update newly pushed guy
+        (*recHitsLegacy)[i].setChiSquared(tmpRecHits_.chi2[i]);
+        (*recHitsLegacy)[i].setRawEnergy(tmpRecHits_.energyM0[i]);
+    }
+
+    // put a legacy format
+    event.put(recHitsLegacyTokenOut_, std::move(recHitsLegacy));
+
+    // put a new format
     event.put(recHitsM0TokenOut_, 
         std::make_unique<OProductType>(
             std::move(tmpRecHits_)));
