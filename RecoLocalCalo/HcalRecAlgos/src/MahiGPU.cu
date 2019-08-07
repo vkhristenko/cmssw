@@ -28,11 +28,15 @@ template<int SIZE, typename T = float>
 using RowVector = Eigen::Matrix<T, 1, SIZE>;
 
 // FIXME remove duplication...
+// this is from PulesFunctor. nvcc was complaining... if included that header...
 constexpr int maxSamples = 10;
 constexpr int maxPSshapeBin = 256;
 constexpr int nsPerBX = 25;
 constexpr float iniTimeShift = 92.5f;
 
+// this is from HcalTimeSlew.
+// HcalTimeSlew are values that come in from ESProducer that takes them 
+// from a python config. see DeclsForKernels for more explanation
 __forceinline__ __device__
 float compute_time_slew_delay(
         float const fC,
@@ -47,6 +51,8 @@ float compute_time_slew_delay(
             : rawDelay);
 }
 
+// HcalQIEShapes are hardcoded in HcalQIEData.cc basically
+// + some logic to generate 128 and 256 value arrays...
 __constant__
 float const qie8shape[129] = {
     -1, 0, 1, 2, 3, 4, 5, 6, 
@@ -105,6 +111,11 @@ float const qie11shape[257] = {
     112908
 };
 
+// Conditions are transferred once per IOV
+// Access is performed based on the det id which is converted to a linear index
+// 2 funcs below are taken from HcalTopology (reimplemented here). 
+// Inputs are constants that are also taken from HcalTopology 
+// but passed to the kernel as arguments using the HclaTopology itself
 constexpr int32_t IPHI_MAX = 72;
 
 __forceinline__ __device__
@@ -145,6 +156,7 @@ float compute_reco_correction_factor(
     return par3*x*x + par2*x + par1;
 }
 
+// compute the charge using the adc, qie type and the appropriate qie shape array
 __forceinline__ __device__
 float compute_coder_charge(
         int const qieType,
