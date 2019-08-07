@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
     // prep input
     TFile rfin{inFileName.c_str()};
     TTree *rt = (TTree*)rfin.Get("Events");
-    rt->SetBranchAddress("HBHERecHitsSorted_hcalCPURecHitsProducer_recHitsLegacyLabelOut_RECO.", &wgpu);
+    rt->SetBranchAddress("HBHERecHitsSorted_hcalCPURecHitsProducer_recHitsLegacyLabelOut_RECO.", &gpu);
 //    rt->SetBranchAddress("hcalCUDAHostAllocatorAliashcalcommonVecStoragePolicyhcalRecHitCollection_hcalCPURecHitsProducer_recHitsM0LabelOut_RECO.", &wgpu);
     rt->SetBranchAddress("HBHERecHitsSorted_hbheprereco__RECO.", &wcpu);
 
