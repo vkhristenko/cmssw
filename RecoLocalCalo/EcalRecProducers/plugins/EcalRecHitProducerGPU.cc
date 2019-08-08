@@ -51,11 +51,24 @@ private:
   edm::EDGetTokenT<CUDAProduct<ecal::UncalibratedRecHit<ecal::Tag::ptr> > > uncalibRecHitsInEBToken_;
   edm::EDGetTokenT<CUDAProduct<ecal::UncalibratedRecHit<ecal::Tag::ptr> > > uncalibRecHitsInEEToken_;
   
+  
+    
+  // event data
+//   ecal::rechit::EventInputDataGPU eventInputDataGPU_;
+  ecal::rechit::EventOutputDataGPU eventOutputDataGPU_;
+//   ecal::rechit::EventDataForScratchGPU eventDataForScratchGPU_;
+  bool shouldTransferToHost_{true};
+  
+  CUDAContextState cudaState_;
+  
   // output
   std::unique_ptr< ecal::RecHit<ecal::Tag::soa> > ebRecHits_{nullptr};
   std::unique_ptr< ecal::RecHit<ecal::Tag::soa> > eeRecHits_{nullptr};
   
-    
+  // configuration parameters
+//   ecal::multifit::ConfigurationParameters configParameters_;
+  
+  uint32_t maxNumberHits_;
   
 };
 
@@ -86,11 +99,27 @@ EcalRecHitProducerGPU::EcalRecHitProducerGPU(const edm::ParameterSet& ps)   {
   produces<ecal::SoARecHitCollection>(recHitsLabelEE_);
 
   
+  
+  // max number of digis to allocate for
+  maxNumberHits_ = ps.getParameter<uint32_t>("maxNumberHits");
+  
+  // allocate event output data
+//   eventOutputDataGPU_.allocate(configParameters_, maxNumberHits_);
+  eventOutputDataGPU_.allocate(maxNumberHits_);
+  
+  
+  
 }
 
 
 EcalRecHitProducerGPU::~EcalRecHitProducerGPU() {
+  
+  // free event ouput data 
+//   eventOutputDataGPU_.deallocate(configParameters_);
+  eventOutputDataGPU_.deallocate();
+  
 }
+
 
 void EcalRecHitProducerGPU::acquire(
   edm::Event const& event,
@@ -104,12 +133,7 @@ void EcalRecHitProducerGPU::acquire(
   auto const& ebUncalibRecHits = ctx.get(ebUncalibRecHitsProduct);
   auto const& eeUncalibRecHits = ctx.get(eeUncalibRecHitsProduct);
   
-  
-  // output
-  ebRecHits_ = std::move( std::make_unique<ecal::RecHit<ecal::Tag::soa>>() );
-  eeRecHits_ = std::move( std::make_unique<ecal::RecHit<ecal::Tag::soa>>() );
-  
-  
+   
 //   int nchannelsEB = ebUncalibRecHits.size;
   int nchannelsEB = 10;
   
@@ -146,11 +170,11 @@ void EcalRecHitProducerGPU::acquire(
     
     
     
-  ecal::rechit::create_ecal_rehit (
-                     ebUncalibRecHits.amplitude,
-                     &(ebRecHits_->energy),
-                     nchannelsEB
-  );
+//   ecal::rechit::create_ecal_rehit (
+//                      ebUncalibRecHits.amplitude,
+//                      ebRecHits_->energy,
+//                      nchannelsEB
+//   );
   
 //   ecal::rechit::kernel_create_ecal_rehit <<< blocks_1d, threads_1d >>> (
 //                          ebUncalibRecHits.amplitudes,
@@ -161,31 +185,40 @@ void EcalRecHitProducerGPU::acquire(
   cudaCheck(cudaGetLastError());
   
   
+  
+  
+  // output
+  ebRecHits_ = std::move( std::make_unique<ecal::RecHit<ecal::Tag::soa>>() );
+  eeRecHits_ = std::move( std::make_unique<ecal::RecHit<ecal::Tag::soa>>() );
+  
+  
+  
+  
+  
 }
 
 void EcalRecHitProducerGPU::produce(
   edm::Event& event, 
   edm::EventSetup const& setup) 
 {
-//   //DurationMeasurer<std::chrono::milliseconds> timer{std::string{"produce duration"}};
-//   CUDAScopedContextProduce ctx{cudaState_};
-//   
-//   if (shouldTransferToHost_) {
-//     // rec hits objects were not originally member variables
-//     transferToHost(*ebRecHits_, *eeRecHits_, ctx.stream());
-//     
-//     // TODO
-//     // for now just sync on the host when transferring back products
-//     cudaStreamSynchronize(ctx.stream().id());
-//   }
-//   
+  //DurationMeasurer<std::chrono::milliseconds> timer{std::string{"produce duration"}};
+  CUDAScopedContextProduce ctx{cudaState_};
+  
+  if (shouldTransferToHost_) {
+    // rec hits objects were not originally member variables
+    transferToHost(*ebRecHits_, *eeRecHits_, ctx.stream());
+    
+    // TODO
+//     for now just sync on the host when transferring back products
+        cudaStreamSynchronize(ctx.stream().id());
+  }
   
   
- 
   
   
   event.put(std::move(ebRecHits_), recHitsLabelEB_);
   event.put(std::move(eeRecHits_), recHitsLabelEE_);
+  
 }
 
 
@@ -194,6 +227,19 @@ void EcalRecHitProducerGPU::produce(
 void EcalRecHitProducerGPU::transferToHost(
   RecHitType& ebRecHits, RecHitType& eeRecHits,
   cuda::stream_t<>& cudaStream) {
+  
+  // copy from eventOutputDataGPU_ to ebRecHits/eeRecHits
+  cudaCheck( cudaMemcpyAsync(ebRecHits.energy.data(),
+                             eventOutputDataGPU_.energy,
+                             ebRecHits.energy.size() * sizeof(ecal::reco::StorageScalarType),
+                             cudaMemcpyDeviceToHost,
+                             cudaStream.id()) );
+  cudaCheck( cudaMemcpyAsync(eeRecHits.energy.data(),
+                             eventOutputDataGPU_.energy + ebRecHits.energy.size(),
+                             eeRecHits.energy.size() * sizeof(ecal::reco::StorageScalarType),
+                             cudaMemcpyDeviceToHost,
+                             cudaStream.id()) );
+  
     
 }
   

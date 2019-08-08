@@ -4,6 +4,10 @@
 
 #include "CUDADataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
 
+#include "RecoLocalCalo/EcalRecAlgos/interface/DeclsForKernels.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/Common.h"
+
+
 namespace ecal { 
   namespace rechit {
     

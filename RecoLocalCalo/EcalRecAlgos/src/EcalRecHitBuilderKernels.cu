@@ -30,7 +30,7 @@ namespace ecal {
       if (idx < nchannels) {
         
         // simple copy
-//         energy[idx] = amplitude[idx];
+//         (energy[idx]) = amplitude[idx];
 //         energy.at(idx) = amplitude[idx];
         
       }
@@ -73,9 +73,12 @@ namespace ecal {
 //     
 // //     error: cannot convert 'ecal::type_wrapper<float, ecal::Tag::soa>::type {aka std::vector<float, CUDAHostAllocator<float, 0> >}' to 'ecal::type_wrapper<float, ecal::Tag::soa>::type* {aka std::vector<float, CUDAHostAllocator<float, 0> >*}'    
 // 
+//  error: no operator "=" matches these operands
+//  operand types are: std::vector<ecal::reco::StorageScalarType, CUDAHostAllocator<ecal::reco::StorageScalarType, 0U>> = const float
 // 
-// 
-    
+//    
+
+
     
   }
   
