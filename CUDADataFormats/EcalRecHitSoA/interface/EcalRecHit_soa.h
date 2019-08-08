@@ -15,7 +15,7 @@
 namespace ecal {
   
   template<typename L = Tag::soa>
-  struct RecHit {
+  struct RecHit  : public Detail::Base<L> {
     
     RecHit() = default;
     RecHit(const RecHit&) = default;

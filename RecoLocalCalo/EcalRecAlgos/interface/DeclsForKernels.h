@@ -337,6 +337,14 @@ namespace ecal {
   };
   
 
+  
+  struct EventInputDataGPU {
+    ecal::SoAUncalibratedRecHitCollection const& ebUncalibRecHits;
+    ecal::SoAUncalibratedRecHitCollection const& eeUncalibRecHits;
+  };
+  
+  
+  
   }
 }
 

@@ -35,14 +35,7 @@ namespace ecal {
   
   template<typename T, typename L = Tag::soa>
   struct type_wrapper {
-   
     using type = std::vector<T, CUDAHostAllocator<T>>;
-//     
-//     //#ifndef ECAL_MULTIFIT_DONOT_USE_PINNED_MEM
-//     //    using type = std::vector<T, CUDAHostAllocator<T>>;
-//     //#else
-//     using type = std::vector<T>;
-//     //#endif
   };
   
   template<typename T>

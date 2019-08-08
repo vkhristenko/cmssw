@@ -13,19 +13,24 @@ namespace ecal {
     
     __global__
     void kernel_create_ecal_rehit(
-      //                              ecal::SoAUncalibratedRecHitCollection const* uncalibRechit_in,
-      //                              ecal::SoARecHitCollection* Rechit_out,
-      float const* amplitude,  // in adc counts
-      type_wrapper<reco::StorageScalarType, Tag::soa>::type * energy,          // in energy
-      int nchannels
-    ); 
-    
+      uint32_t const* dids_eb,
+      uint32_t const* dids_ee,
+      ::ecal::reco::StorageScalarType const* amplitude_eb,   // in adc counts  
+      ::ecal::reco::StorageScalarType const* amplitude_ee,   // in adc counts  
+      ::ecal::reco::StorageScalarType* energy,   // in energy [GeV]  
+      int const nchannels 
+    );
+      
     
     // host version, to be called by the plugin
+    
     void create_ecal_rehit(
-      float const* amplitude,  // in adc counts
-      type_wrapper<reco::StorageScalarType, Tag::soa>::type * energy,          // in energy
-      int nchannels
+      EventInputDataGPU const& eventInputGPU,
+      EventOutputDataGPU&      eventOutputGPU,
+      //     eventDataForScratchGPU_,
+      //     conditions,
+      //     configParameters_,
+      cuda::stream_t<>& cudaStream
     );
     
   }
