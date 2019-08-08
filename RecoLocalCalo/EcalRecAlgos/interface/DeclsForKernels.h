@@ -339,8 +339,8 @@ namespace ecal {
 
   
   struct EventInputDataGPU {
-    ecal::SoAUncalibratedRecHitCollection const& ebUncalibRecHits;
-    ecal::SoAUncalibratedRecHitCollection const& eeUncalibRecHits;
+    ecal::UncalibratedRecHit<ecal::Tag::ptr> const& ebUncalibRecHits;
+    ecal::UncalibratedRecHit<ecal::Tag::ptr> const& eeUncalibRecHits;
   };
   
   

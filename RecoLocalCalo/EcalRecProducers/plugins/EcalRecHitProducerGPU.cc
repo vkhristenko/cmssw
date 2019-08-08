@@ -48,9 +48,8 @@ private:
 //   edm::EDGetTokenT<ecal::SoAUncalibratedRecHitCollection> uncalibrechitToken_; // EB and EE input together
   
   // gpu input  
-  edm::EDGetTokenT<CUDAProduct<ecal::SoAUncalibratedRecHitCollection> > uncalibRecHitsInEBToken_;
-  edm::EDGetTokenT<CUDAProduct<ecal::SoAUncalibratedRecHitCollection> > uncalibRecHitsInEEToken_;
-  //                           ecal::SoAUncalibratedRecHitCollection  ==   ecal::UncalibratedRecHit<ecal::Tag::soa>
+  edm::EDGetTokenT<CUDAProduct< ecal::UncalibratedRecHit<ecal::Tag::ptr> > > uncalibRecHitsInEBToken_;
+  edm::EDGetTokenT<CUDAProduct< ecal::UncalibratedRecHit<ecal::Tag::ptr> > > uncalibRecHitsInEEToken_;
    
   
     
@@ -94,8 +93,8 @@ void EcalRecHitProducerGPU::fillDescriptions(
 EcalRecHitProducerGPU::EcalRecHitProducerGPU(const edm::ParameterSet& ps)   {
   
   //---- input
-  uncalibRecHitsInEBToken_ = consumes<CUDAProduct<ecal::SoAUncalibratedRecHitCollection>>(ps.getParameter<edm::InputTag>("recHitsInLabelEB"));
-  uncalibRecHitsInEEToken_ = consumes<CUDAProduct<ecal::SoAUncalibratedRecHitCollection>>(ps.getParameter<edm::InputTag>("recHitsInLabelEE"));
+  uncalibRecHitsInEBToken_ = consumes<CUDAProduct<ecal::UncalibratedRecHit<ecal::Tag::ptr>>>(ps.getParameter<edm::InputTag>("recHitsInLabelEB"));
+  uncalibRecHitsInEEToken_ = consumes<CUDAProduct<ecal::UncalibratedRecHit<ecal::Tag::ptr>>>(ps.getParameter<edm::InputTag>("recHitsInLabelEE"));
         
   //---- output
   recHitsTokenEB_ = produces<CUDAProduct<ecal::RecHit<ecal::Tag::ptr>>>( ps.getParameter<std::string>("recHitsLabelEB") );
@@ -146,11 +145,10 @@ void EcalRecHitProducerGPU::acquire(
   
   
   
-//   int nchannelsEB = ebUncalibRecHits.size;
-  int nchannelsEB = 10;
+  int nchannelsEB = ebUncalibRecHits.size;
+  int offsetForInput = nchannelsEB;
   
-  
-  int totalChannels = 10000;
+  int totalChannels = 10000; // FIXME
   // 
   // kernel
   //
@@ -204,6 +202,7 @@ void EcalRecHitProducerGPU::acquire(
 //     eventDataForScratchGPU_,
 //     conditions,
 //     configParameters_,
+    offsetForInput,
     ctx.stream()
   );
   

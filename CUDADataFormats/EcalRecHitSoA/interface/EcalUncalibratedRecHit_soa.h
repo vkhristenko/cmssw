@@ -32,7 +32,6 @@ namespace ecal {
     
   }
   
-  
   template<typename T, typename L = Tag::soa>
   struct type_wrapper {
     using type = std::vector<T, CUDAHostAllocator<T>>;
@@ -44,8 +43,7 @@ namespace ecal {
   };
   
   template<typename L = Tag::soa>
-  struct UncalibratedRecHit {
-    
+  struct UncalibratedRecHit : public Detail::Base<L> {
     UncalibratedRecHit() = default;
     UncalibratedRecHit(const UncalibratedRecHit&) = default;
     UncalibratedRecHit& operator=(const UncalibratedRecHit&) = default;

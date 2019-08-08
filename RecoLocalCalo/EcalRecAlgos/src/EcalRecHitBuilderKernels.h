@@ -18,7 +18,8 @@ namespace ecal {
       ::ecal::reco::StorageScalarType const* amplitude_eb,   // in adc counts  
       ::ecal::reco::StorageScalarType const* amplitude_ee,   // in adc counts  
       ::ecal::reco::StorageScalarType* energy,   // in energy [GeV]  
-      int const nchannels 
+      int const nchannels,
+      uint32_t const offsetForInput
     );
       
     
@@ -30,6 +31,7 @@ namespace ecal {
       //     eventDataForScratchGPU_,
       //     conditions,
       //     configParameters_,
+      uint32_t const offsetForInput, 
       cuda::stream_t<>& cudaStream
     );
     
