@@ -54,23 +54,16 @@ private:
   
     
   // event data
-//   ecal::rechit::EventInputDataGPU eventInputDataGPU_;
   ecal::rechit::EventOutputDataGPU eventOutputDataGPU_;
-//   ecal::rechit::EventDataForScratchGPU eventDataForScratchGPU_;
   bool shouldTransferToHost_{true};
   
   CUDAContextState cudaState_;
-  
-  // output
-//   std::unique_ptr< ecal::RecHit<ecal::Tag::soa> > ebRecHits_{nullptr};
-//   std::unique_ptr< ecal::RecHit<ecal::Tag::soa> > eeRecHits_{nullptr};
   
   // gpu output
   edm::EDPutTokenT<CUDAProduct<ecal::RecHit<ecal::Tag::ptr>>>  recHitsTokenEB_, recHitsTokenEE_;
   
   
   // configuration parameters
-//   ecal::multifit::ConfigurationParameters configParameters_;
   
   uint32_t maxNumberHits_;
   uint32_t neb_, nee_; // extremely important, in particular neb_
@@ -148,7 +141,8 @@ void EcalRecHitProducerGPU::acquire(
   int nchannelsEB = ebUncalibRecHits.size;
   int offsetForInput = nchannelsEB;
   
-  int totalChannels = 10000; // FIXME
+//   int totalChannels = 10000; // FIXME
+  
   // 
   // kernel
   //
@@ -156,42 +150,6 @@ void EcalRecHitProducerGPU::acquire(
   unsigned int threads_1d = 10 * nchannels_per_block;
 //   unsigned int blocks_1d = threads_1d > 10*totalChannels  ? 1 : (totalChannels*10 + threads_1d - 1) / threads_1d;
   unsigned int blocks_1d = 2;
-  
-  
-//   edm::Handle<ecal::SoAUncalibratedRecHitCollection> hRecHitsGPUEB, hRecHitsGPUEE;
-//   event.getByToken(recHitsGPUEB_, hRecHitsGPUEB);
-//   event.getByToken(recHitsGPUEE_, hRecHitsGPUEE);
-//   
-//   auto recHitsCPUEB = std::make_unique<EBUncalibratedRecHitCollection>();
-//   auto recHitsCPUEE = std::make_unique<EEUncalibratedRecHitCollection>();
-//   recHitsCPUEB->reserve(hRecHitsGPUEB->amplitude.size());
-//   recHitsCPUEE->reserve(hRecHitsGPUEE->amplitude.size());
-//   
-//   for (uint32_t i=0; i<hRecHitsGPUEB->amplitude.size(); ++i) {
-//     recHitsCPUEB->emplace_back(
-//       DetId{hRecHitsGPUEB->did[i]},
-//       hRecHitsGPUEB->amplitude[i],
-//       hRecHitsGPUEB->pedestal[i],
-//       hRecHitsGPUEB->jitter[i],
-//       hRecHitsGPUEB->chi2[i],
-//       hRecHitsGPUEB->flags[i]
-//     );
-//     
-    
-    
-    
-//   ecal::rechit::create_ecal_rehit (
-//                      ebUncalibRecHits.amplitude,
-//                      ebRecHits_->energy,
-//                      nchannelsEB
-//   );
-  
-//   ecal::rechit::kernel_create_ecal_rehit <<< blocks_1d, threads_1d >>> (
-//                          ebUncalibRecHits.amplitudes,
-//                          ebRecHits_.energy,
-//                          nchannelsEB
-//   );
-  
   
   //
   // schedule algorithms

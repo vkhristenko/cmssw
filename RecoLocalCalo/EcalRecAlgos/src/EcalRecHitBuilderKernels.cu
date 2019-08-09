@@ -15,14 +15,24 @@ namespace ecal {
     
     __global__
     void kernel_create_ecal_rehit(
-                    uint32_t const *did_eb,
-                    uint32_t const *did_ee,
-                    ::ecal::reco::StorageScalarType const* amplitude_eb,   // in adc counts  
-                    ::ecal::reco::StorageScalarType const* amplitude_ee,   // in adc counts  
-                    ::ecal::reco::StorageScalarType* energy,   // in energy [GeV]  
-                    int const nchannels,
-                    uint32_t const offsetForInput
-         ) {
+                     // input
+                     uint32_t const* did_eb,
+                     uint32_t const* did_ee,
+                     ::ecal::reco::StorageScalarType const* amplitude_eb,   // in adc counts  
+                     ::ecal::reco::StorageScalarType const* amplitude_ee,   // in adc counts  
+                     ::ecal::reco::StorageScalarType const* time_eb,   
+                     ::ecal::reco::StorageScalarType const* time_ee,   
+                     ::ecal::reco::StorageScalarType const* chi2_eb,   
+                     ::ecal::reco::StorageScalarType const* chi2_ee,   
+                     // output
+                     ::ecal::reco::StorageScalarType* energy,   // in energy [GeV]  
+                     ::ecal::reco::StorageScalarType* time,  
+                     ::ecal::reco::StorageScalarType* chi2,  
+                     uint32_t* flagBits,
+                     uint32_t* extra,
+                     int const nchannels,
+                     uint32_t const offsetForInput
+    ) {
       
       
 //       
@@ -35,19 +45,50 @@ namespace ecal {
                         ? ch - offsetForInput
                         : ch;
       
-      uint32_t const * did = ch >= offsetForInput
-                        ? did_ee
-                        : did_eb;
+//                         
+// not used? ... yet ... it will be used to get IC, Laser Correction, ...
+//                         
+//       uint32_t const * did = ch >= offsetForInput
+//                         ? did_ee
+//                         : did_eb;
       
       ::ecal::reco::StorageScalarType const* amplitude = ch >= offsetForInput
                         ? amplitude_ee
                         : amplitude_eb;
    
+      ::ecal::reco::StorageScalarType const* time_in = ch >= offsetForInput
+                        ? time_ee
+                        : time_eb;
+
+      ::ecal::reco::StorageScalarType const* chi2_in = ch >= offsetForInput
+                        ? chi2_ee
+                        : chi2_eb;
       
       if (ch < nchannels) {
         
         // simple copy
         energy[ch] = amplitude[inputCh];
+        
+        // FIXME
+        // 
+        //  From: https://github.com/cms-sw/cmssw/blob/master/RecoLocalCalo/EcalRecProducers/plugins/EcalRecHitWorkerSimple.cc 
+        //
+        // - get ADCToGeVConstant
+        // - get IC
+        // - get Laser Correction
+        //
+        // - correct from the "jitter" to "time" properly
+        //
+        // - what is "extra" ?
+        //
+        
+        time[ch] = time_in[inputCh];
+        chi2[ch] = chi2_in[inputCh];
+        
+        // FIXME: calculate the flagBits
+        flagBits[ch] = 0;
+        extra[ch] = 0;
+        
       }
       
     }
@@ -65,10 +106,9 @@ namespace ecal {
                   cuda::stream_t<>& cudaStream
              ){
     
-      int nchannels = 10; // FIXME
-//       int offsetForInput = 5; // FIXME
+      int nchannels = eventInputGPU.ebUncalibRecHits.size + eventInputGPU.eeUncalibRecHits.size ;
       
-      unsigned int totalChannels = 10; //eventInputGPU.ebUncalibRecHits.nchannels +
+//       unsigned int totalChannels = 10; //eventInputGPU.ebUncalibRecHits.nchannels +
 //       eventInputGPU.eeUncalibRecHits.nchannels;
       
       unsigned int nchannels_per_block = 32;
@@ -80,11 +120,22 @@ namespace ecal {
       // kernel
       //
       kernel_create_ecal_rehit <<< blocks_1d, threads_1d >>> (
+// input
         eventInputGPU.ebUncalibRecHits.did,
         eventInputGPU.eeUncalibRecHits.did,
         eventInputGPU.ebUncalibRecHits.amplitude, 
         eventInputGPU.eeUncalibRecHits.amplitude, 
+        eventInputGPU.ebUncalibRecHits.jitter, 
+        eventInputGPU.eeUncalibRecHits.jitter, 
+        eventInputGPU.ebUncalibRecHits.chi2, 
+        eventInputGPU.eeUncalibRecHits.chi2, 
+// output
         eventOutputGPU.energy,
+        eventOutputGPU.time,
+        eventOutputGPU.chi2,
+        eventOutputGPU.flagBits,
+        eventOutputGPU.extra,
+// other
         nchannels,
         offsetForInput
       );
