@@ -276,4 +276,70 @@ struct conf_data {
 
 }}
 
+
+
+
+// 
+// ECAL Rechit producer
+// 
+
+#include "CUDADataFormats/EcalRecHitSoA/interface/EcalRecHit_soa.h"
+
+namespace ecal { 
+  namespace rechit {
+    
+   struct EventOutputDataGPU final : public ::ecal::RecHit<::ecal::Tag::ptr> {
+    
+//      void allocate(ConfigurationParameters const& configParameters, uint32_t size) {
+     void allocate(uint32_t size) {
+       
+      cudaCheck( cudaMalloc((void**)&energy,
+                            size * sizeof(::ecal::reco::StorageScalarType)) );
+      cudaCheck( cudaMalloc((void**)&time,
+                            size * sizeof(::ecal::reco::StorageScalarType)) );
+      cudaCheck( cudaMalloc((void**)&chi2,
+                            size * sizeof(::ecal::reco::StorageScalarType)) );
+      cudaCheck( cudaMalloc((void**)&flagBits,
+                            size * sizeof(uint32_t)) );
+      cudaCheck( cudaMalloc((void**)&extra,
+                            size * sizeof(uint32_t)) );
+      
+      cudaCheck( cudaMalloc((void**)&did,
+                            size * sizeof(uint32_t)) );
+    }
+    
+    
+//     void deallocate(ConfigurationParameters const& configParameters) {
+    void deallocate() {
+      cudaCheck( cudaFree(energy) );
+      cudaCheck( cudaFree(time) );
+      cudaCheck( cudaFree(chi2) );
+      cudaCheck( cudaFree(flagBits) );
+      cudaCheck( cudaFree(extra) );
+      cudaCheck( cudaFree(did) );
+    }
+  };
+  
+
+  
+  struct EventInputDataGPU {
+    ecal::UncalibratedRecHit<ecal::Tag::ptr> const& ebUncalibRecHits;
+    ecal::UncalibratedRecHit<ecal::Tag::ptr> const& eeUncalibRecHits;
+  };
+  
+  
+  
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
 #endif
