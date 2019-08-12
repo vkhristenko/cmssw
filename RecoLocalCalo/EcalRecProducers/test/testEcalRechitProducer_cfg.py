@@ -57,8 +57,8 @@ process.load("RecoLocalCalo.EcalRecProducers.ecalUncalibRecHitProducerGPU_cfi")
 process.load("RecoLocalCalo.EcalRecProducers.ecalMultiFitUncalibRecHit_cfi")
 
 # for validation of gpu multifit products
-#process.load("RecoLocalCalo.EcalRecProducers.ecalCPUUncalibRecHitProducer_cfi")
-#process.load("RecoLocalCalo.EcalRecProducers.ecalCPURecHitProducer_cfi")
+process.load("RecoLocalCalo.EcalRecProducers.ecalCPUUncalibRecHitProducer_cfi")
+process.load("RecoLocalCalo.EcalRecProducers.ecalCPURecHitProducer_cfi")
 
 
 process.load("EventFilter.EcalRawToDigi.ecalRawToDigiGPU_cfi")
@@ -162,7 +162,7 @@ process.load('Configuration.StandardSequences.Reconstruction_cff')
     
     
 process.load("RecoLocalCalo.EcalRecProducers.ecalRecHitGPU_cfi")
-#process.ecalRecHitGPU
+process.ecalRecHitProducerGPU = process.ecalRecHitGPU.clone()
     
 
 
@@ -202,8 +202,8 @@ process.recoPath = cms.Path(
 #   gpu
     *process.ecalUncalibRecHitProducerGPU
     #*process.ecalCPUUncalibRecHitProducer
-    *process.ecalRecHitGPU
-    #*process.ecalCPURecHitProducer
+    *process.ecalRecHitProducerGPU
+    *process.ecalCPURecHitProducer
 )
 
 process.schedule = cms.Schedule(

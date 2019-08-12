@@ -8,8 +8,8 @@ ecalRecHitGPU = cms.EDProducer("EcalRecHitProducerGPU",
     uncalibrecHitsInLabelEB = cms.InputTag("ecalUncalibRecHitProducerGPU","EcalUncalibRecHitsEB"),
     uncalibrecHitsInLabelEE = cms.InputTag("ecalUncalibRecHitProducerGPU","EcalUncalibRecHitsEE"),
           
-    recHitsLabelEB = cms.string("EcalRecHitsEBGPU"),
-    recHitsLabelEE = cms.string("EcalRecHitsEEGPU"),
+    recHitsLabelEB = cms.string("EcalRecHitsGPUEB"),
+    recHitsLabelEE = cms.string("EcalRecHitsGPUEE"),
  
     maxNumberHits = cms.uint32(20000),  # FIXME AM
   

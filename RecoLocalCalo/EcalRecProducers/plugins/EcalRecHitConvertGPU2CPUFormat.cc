@@ -37,8 +37,8 @@ void EcalRecHitConvertGPU2CPUFormat::fillDescriptions(
         edm::ConfigurationDescriptions& confDesc) {
     edm::ParameterSetDescription desc;
 
-    desc.add<edm::InputTag>("recHitsLabelGPUEB", edm::InputTag("ecalRecHitProducerGPU", "EcalRecHitsEB"));
-    desc.add<edm::InputTag>("recHitsLabelGPUEE", edm::InputTag("ecalRecHitProducerGPU", "EcalRecHitsEE"));
+    desc.add<edm::InputTag>("recHitsLabelGPUEB", edm::InputTag("ecalRecHitProducerGPU", "EcalRecHitsGPUEB"));
+    desc.add<edm::InputTag>("recHitsLabelGPUEE", edm::InputTag("ecalRecHitProducerGPU", "EcalRecHitsGPUEE"));
 
     desc.add<std::string>("recHitsLabelCPUEB", "EcalRecHitsEB");
     desc.add<std::string>("recHitsLabelCPUEE", "EcalRecHitsEE");
