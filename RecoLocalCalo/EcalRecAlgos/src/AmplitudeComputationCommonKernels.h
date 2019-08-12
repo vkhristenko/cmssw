@@ -19,8 +19,10 @@ namespace ecal { namespace multifit {
 /// 
 __global__
 void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
-                    uint16_t const* digis_in,
-                    uint32_t const* dids,
+                    uint16_t const* digis_in_eb,
+                    uint32_t const* dids_eb,
+                    uint16_t const* digis_in_ee,
+                    uint32_t const* dids_ee,
                     SampleVector* amplitudes,
                     SampleVector* amplitudesForMinimization,
                     SampleGainVector* gainsNoise,
@@ -36,10 +38,12 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
                     ::ecal::reco::StorageScalarType* energies,
                     ::ecal::reco::StorageScalarType* chi2,
                     ::ecal::reco::StorageScalarType* pedestal,
+                    uint32_t *dids_out,
                     uint32_t *flags,
                     char* acState,
                     BXVectorType *bxs,
-                    uint32_t offsetForHashes,
+                    uint32_t const offsetForHashes,
+                    uint32_t const offsetForInputs,
                     bool const gainSwitchUseMaxSampleEB,
                     bool const gainSwitchUseMaxSampleEE,
                     int const nchannels);
@@ -52,7 +56,8 @@ __global__
 void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                     FullSampleMatrix* pulse_cov_out,
                     SampleGainVector const* gainNoise,
-                    uint32_t const* dids,
+                    uint32_t const* dids_eb,
+                    uint32_t const* dids_ee,
                     float const* rms_x12,
                     float const* rms_x6,
                     float const* rms_x1,
@@ -70,7 +75,8 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                     bool const* hasSwitchToGain6,
                     bool const* hasSwitchToGain1,
                     bool const* isSaturated,
-                    uint32_t const offsetForHashes);
+                    uint32_t const offsetForHashes,
+                    uint32_t const offsetForInputs);
 
 __global__
 void kernel_permute_results(

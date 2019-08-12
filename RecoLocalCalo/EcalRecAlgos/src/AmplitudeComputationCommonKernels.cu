@@ -26,8 +26,10 @@ namespace ecal { namespace multifit {
 __global__
 void kernel_prep_1d_and_initialize(
                     EcalPulseShape const* shapes_in,
-                    uint16_t const* digis_in,
-                    uint32_t const* dids,
+                    uint16_t const* digis_in_eb,
+                    uint32_t const* dids_eb,
+                    uint16_t const* digis_in_ee,
+                    uint32_t const* dids_ee,
                     SampleVector* amplitudes,
                     SampleVector* amplitudesForMinimization,
                     SampleGainVector* gainsNoise,
@@ -43,10 +45,12 @@ void kernel_prep_1d_and_initialize(
                     ::ecal::reco::StorageScalarType* energies,
                     ::ecal::reco::StorageScalarType* chi2,
                     ::ecal::reco::StorageScalarType* g_pedestal,
+                    uint32_t *dids_out,
                     uint32_t *flags,
                     char* acState,
                     BXVectorType *bxs,
                     uint32_t const offsetForHashes,
+                    uint32_t const offsetForInputs,
                     bool const gainSwitchUseMaxSampleEB,
                     bool const gainSwitchUseMaxSampleEE,
                     int const nchannels) {
@@ -58,6 +62,20 @@ void kernel_prep_1d_and_initialize(
     int const nchannels_per_block = blockDim.x / nsamples;
     int const total_threads = nchannels * nsamples;
     int const ch = tx / nsamples;
+    // for accessing input arrays
+    int const inputCh = ch >= offsetForInputs
+        ? ch - offsetForInputs
+        : ch;
+    int const inputTx = ch >= offsetForInputs
+        ? tx - offsetForInputs*10
+        : tx;
+    // eb is first and then ee
+    auto const* digis_in = ch >= offsetForInputs
+        ? digis_in_ee
+        : digis_in_eb;
+    auto const* dids = ch >= offsetForInputs
+        ? dids_ee
+        : dids_eb;
     int const sample = threadIdx.x % nsamples;
 
     if (ch < nchannels) {
@@ -81,12 +99,13 @@ void kernel_prep_1d_and_initialize(
         //
         // indices
         //
-        auto const did = DetId{dids[ch]};
+        auto const did = DetId{dids[inputCh]};
         auto const isBarrel = did.subdetId() == EcalBarrel;
         // TODO offset for ee, 0 for eb
         auto const hashedId = isBarrel
             ? hashedIndexEB(did.rawId())
             : offsetForHashes + hashedIndexEE(did.rawId());
+
 
         //
         // pulse shape template
@@ -102,8 +121,8 @@ void kernel_prep_1d_and_initialize(
         //
         // amplitudes
         //
-        int const adc = ecal::mgpa::adc(digis_in[tx]);
-        int const gainId = ecal::mgpa::gainId(digis_in[tx]);
+        int const adc = ecal::mgpa::adc(digis_in[inputTx]);
+        int const gainId = ecal::mgpa::gainId(digis_in[inputTx]);
         SampleVector::Scalar amplitude = 0.;
         SampleVector::Scalar pedestal = 0.;
         SampleVector::Scalar gainratio = 0.;
@@ -245,6 +264,7 @@ void kernel_prep_1d_and_initialize(
             chi2[ch] = 0;
             g_pedestal[ch] = 0;
             uint32_t flag = 0;
+            dids_out[ch] = did.rawId();
 
             // start of this channel in shared mem
             int const chStart = threadIdx.x - sample_max;
@@ -331,7 +351,8 @@ __global__
 void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                     FullSampleMatrix* pulse_cov_out,
                     SampleGainVector const* gainNoise,
-                    uint32_t const* dids,
+                    uint32_t const* dids_eb,
+                    uint32_t const* dids_ee,
                     float const* rms_x12,
                     float const* rms_x6,
                     float const* rms_x1,
@@ -349,19 +370,28 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
                     bool const* hasSwitchToGain6,
                     bool const* hasSwitchToGain1,
                     bool const* isSaturated,
-                    uint32_t const offsetForHashes) {
-    int ch = blockIdx.x;
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
+                    uint32_t const offsetForHashes,
+                    uint32_t const offsetForInputs) {
+    int const ch = blockIdx.x;
+    int const tx = threadIdx.x;
+    int const ty = threadIdx.y;
     constexpr int nsamples = EcalDataFrame::MAXSAMPLES;
     constexpr float addPedestalUncertainty = 0.f;
     constexpr bool dynamicPedestal = false;
     constexpr bool simplifiedNoiseModelForGainSwitch = true;  //---- default is true
     constexpr int template_samples = EcalPulseShape::TEMPLATESAMPLES;
 
+    // to access input arrays (ids and digis only)
+    int const inputCh = ch >= offsetForInputs
+        ? ch - offsetForInputs
+        : ch;
+    auto const* dids = ch >= offsetForInputs
+        ? dids_ee
+        : dids_eb;
+
     bool tmp0 = hasSwitchToGain6[ch];
     bool tmp1 = hasSwitchToGain1[ch];
-    auto const did = DetId{dids[ch]};
+    auto const did = DetId{dids[inputCh]};
     auto const isBarrel = did.subdetId() == EcalBarrel;
     auto const hashedId = isBarrel
         ? hashedIndexEB(did.rawId())

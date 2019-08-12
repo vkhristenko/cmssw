@@ -37,7 +37,8 @@ void kernel_time_compute_nullhypot(SampleVector::Scalar const* sample_values,
 __global__
 void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
                                    SampleVector::Scalar const* sample_value_errors,
-                                   uint32_t const* dids,
+                                   uint32_t const* dids_eb,
+                                   uint32_t const* dids_ee,
                                    bool const* useless_sample_values,
                                    char const* pedestal_nums,
                                    ConfigurationParameters::type const* amplitudeFitParametersEB,
@@ -57,7 +58,8 @@ void kernel_time_compute_makeratio(SampleVector::Scalar const* sample_values,
                                    ConfigurationParameters::type const timeFitLimits_firstEE,
                                    ConfigurationParameters::type const timeFitLimits_secondEB,
                                    ConfigurationParameters::type const timeFitLimits_secondEE,
-                                   int const nchannels);
+                                   int const nchannels,
+                                   uint32_t const offsetForInputs);
 
 /// launch ctx parameters are 
 /// 10 threads per channel, N channels per block, Y blocks
@@ -67,7 +69,8 @@ __global__
 void kernel_time_compute_findamplchi2_and_finish(
         SampleVector::Scalar const* sample_values,
         SampleVector::Scalar const* sample_value_errors,
-        uint32_t const* dids,
+        uint32_t const* dids_eb,
+        uint32_t const* dids_ee,
         bool const* useless_samples,
         SampleVector::Scalar const* g_tMaxAlphaBeta,
         SampleVector::Scalar const* g_tMaxErrorAlphaBeta,
@@ -83,31 +86,38 @@ void kernel_time_compute_findamplchi2_and_finish(
         SampleVector::Scalar* g_ampMaxError,
         SampleVector::Scalar* g_timeMax,
         SampleVector::Scalar* g_timeError,
-        int const nchannels);
+        int const nchannels,
+        uint32_t const offsetForInputs);
 
 __global__
-void kernel_time_compute_fixMGPAslew(uint16_t const* digis,
+void kernel_time_compute_fixMGPAslew(uint16_t const* digis_eb,
+                                     uint16_t const* digis_ee,
                                      SampleVector::Scalar* sample_values,
                                      SampleVector::Scalar* sample_value_errors,
                                      bool* useless_sample_values,
                                      unsigned int const sample_mask,
-                                     int const nchannels);
+                                     int const nchannels,
+                                     uint32_t const offsetForInputs);
 
 __global__
 void kernel_time_compute_ampl(SampleVector::Scalar const* sample_values,
                               SampleVector::Scalar const* sample_value_errors,
-                              uint32_t const* dids,
+                              uint32_t const* dids_eb,
+                              uint32_t const* dids_ed,
                               bool const* useless_samples,
                               SampleVector::Scalar const* g_timeMax,
                               SampleVector::Scalar const* amplitudeFitParametersEB,
                               SampleVector::Scalar const* amplitudeFitParametersEE,
                               SampleVector::Scalar *g_amplitudeMax,
-                              int const nchannels);
+                              int const nchannels,
+                              uint32_t const offsetForInputs);
 
 //#define ECAL_RECO_CUDA_TC_INIT_DEBUG
 __global__
-void kernel_time_computation_init(uint16_t const* digis,
-                                  uint32_t const* dids,
+void kernel_time_computation_init(uint16_t const* digis_eb,
+                                  uint32_t const* dids_eb,
+                                  uint16_t const* digis_ee,
+                                  uint32_t const* dids_ee,
                                   float const* rms_x12,
                                   float const* rms_x6,
                                   float const* rms_x1,
@@ -122,6 +132,7 @@ void kernel_time_computation_init(uint16_t const* digis,
                                   bool* useless_sample_values,
                                   char* pedestal_nums,
                                   uint32_t const offsetForHashes,
+                                  uint32_t const offsetForInputs,
                                   unsigned int const sample_maskEB,
                                   unsigned int const sample_maskEE,
                                   int nchannels);
@@ -134,8 +145,10 @@ __global__
 void kernel_time_correction_and_finalize(
 //        SampleVector::Scalar const* g_amplitude,
         ::ecal::reco::StorageScalarType const* g_amplitude,
-        uint16_t const* digis,
-        uint32_t const* dids,
+        uint16_t const* digis_eb,
+        uint32_t const* dids_eb,
+        uint16_t const* digis_ee,
+        uint32_t const* dids_ee,
         float const* amplitudeBinsEB,
         float const* amplitudeBinsEE,
         float const* shiftBinsEB,
@@ -166,6 +179,7 @@ void kernel_time_correction_and_finalize(
         ConfigurationParameters::type const outOfTimeThreshG61mEB,
         ConfigurationParameters::type const outOfTimeThreshG61mEE,
         uint32_t const offsetForHashes,
+        uint32_t const offsetForInputs,
         int const nchannels);
 
 }}

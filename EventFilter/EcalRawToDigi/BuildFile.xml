@@ -14,9 +14,13 @@
 <use   name="FWCore/MessageLogger"/>
 <use   name="Geometry/EcalMapping"/>
 <use   name="Geometry/Records"/>
-<use   name="RecoLocalCalo/EcalRecAlgos"/>
-<use   name="RecoLocalCalo/EcalRecProducers"/>
 <use   name="Utilities/StorageFactory"/>
+
+<use   name="cuda"/>
+<use   name="HeterogeneousCore/CUDAUtilities"/>
+<use   name="cuda-api-wrappers"/>
+<use   name="HeterogeneousCore/CUDACore"/>
+<use   name="CUDADataFormats/EcalDigi" />
 
 <export>
   <lib   name="1"/>

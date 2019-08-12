@@ -271,13 +271,13 @@ void kernel_minimize(SampleMatrix const* noisecov,
 namespace v1 {
 
 void minimization_procedure(
-        EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
+        EventInputDataGPU const& eventInputGPU,
         EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
         ConditionsProducts const& conditions,
         ConfigurationParameters const& configParameters,
         cuda::stream_t<>& cudaStream) {
-    unsigned int totalChannels = eventInputCPU.ebDigis.size() 
-        + eventInputCPU.eeDigis.size();
+    unsigned int totalChannels = eventInputGPU.ebDigis.ndigis
+        + eventInputGPU.eeDigis.ndigis;
 //    unsigned int threads_min = conf.threads.x;
     // TODO: configure from python
     unsigned int threads_min = configParameters.kernelMinimizeThreads[0];

@@ -28,7 +28,7 @@
 namespace ecal { namespace multifit {
    
 void entryPoint(
-        EventInputDataCPU const& eventInputCPU, EventInputDataGPU& eventInputGPU,
+        EventInputDataGPU const& eventInputGPU,
         EventOutputDataGPU& eventOutputGPU, EventDataForScratchGPU& scratch,
         ConditionsProducts const& conditions, 
         ConfigurationParameters const& configParameters,
@@ -41,8 +41,9 @@ void entryPoint(
     bool const gainSwitchUseMaxSampleEE = false;
     
     uint32_t const offsetForHashes = conditions.offsetForHashes;
-    unsigned int totalChannels = eventInputCPU.ebDigis.size() 
-        + eventInputCPU.eeDigis.size();
+    uint32_t const offsetForInputs = eventInputGPU.ebDigis.ndigis;
+    unsigned int totalChannels = eventInputGPU.ebDigis.ndigis +
+        eventInputGPU.eeDigis.ndigis;
     
     // temporary for recording
     /*cudaEvent_t start_event;
@@ -62,6 +63,7 @@ void entryPoint(
     // copy event data: digis + ids, not really async as vectors have default
     // allocators
     //
+    /*
     cudaCheck( cudaMemcpyAsync(eventInputGPU.digis, 
                eventInputCPU.ebDigis.data().data(),
                eventInputCPU.ebDigis.data().size() * sizeof(digis_type::value_type),
@@ -83,6 +85,7 @@ void entryPoint(
                eventInputCPU.eeDigis.ids().size() * sizeof(dids_type::value_type),
                cudaMemcpyHostToDevice,
                cudaStream.id()) );
+               */
 
     // 
     // 1d preparation kernel
@@ -98,8 +101,10 @@ void entryPoint(
     kernel_prep_1d_and_initialize<<<blocks_1d, threads_1d, 
                                     shared_bytes, cudaStream.id()>>>(
         conditions.pulseShapes.values, 
-        eventInputGPU.digis, 
-        eventInputGPU.ids,
+        eventInputGPU.ebDigis.data, 
+        eventInputGPU.ebDigis.ids,
+        eventInputGPU.eeDigis.data,
+        eventInputGPU.eeDigis.ids,
         scratch.samples,
         (SampleVector*)eventOutputGPU.amplitudesAll,
         scratch.gainsNoise,
@@ -115,10 +120,12 @@ void entryPoint(
         eventOutputGPU.amplitude,
         eventOutputGPU.chi2,
         eventOutputGPU.pedestal,
+        eventOutputGPU.did,
         eventOutputGPU.flags,
         scratch.acState,
         scratch.activeBXs,
         offsetForHashes,
+        offsetForInputs,
         gainSwitchUseMaxSampleEB,
         gainSwitchUseMaxSampleEE,
         totalChannels);
@@ -133,7 +140,8 @@ void entryPoint(
         conditions.pulseCovariances.values, 
         scratch.pulse_covariances,
         scratch.gainsNoise,
-        eventInputGPU.ids,
+        eventInputGPU.ebDigis.ids,
+        eventInputGPU.eeDigis.ids,
         conditions.pedestals.rms_x12,
         conditions.pedestals.rms_x6,
         conditions.pedestals.rms_x1,
@@ -151,12 +159,13 @@ void entryPoint(
         scratch.hasSwitchToGain6,
         scratch.hasSwitchToGain1,
         scratch.isSaturated,
-        offsetForHashes);
+        offsetForHashes,
+        offsetForInputs);
     cudaCheck(cudaGetLastError());
     
     // run minimization kernels
     v1::minimization_procedure(
-        eventInputCPU, eventInputGPU, eventOutputGPU,
+        eventInputGPU, eventOutputGPU,
         scratch, conditions, configParameters, cudaStream);
 
     if (configParameters.shouldRunTimingComputation) {
@@ -170,8 +179,10 @@ void entryPoint(
         int sharedBytesInit = 2 * threads_time_init * sizeof(SampleVector::Scalar);
         kernel_time_computation_init<<<blocks_time_init, threads_time_init,
                                        sharedBytesInit, cudaStream.id()>>>(
-            eventInputGPU.digis, 
-            eventInputGPU.ids,
+            eventInputGPU.ebDigis.data, 
+            eventInputGPU.ebDigis.ids,
+            eventInputGPU.eeDigis.data,
+            eventInputGPU.eeDigis.ids,
             conditions.pedestals.rms_x12,
             conditions.pedestals.rms_x6,
             conditions.pedestals.rms_x1,
@@ -186,6 +197,7 @@ void entryPoint(
             scratch.useless_sample_values,
             scratch.pedestal_nums,
             offsetForHashes,
+            offsetForInputs,
             conditions.sampleMask.getEcalSampleMaskRecordEB(),
             conditions.sampleMask.getEcalSampleMaskRecordEE(),
             totalChannels
@@ -200,18 +212,20 @@ void entryPoint(
         // therefore we need to create threads/blocks only for that
         unsigned int const threadsFixMGPA = threads_1d;
         unsigned int const blocksFixMGPA = 
-            threadsFixMGPA > 10 * eventInputCPU.ebDigis.size()
+            threadsFixMGPA > 10 * eventInputGPU.ebDigis.ndigis
                 ? 1
-                : (10 * eventInputCPU.ebDigis.size() + threadsFixMGPA - 1) 
+                : (10 * eventInputGPU.ebDigis.ndigis + threadsFixMGPA - 1) 
                     / threadsFixMGPA;
         kernel_time_compute_fixMGPAslew<<<blocksFixMGPA, threadsFixMGPA, 
                                           0, cudaStream.id()>>>(
-            eventInputGPU.digis,
+            eventInputGPU.ebDigis.data,
+            eventInputGPU.eeDigis.data,
             scratch.sample_values,
             scratch.sample_value_errors,
             scratch.useless_sample_values,
             conditions.sampleMask.getEcalSampleMaskRecordEB(),
-            totalChannels
+            totalChannels,
+            offsetForInputs
         );
         cudaCheck(cudaGetLastError());
 
@@ -244,7 +258,8 @@ void entryPoint(
                                         sharedBytesMakeRatio, cudaStream.id()>>>(
             scratch.sample_values,
             scratch.sample_value_errors,
-            eventInputGPU.ids,
+            eventInputGPU.ebDigis.ids,
+            eventInputGPU.eeDigis.ids,
             scratch.useless_sample_values,
             scratch.pedestal_nums,
             configParameters.amplitudeFitParametersEB,
@@ -264,7 +279,8 @@ void entryPoint(
             configParameters.timeFitLimitsFirstEE,
             configParameters.timeFitLimitsSecondEB,
             configParameters.timeFitLimitsSecondEE,
-            totalChannels
+            totalChannels,
+            offsetForInputs
         );
         cudaCheck(cudaGetLastError());
 
@@ -280,7 +296,8 @@ void entryPoint(
                                            sharedBytesFindAmplChi2, cudaStream.id()>>>(
             scratch.sample_values,
             scratch.sample_value_errors,
-            eventInputGPU.ids,
+            eventInputGPU.ebDigis.ids,
+            eventInputGPU.eeDigis.ids,
             scratch.useless_sample_values,
             scratch.tMaxAlphaBetas,
             scratch.tMaxErrorAlphaBetas,
@@ -296,7 +313,8 @@ void entryPoint(
             scratch.ampMaxError,
             scratch.timeMax,
             scratch.timeError,
-            totalChannels
+            totalChannels,
+            offsetForInputs
         );
         cudaCheck(cudaGetLastError());
         
@@ -309,8 +327,10 @@ void entryPoint(
         kernel_time_correction_and_finalize<<<blocks_timecorr, threads_timecorr,
                                               0, cudaStream.id()>>>(
             eventOutputGPU.amplitude,
-            eventInputGPU.digis,
-            eventInputGPU.ids,
+            eventInputGPU.ebDigis.data,
+            eventInputGPU.ebDigis.ids,
+            eventInputGPU.eeDigis.data,
+            eventInputGPU.eeDigis.ids,
             conditions.timeBiasCorrections.EBTimeCorrAmplitudeBins,
             conditions.timeBiasCorrections.EETimeCorrAmplitudeBins,
             conditions.timeBiasCorrections.EBTimeCorrShiftBins,
@@ -341,6 +361,7 @@ void entryPoint(
             configParameters.outOfTimeThreshG61mEB,
             configParameters.outOfTimeThreshG61mEE,
             offsetForHashes,
+            offsetForInputs,
             totalChannels
         );
         cudaCheck(cudaGetLastError());

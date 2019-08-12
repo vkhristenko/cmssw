@@ -13,6 +13,14 @@
 <use   name="TrackingTools/Records"/>
 <use   name="TrackingTools/GeomPropagators"/>
 <use   name="TrackingTools/TrajectoryState"/>
+
+<use   name="cuda"/>
+<use   name="CUDADataFormats/EcalRecHitSoA"/>
+<use   name="HeterogeneousCore/CUDAUtilities"/>
+<use   name="cuda-api-wrappers"/>
+<use   name="HeterogeneousCore/CUDACore"/>
+<use   name="CUDADataFormats/EcalDigi" />
+
 <library   file="*.cc" name="EventFilterEcalRawToDigiPlugins">
   <flags   EDM_PLUGIN="1"/>
 </library>

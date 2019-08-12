@@ -9,7 +9,8 @@
 
 namespace ecal { namespace multifit {
 
-void entryPoint(EventInputDataCPU const&, EventInputDataGPU&,
+void entryPoint(
+        EventInputDataGPU const&,
         EventOutputDataGPU&, EventDataForScratchGPU&,
         ConditionsProducts const&, ConfigurationParameters const&,
         cuda::stream_t<>&);

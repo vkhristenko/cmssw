@@ -26,6 +26,8 @@
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalTimeBiasCorrectionsGPU.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalTimeCalibConstantsGPU.h"
 
+#include "CUDADataFormats/EcalDigi/interface/DigisCollection.h"
+
 class EcalPulseShape;
 class EcalSampleMask;
 class EcalTimeBiasCorrections;
@@ -48,28 +50,10 @@ enum class MinimizationState : char {
     Precomputed = 2,
 };
 
-// event input data on cpu, just const refs
-struct EventInputDataCPU {
-    EBDigiCollection const& ebDigis;
-    EEDigiCollection const& eeDigis;
-};
-
 //
 struct EventInputDataGPU {
-    uint16_t *digis;
-    uint32_t *ids;
-
-    void allocate(uint32_t size) {
-        cudaCheck( cudaMalloc((void**)&digis,
-            sizeof(uint16_t) * size * EcalDataFrame::MAXSAMPLES) );
-        cudaCheck( cudaMalloc((void**)&ids,
-            sizeof(uint32_t) * size) );
-    }
-
-    void deallocate() {
-        cudaCheck( cudaFree(digis) );
-        cudaCheck( cudaFree(ids) );
-    }
+    ecal::DigisCollection const& ebDigis;
+    ecal::DigisCollection const& eeDigis;
 };
 
 // parameters have a fixed type

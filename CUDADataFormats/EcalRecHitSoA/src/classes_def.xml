@@ -1,6 +1,12 @@
 <lcgdict>
+    <class name="std::vector<float, CUDAHostAllocator<float, 0>>" />
+    <class name="std::vector<double, CUDAHostAllocator<double, 0>>" />
+    <class name="std::vector<uint32_t, CUDAHostAllocator<uint32_t, 0>>" />
     <class name="ecal::Tag::soa"/>
-    <class name="ecal::Tag::aos"/>
+    <class name="ecal::Detail::Base<ecal::Tag::soa>" />
+
+    <class name="CUDAProduct<ecal::UncalibratedRecHit<ecal::Tag::ptr>>" persistent="false" />
+    <class name="edm::Wrapper<CUDAProduct<ecal::UncalibratedRecHit<ecal::Tag::ptr>>>" persistent="false" />
 
     <!--
     <class name="std::vector<double, CUDAHostAllocator<double> >"/>

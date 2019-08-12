@@ -8,6 +8,7 @@
 #include <TH1D.h>
 #include <TH2D.h>
 #include <TTree.h>
+#include <TPaveStats.h>
 
 #include "DataFormats/Common/interface/Wrapper.h"
 #include "DataFormats/EcalRecHit/interface/EcalUncalibratedRecHit.h"
@@ -64,8 +65,8 @@ int main(int argc, char *argv[]) {
     std::cout << "validating file " << fileName << std::endl;
     TFile rf{fileName.c_str()};
     TTree *rt = (TTree*)rf.Get("Events");
-    rt->SetBranchAddress("ecalTagsoaecalUncalibratedRecHit_ecalUncalibRecHitProducerGPU_EcalUncalibRecHitsEB_RECO.", &wgpuEB);
-    rt->SetBranchAddress("ecalTagsoaecalUncalibratedRecHit_ecalUncalibRecHitProducerGPU_EcalUncalibRecHitsEE_RECO.", &wgpuEE);
+    rt->SetBranchAddress("ecalTagsoaecalUncalibratedRecHit_ecalCPUUncalibRecHitProducer_EcalUncalibRecHitsEB_RECO.", &wgpuEB);
+    rt->SetBranchAddress("ecalTagsoaecalUncalibratedRecHit_ecalCPUUncalibRecHitProducer_EcalUncalibRecHitsEE_RECO.", &wgpuEE);
     rt->SetBranchAddress("EcalUncalibratedRecHitsSorted_ecalMultiFitUncalibRecHit_EcalUncalibRecHitsEB_RECO.", &wcpuEB);
     rt->SetBranchAddress("EcalUncalibratedRecHitsSorted_ecalMultiFitUncalibRecHit_EcalUncalibRecHitsEE_RECO.", &wcpuEE);
 
@@ -95,10 +96,18 @@ int main(int argc, char *argv[]) {
         auto const nee = wcpuEE->bareProduct().size();
 
         for (uint32_t i=0; i<neb; ++i) {
+            auto const did_gpu = wgpuEB->bareProduct().did[i];
             auto const soi_amp_gpu = wgpuEB->bareProduct().amplitude[i];
-            auto const soi_amp_cpu = wcpuEB->bareProduct()[i].amplitude();
+            auto const cpu_iter = wcpuEB->bareProduct().find(DetId{did_gpu});
+            if (cpu_iter == wcpuEB->bareProduct().end()) {
+                std::cerr << ie << ordinal[ie % 10] << " entry\n"
+                          << "  Did not find a DetId " << did_gpu
+                          << " in a CPU collection\n";
+                continue;
+            }
+            auto const soi_amp_cpu = cpu_iter->amplitude();
             auto const chi2_gpu = wgpuEB->bareProduct().chi2[i];
-            auto const chi2_cpu = wcpuEB->bareProduct()[i].chi2();
+            auto const chi2_cpu = cpu_iter->chi2();
 
             hSOIAmplitudesEBGPU->Fill(soi_amp_gpu);
             hSOIAmplitudesEBCPU->Fill(soi_amp_cpu);
@@ -120,10 +129,18 @@ int main(int argc, char *argv[]) {
         }
 
         for (uint32_t i=0; i<nee; ++i) {
+            auto const did_gpu = wgpuEE->bareProduct().did[i];
             auto const soi_amp_gpu = wgpuEE->bareProduct().amplitude[i];
-            auto const soi_amp_cpu = wcpuEE->bareProduct()[i].amplitude();
+            auto const cpu_iter = wcpuEE->bareProduct().find(DetId{did_gpu});
+            if (cpu_iter == wcpuEE->bareProduct().end()) {
+                std::cerr << ie << ordinal[ie % 10] << " entry\n"
+                          << "  did not find a DetId " << did_gpu
+                          << " in a CPU collection\n";
+                continue;
+            }
+            auto const soi_amp_cpu = cpu_iter->amplitude();
             auto const chi2_gpu = wgpuEE->bareProduct().chi2[i];
-            auto const chi2_cpu = wcpuEE->bareProduct()[i].chi2();
+            auto const chi2_cpu = cpu_iter->chi2();
 
             hSOIAmplitudesEEGPU->Fill(soi_amp_gpu);
             hSOIAmplitudesEECPU->Fill(soi_amp_cpu);
@@ -150,21 +167,37 @@ int main(int argc, char *argv[]) {
       c.Divide(2, 3);
 
       c.cd(1);
-      gPad->SetLogy();
-      hSOIAmplitudesEBCPU->SetLineColor(kBlack);
-      hSOIAmplitudesEBCPU->SetLineWidth(1.);
-      hSOIAmplitudesEBCPU->Draw("");
-      hSOIAmplitudesEBGPU->SetLineColor(kBlue);
-      hSOIAmplitudesEBGPU->SetLineWidth(1.);
-      hSOIAmplitudesEBGPU->Draw("SAME");
+      {
+          gPad->SetLogy();
+          hSOIAmplitudesEBCPU->SetLineColor(kBlack);
+          hSOIAmplitudesEBCPU->SetLineWidth(1.);
+          hSOIAmplitudesEBCPU->Draw("");
+          hSOIAmplitudesEBGPU->SetLineColor(kBlue);
+          hSOIAmplitudesEBGPU->SetLineWidth(1.);
+          hSOIAmplitudesEBGPU->Draw("sames");
+          gPad->Update();
+          auto stats = (TPaveStats*)hSOIAmplitudesEBGPU->FindObject("stats");
+          auto y2 = stats->GetY2NDC();
+          auto y1 = stats->GetY1NDC();
+          stats->SetY2NDC(y1);
+          stats->SetY1NDC(y1 - (y2-y1));
+      }
       c.cd(2);
-      gPad->SetLogy();
-      hSOIAmplitudesEECPU->SetLineColor(kBlack);
-      hSOIAmplitudesEECPU->SetLineWidth(1.);
-      hSOIAmplitudesEECPU->Draw("");
-      hSOIAmplitudesEEGPU->SetLineColor(kBlue);
-      hSOIAmplitudesEEGPU->SetLineWidth(1.);
-      hSOIAmplitudesEEGPU->Draw("SAME");
+      {
+          gPad->SetLogy();
+          hSOIAmplitudesEECPU->SetLineColor(kBlack);
+          hSOIAmplitudesEECPU->SetLineWidth(1.);
+          hSOIAmplitudesEECPU->Draw("");
+          hSOIAmplitudesEEGPU->SetLineColor(kBlue);
+          hSOIAmplitudesEEGPU->SetLineWidth(1.);
+          hSOIAmplitudesEEGPU->Draw("sames");
+          gPad->Update();
+          auto stats = (TPaveStats*)hSOIAmplitudesEEGPU->FindObject("stats");
+          auto y2 = stats->GetY2NDC();
+          auto y1 = stats->GetY1NDC();
+          stats->SetY2NDC(y1);
+          stats->SetY1NDC(y1 - (y2-y1));
+      }
       c.cd(3);
       hSOIAmplitudesEBGPUvsCPU->Draw("COLZ");
       c.cd(4);
@@ -177,21 +210,37 @@ int main(int argc, char *argv[]) {
       c.SaveAs("ecal-amplitudes.pdf");
 
       c.cd(1);
-      gPad->SetLogy();
-      hChi2EBCPU->SetLineColor(kBlack);
-      hChi2EBCPU->SetLineWidth(1.);
-      hChi2EBCPU->Draw("");
-      hChi2EBGPU->SetLineColor(kBlue);
-      hChi2EBGPU->SetLineWidth(1.);
-      hChi2EBGPU->Draw("SAME");
+      {
+          gPad->SetLogy();
+          hChi2EBCPU->SetLineColor(kBlack);
+          hChi2EBCPU->SetLineWidth(1.);
+          hChi2EBCPU->Draw("");
+          hChi2EBGPU->SetLineColor(kBlue);
+          hChi2EBGPU->SetLineWidth(1.);
+          hChi2EBGPU->Draw("sames");
+          gPad->Update();
+          auto stats = (TPaveStats*)hChi2EBGPU->FindObject("stats");
+          auto y2 = stats->GetY2NDC();
+          auto y1 = stats->GetY1NDC();
+          stats->SetY2NDC(y1);
+          stats->SetY1NDC(y1 - (y2-y1));
+      }
       c.cd(2);
-      gPad->SetLogy();
-      hChi2EECPU->SetLineColor(kBlack);
-      hChi2EECPU->SetLineWidth(1.);
-      hChi2EECPU->Draw("");
-      hChi2EEGPU->SetLineColor(kBlue);
-      hChi2EEGPU->SetLineWidth(1.);
-      hChi2EEGPU->Draw("SAME");
+      {
+          gPad->SetLogy();
+          hChi2EECPU->SetLineColor(kBlack);
+          hChi2EECPU->SetLineWidth(1.);
+          hChi2EECPU->Draw("");
+          hChi2EEGPU->SetLineColor(kBlue);
+          hChi2EEGPU->SetLineWidth(1.);
+          hChi2EEGPU->Draw("sames");
+          gPad->Update();
+          auto stats = (TPaveStats*)hChi2EEGPU->FindObject("stats");
+          auto y2 = stats->GetY2NDC();
+          auto y1 = stats->GetY1NDC();
+          stats->SetY2NDC(y1);
+          stats->SetY1NDC(y1 - (y2-y1));
+      }
       c.cd(3);
       hChi2EBGPUvsCPU->Draw("COLZ");
       c.cd(4);
