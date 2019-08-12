@@ -10,41 +10,40 @@
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
 
 namespace ecal {
-
-namespace Tag {
-
-struct soa {};
-struct ptr {};
-
-}
-
-namespace Detail {
-
-// empty base 
-template<typename T>
-struct Base {};
-
-// add number of values for ptr case
-template<>
-struct Base<::ecal::Tag::ptr> {
-    uint32_t size;
-};
-
-}
-
-template<typename T, typename L = Tag::soa>
-struct type_wrapper {
+  
+  namespace Tag {
+    
+    struct soa {};
+    struct ptr {};
+    
+  }
+  
+  namespace Detail {
+    
+    // empty base 
+    template<typename T>
+    struct Base {};
+    
+    // add number of values for ptr case
+    template<>
+    struct Base<::ecal::Tag::ptr> {
+      uint32_t size;
+    };
+    
+  }
+  
+  template<typename T, typename L = Tag::soa>
+  struct type_wrapper {
     using type = std::vector<T, CUDAHostAllocator<T>>;
-};
-
-template<typename T>
-struct type_wrapper<T, Tag::ptr> {
+  };
+  
+  template<typename T>
+  struct type_wrapper<T, Tag::ptr> {
     using type = T*;
-};
-
-template<typename L = Tag::soa>
-struct UncalibratedRecHit : public Detail::Base<L> {
-
+  };
+  
+  template<typename L = Tag::soa>
+  struct UncalibratedRecHit : public Detail::Base<L> {
     UncalibratedRecHit() = default;
     UncalibratedRecHit(const UncalibratedRecHit&) = default;
     UncalibratedRecHit& operator=(const UncalibratedRecHit&) = default;

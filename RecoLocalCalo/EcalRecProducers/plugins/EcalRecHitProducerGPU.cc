@@ -86,8 +86,8 @@ void EcalRecHitProducerGPU::fillDescriptions(
 EcalRecHitProducerGPU::EcalRecHitProducerGPU(const edm::ParameterSet& ps)   {
   
   //---- input
-  uncalibRecHitsInEBToken_ = consumes<CUDAProduct<ecal::UncalibratedRecHit<ecal::Tag::ptr>>>(ps.getParameter<edm::InputTag>("recHitsInLabelEB"));
-  uncalibRecHitsInEEToken_ = consumes<CUDAProduct<ecal::UncalibratedRecHit<ecal::Tag::ptr>>>(ps.getParameter<edm::InputTag>("recHitsInLabelEE"));
+  uncalibRecHitsInEBToken_ = consumes<CUDAProduct<ecal::UncalibratedRecHit<ecal::Tag::ptr>>>(ps.getParameter<edm::InputTag>("uncalibrecHitsInLabelEB"));
+  uncalibRecHitsInEEToken_ = consumes<CUDAProduct<ecal::UncalibratedRecHit<ecal::Tag::ptr>>>(ps.getParameter<edm::InputTag>("uncalibrecHitsInLabelEE"));
         
   //---- output
   recHitsTokenEB_ = produces<CUDAProduct<ecal::RecHit<ecal::Tag::ptr>>>( ps.getParameter<std::string>("recHitsLabelEB") );
@@ -154,15 +154,15 @@ void EcalRecHitProducerGPU::acquire(
   //
   // schedule algorithms
   //
-  ecal::rechit::create_ecal_rehit(
-    inputDataGPU,
-    eventOutputDataGPU_,
-//     eventDataForScratchGPU_,
-//     conditions,
-//     configParameters_,
-    offsetForInput,
-    ctx.stream()
-  );
+//   ecal::rechit::create_ecal_rehit(
+//     inputDataGPU,
+//     eventOutputDataGPU_,
+// //     eventDataForScratchGPU_,
+// //     conditions,
+// //     configParameters_,
+//     offsetForInput,
+//     ctx.stream()
+//   );
   
   
   
