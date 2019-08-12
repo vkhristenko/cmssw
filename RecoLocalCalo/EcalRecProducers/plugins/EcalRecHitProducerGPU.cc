@@ -135,6 +135,10 @@ void EcalRecHitProducerGPU::acquire(
   
   
   
+  neb_ = ebUncalibRecHits.size;
+  nee_ = eeUncalibRecHits.size;
+  
+//   std::cout << " [EcalRecHitProducerGPU::acquire]  neb_:nee_ = " << neb_ << " : " << nee_ << std::endl;
   
   
   

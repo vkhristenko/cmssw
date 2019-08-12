@@ -57,9 +57,7 @@ process.load("RecoLocalCalo.EcalRecProducers.ecalUncalibRecHitProducerGPU_cfi")
 process.load("RecoLocalCalo.EcalRecProducers.ecalMultiFitUncalibRecHit_cfi")
 
 # for validation of gpu multifit products
-#process.load("RecoLocalCalo.EcalRecProducers.ecalCPUUncalibRecHitProducer_cfi")
-#process.load("RecoLocalCalo.EcalRecProducers.ecalCPURecHitProducer_cfi")
-
+process.load("RecoLocalCalo.EcalRecProducers.ecalCPUUncalibRecHitProducer_cfi")
 
 process.load("EventFilter.EcalRawToDigi.ecalRawToDigiGPU_cfi")
 process.load("EventFilter.EcalRawToDigi.ecalElectronicsMappingGPUESProducer_cfi")
@@ -156,12 +154,12 @@ process.ecalMultiFitUncalibRecHit.algoPSet = cms.PSet(
     
     
     
-process.load('Configuration.StandardSequences.Reconstruction_cff')
+#process.load('Configuration.StandardSequences.Reconstruction_cff')
 #process.ecalRecHit
 
     
     
-process.load("RecoLocalCalo.EcalRecProducers.ecalRecHitGPU_cfi")
+#process.load("RecoLocalCalo.EcalRecProducers.ecalRecHitGPU_cfi")
 #process.ecalRecHitGPU
     
 
@@ -196,14 +194,13 @@ process.digiPath = cms.Path(
 )
 
 process.recoPath = cms.Path(
-    (process.ecalMultiFitUncalibRecHit+process.ecalDetIdToBeRecovered)
-    #process.ecalMultiFitUncalibRecHit
-    *process.ecalRecHit
+    #(process.ecalMultiFitUncalibRecHit+process.ecalDetIdToBeRecovered)
+    process.ecalMultiFitUncalibRecHit
+    #*process.ecalRecHit
 #   gpu
     *process.ecalUncalibRecHitProducerGPU
-    #*process.ecalCPUUncalibRecHitProducer
-    *process.ecalRecHitGPU
-    #*process.ecalCPURecHitProducer
+    *process.ecalCPUUncalibRecHitProducer
+    #*process.ecalRecHitGPU
 )
 
 process.schedule = cms.Schedule(
