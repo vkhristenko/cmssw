@@ -143,7 +143,7 @@ void EcalRecHitProducerGPU::acquire(
   
   
   int nchannelsEB = ebUncalibRecHits.size;
-  int offsetForInput = nchannelsEB;
+  int offsetForInput = nchannelsEB;  // first EB and then EE
   
 //   int totalChannels = 10000; // FIXME
   
@@ -158,15 +158,15 @@ void EcalRecHitProducerGPU::acquire(
   //
   // schedule algorithms
   //
-//   ecal::rechit::create_ecal_rehit(
-//     inputDataGPU,
-//     eventOutputDataGPU_,
-// //     eventDataForScratchGPU_,
-// //     conditions,
-// //     configParameters_,
-//     offsetForInput,
-//     ctx.stream()
-//   );
+  ecal::rechit::create_ecal_rehit(
+    inputDataGPU,
+    eventOutputDataGPU_,
+//     eventDataForScratchGPU_,
+//     conditions,
+//     configParameters_,
+    offsetForInput,
+    ctx.stream()
+  );
   
   
   

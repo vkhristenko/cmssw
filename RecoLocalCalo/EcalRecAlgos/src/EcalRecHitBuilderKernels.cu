@@ -44,7 +44,11 @@ namespace ecal {
       int const inputCh = ch >= offsetForInput
                         ? ch - offsetForInput
                         : ch;
-      
+
+//       int const inputCh = ch < offsetForInput
+//                         ? ch
+//                         : ch - offsetForInput;
+                        
 //                         
 // not used? ... yet ... it will be used to get IC, Laser Correction, ...
 //                         
@@ -52,6 +56,9 @@ namespace ecal {
 //                         ? did_ee
 //                         : did_eb;
       
+                        
+      // first EB and then EE
+                        
       ::ecal::reco::StorageScalarType const* amplitude = ch >= offsetForInput
                         ? amplitude_ee
                         : amplitude_eb;
@@ -82,7 +89,8 @@ namespace ecal {
         // - what is "extra" ?
         //
         
-        time[ch] = time_in[inputCh];
+        // Time is not saved so far, FIXME
+//         time[ch] = time_in[inputCh];
         chi2[ch] = chi2_in[inputCh];
         
         // FIXME: calculate the flagBits
@@ -112,7 +120,8 @@ namespace ecal {
 //       eventInputGPU.eeUncalibRecHits.nchannels;
       
       unsigned int nchannels_per_block = 32;
-      unsigned int threads_1d = 10 * nchannels_per_block;
+//       unsigned int threads_1d = 10 * nchannels_per_block;
+      unsigned int threads_1d = nchannels_per_block;
       //   unsigned int blocks_1d = threads_1d > 10*totalChannels  ? 1 : (totalChannels*10 + threads_1d - 1) / threads_1d;
       unsigned int blocks_1d = 2;
       
