@@ -287,6 +287,7 @@ struct conf_data {
 #include "CUDADataFormats/EcalRecHitSoA/interface/EcalRecHit_soa.h"
 
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalADCToGeVConstantGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalIntercalibConstantsGPU.h"
 
 
 namespace ecal { 
@@ -333,10 +334,12 @@ namespace ecal {
       
   // const refs products to conditions
   struct ConditionsProducts {
-    EcalADCToGeVConstantGPU::Product const& ADCToGeVConstantProduct;
+    EcalADCToGeVConstantGPU::Product    const& ADCToGeV;
+    EcalIntercalibConstantsGPU::Product const& Intercalib;
 //     
 //     
 //     
+    uint32_t offsetForHashes;    
   };
   
   

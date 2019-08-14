@@ -81,9 +81,9 @@ void EcalCPURecHitProducer::acquire(
     recHitsEB_.resize(ebRecHits.size);
     recHitsEE_.resize(eeRecHits.size);
 
-    
-    std::cout << " [EcalCPURecHitProducer::acquire] ebRecHits.size = " << ebRecHits.size << std::endl;
-    std::cout << " [EcalCPURecHitProducer::acquire] eeRecHits.size = " << eeRecHits.size << std::endl;
+//     AM DEBUG FIXME
+//     std::cout << " [EcalCPURecHitProducer::acquire] ebRecHits.size = " << ebRecHits.size << std::endl;
+//     std::cout << " [EcalCPURecHitProducer::acquire] eeRecHits.size = " << eeRecHits.size << std::endl;
     
     
     // enqeue transfers

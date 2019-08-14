@@ -13,6 +13,9 @@ namespace ecal {
     
     __global__
     void kernel_create_ecal_rehit(
+      // conditions
+      float const* adc2gev,
+      float const* intercalib,
       // input
       uint32_t const* did_eb,
       uint32_t const* did_ee,
@@ -30,7 +33,8 @@ namespace ecal {
       uint32_t* flagBits,
       uint32_t* extra,
       int const nchannels,
-      uint32_t const offsetForInput
+      uint32_t const offsetForInput,
+      uint32_t const offsetForHashes  
     );
       
     

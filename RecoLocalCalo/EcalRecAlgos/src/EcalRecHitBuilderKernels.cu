@@ -10,11 +10,17 @@
 #include "EcalRecHitBuilderKernels.h"
 
 
+#include "KernelHelpers.h"
+
+
 namespace ecal {
   namespace rechit {
     
     __global__
     void kernel_create_ecal_rehit(
+                     // conditions
+                     float const* adc2gev,
+                     float const* intercalib,
                      // input
                      uint32_t const* did_eb,
                      uint32_t const* did_ee,
@@ -32,7 +38,8 @@ namespace ecal {
                      uint32_t* flagBits,
                      uint32_t* extra,
                      int const nchannels,
-                     uint32_t const offsetForInput
+                     uint32_t const offsetForInput,
+                     uint32_t const offsetForHashes  
     ) {
       
       
@@ -41,44 +48,66 @@ namespace ecal {
 //       
       
       int ch = threadIdx.x + blockDim.x*blockIdx.x;
-      
-      int const inputCh = ch >= offsetForInput
-                        ? ch - offsetForInput
-                        : ch;
 
-//       int const inputCh = ch < offsetForInput
-//                         ? ch
-//                         : ch - offsetForInput;
-                        
-//                         
-// not used? ... yet ... it will be used to get IC, Laser Correction, ...
-//                         
-      uint32_t const * didCh = ch >= offsetForInput
-                        ? did_ee
-                        : did_eb;
-      
-
-                        
-      // first EB and then EE
-                        
-      ::ecal::reco::StorageScalarType const* amplitude = ch >= offsetForInput
-                        ? amplitude_ee
-                        : amplitude_eb;
-   
-      ::ecal::reco::StorageScalarType const* time_in = ch >= offsetForInput
-                        ? time_ee
-                        : time_eb;
-
-      ::ecal::reco::StorageScalarType const* chi2_in = ch >= offsetForInput
-                        ? chi2_ee
-                        : chi2_eb;
-      
       if (ch < nchannels) {
         
+        int const inputCh = ch >= offsetForInput
+                          ? ch - offsetForInput
+                          : ch;
+  
+  //       int const inputCh = ch < offsetForInput
+  //                         ? ch
+  //                         : ch - offsetForInput;
+                          
+  //                         
+  // not used? ... yet ... it will be used to get IC, Laser Correction, ...
+  //                         
+        uint32_t const * didCh = ch >= offsetForInput
+                          ? did_ee
+                          : did_eb;
+        
+        // only two values, EB or EE
+        float adc2gev_to_use = ch >= offsetForInput
+                          ? adc2gev[0]
+                          : adc2gev[1];
+                          
+  
+        // first EB and then EE
+                          
+        ::ecal::reco::StorageScalarType const* amplitude = ch >= offsetForInput
+                          ? amplitude_ee
+                          : amplitude_eb;
+     
+        ::ecal::reco::StorageScalarType const* time_in = ch >= offsetForInput
+                          ? time_ee
+                          : time_eb;
+  
+        ::ecal::reco::StorageScalarType const* chi2_in = ch >= offsetForInput
+                          ? chi2_ee
+                          : chi2_eb;
+        
+  
         // simple copy
         did[ch] = didCh[inputCh];
+        
+        auto const did_to_use = DetId{didCh[inputCh]};
+        
+        //
+        // AM FIXME: move hashedIndexEB outside ecal::multifit
+        //
+        
+        auto const isBarrel = did_to_use.subdetId() == EcalBarrel;
+        auto const hashedId = isBarrel
+                            ? ecal::multifit::hashedIndexEB(did_to_use.rawId())
+                            : offsetForHashes + ecal::multifit::hashedIndexEE(did_to_use.rawId());
 
-        energy[ch] = amplitude[inputCh];
+        float const intercalib_to_use = intercalib[hashedId];
+       
+        
+        
+        // multiply the adc counts with factors to get GeV
+        
+        energy[ch] = amplitude[inputCh] * adc2gev_to_use * intercalib_to_use;
         
         // FIXME
         // 
@@ -133,6 +162,9 @@ namespace ecal {
       // kernel
       //
       kernel_create_ecal_rehit <<< blocks_1d, threads_1d >>> (
+// conditions
+        conditions.ADCToGeV.adc2gev,
+        conditions.Intercalib.values,        
 // input
         eventInputGPU.ebUncalibRecHits.did,
         eventInputGPU.eeUncalibRecHits.did,
@@ -151,7 +183,8 @@ namespace ecal {
         eventOutputGPU.extra,
 // other
         nchannels,
-        offsetForInput
+        offsetForInput,
+        conditions.offsetForHashes
       );
       
       

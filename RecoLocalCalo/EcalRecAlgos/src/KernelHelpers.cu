@@ -3,6 +3,11 @@
 #include "DataFormats/EcalDetId/interface/EBDetId.h"
 #include "DataFormats/EcalDetId/interface/EEDetId.h"
 
+//
+// AM FIXME: can I remove "multifit" here?
+//           It will allow this to be used by other namespaces, such as "rechit"
+//
+
 namespace ecal { namespace multifit {
 
 namespace internal {

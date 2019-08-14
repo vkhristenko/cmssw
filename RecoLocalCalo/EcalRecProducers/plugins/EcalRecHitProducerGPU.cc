@@ -24,8 +24,10 @@
 
 // conditions cpu
 #include "CondFormats/DataRecord/interface/EcalADCToGeVConstantRcd.h"
+#include "CondFormats/DataRecord/interface/EcalIntercalibConstantsRcd.h"
 // conditions gpu
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalADCToGeVConstantGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalIntercalibConstantsGPU.h"
 
 
 
@@ -77,8 +79,7 @@ private:
   
   // conditions handles
   edm::ESHandle<EcalADCToGeVConstantGPU> ADCToGeVConstantHandle_;
-  
-  
+  edm::ESHandle<EcalIntercalibConstantsGPU> IntercalibConstantsHandle_;
   
 };
 
@@ -166,14 +167,17 @@ void EcalRecHitProducerGPU::acquire(
 
 
 //   
-  setup.get<EcalADCToGeVConstantRcd>().get(ADCToGeVConstantHandle_);
+  setup.get<EcalADCToGeVConstantRcd>()   .get(ADCToGeVConstantHandle_);
+  setup.get<EcalIntercalibConstantsRcd>().get(IntercalibConstantsHandle_);
 //   
 
-  auto const& ADCToGeVConstantProduct = ADCToGeVConstantHandle_->getProduct(ctx.stream());
+  auto const& ADCToGeVConstantProduct    = ADCToGeVConstantHandle_    -> getProduct(ctx.stream());
+  auto const& IntercalibConstantsProduct = IntercalibConstantsHandle_ -> getProduct(ctx.stream());
   
   // bundle up conditions
   ecal::rechit::ConditionsProducts conditions {
-      ADCToGeVConstantProduct
+      ADCToGeVConstantProduct,
+      IntercalibConstantsProduct,
 //     gainsProduct, pulseShapesProduct,
 //     pulseCovariancesProduct, 
 //     samplesCorrelationProduct,
@@ -181,7 +185,7 @@ void EcalRecHitProducerGPU::acquire(
 //     timeCalibConstantsProduct,
 //     *sampleMaskHandle_,
 //     *timeOffsetConstantHandle_,
-//     timeCalibConstantsHandle_->getOffset()
+      IntercalibConstantsHandle_->getOffset()
   };
   
   
