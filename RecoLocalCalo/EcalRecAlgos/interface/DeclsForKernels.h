@@ -26,6 +26,7 @@
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalTimeBiasCorrectionsGPU.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalTimeCalibConstantsGPU.h"
 
+
 #include "CUDADataFormats/EcalDigi/interface/DigisCollection.h"
 
 class EcalPulseShape;
@@ -284,6 +285,9 @@ struct conf_data {
 // 
 
 #include "CUDADataFormats/EcalRecHitSoA/interface/EcalRecHit_soa.h"
+
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalADCToGeVConstantGPU.h"
+
 
 namespace ecal { 
   namespace rechit {

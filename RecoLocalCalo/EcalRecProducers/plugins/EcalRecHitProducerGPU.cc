@@ -22,6 +22,12 @@
 // the kernels
 #include "RecoLocalCalo/EcalRecAlgos/src/EcalRecHitBuilderKernels.h"
 
+// conditions cpu
+#include "CondFormats/DataRecord/interface/EcalADCToGeVConstantRcd.h"
+// conditions gpu
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalADCToGeVConstantGPU.h"
+
+
 
 class EcalRecHitProducerGPU: public edm::stream::EDProducer<edm::ExternalWork> {
 
@@ -67,6 +73,12 @@ private:
   
   uint32_t maxNumberHits_;
   uint32_t neb_, nee_; // extremely important, in particular neb_
+  
+  
+  // conditions handles
+  edm::ESHandle<EcalADCToGeVConstantGPU> ADCToGeVConstantHandle_;
+  
+  
   
 };
 
@@ -133,19 +145,46 @@ void EcalRecHitProducerGPU::acquire(
   
   ecal::rechit::EventInputDataGPU inputDataGPU{ebUncalibRecHits, eeUncalibRecHits};
   
-  
-  
   neb_ = ebUncalibRecHits.size;
   nee_ = eeUncalibRecHits.size;
   
 //   std::cout << " [EcalRecHitProducerGPU::acquire]  neb_:nee_ = " << neb_ << " : " << nee_ << std::endl;
   
-  
-  
+
   int nchannelsEB = ebUncalibRecHits.size;
   int offsetForInput = nchannelsEB;  // first EB and then EE
   
 //   int totalChannels = 10000; // FIXME
+
+
+  // conditions
+  // - laser correction 
+  // - IC
+  // - adt2gev
+  
+
+
+
+//   
+  setup.get<EcalADCToGeVConstantRcd>().get(ADCToGeVConstantHandle_);
+//   
+
+  auto const& ADCToGeVConstantProduct = ADCToGeVConstantHandle_->getProduct(ctx.stream());
+  
+  // bundle up conditions
+//   ecal::reco::ConditionsProducts conditions {
+  //     ADCToGeVConstantProduct, 
+//     gainsProduct, pulseShapesProduct,
+//     pulseCovariancesProduct, 
+//     samplesCorrelationProduct,
+//     timeBiasCorrectionsProduct,
+//     timeCalibConstantsProduct,
+//     *sampleMaskHandle_,
+//     *timeOffsetConstantHandle_,
+//     timeCalibConstantsHandle_->getOffset()
+//   };
+  
+  
   
   // 
   // kernel
@@ -162,7 +201,7 @@ void EcalRecHitProducerGPU::acquire(
     inputDataGPU,
     eventOutputDataGPU_,
 //     eventDataForScratchGPU_,
-//     conditions,
+//     conditions,    ---> to be restored
 //     configParameters_,
     offsetForInput,
     ctx.stream()

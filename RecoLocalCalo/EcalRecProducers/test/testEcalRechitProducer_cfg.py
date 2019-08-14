@@ -64,6 +64,7 @@ process.load("RecoLocalCalo.EcalRecProducers.ecalCPURecHitProducer_cfi")
 process.load("EventFilter.EcalRawToDigi.ecalRawToDigiGPU_cfi")
 process.load("EventFilter.EcalRawToDigi.ecalElectronicsMappingGPUESProducer_cfi")
 
+
 #process.ecalUncalibRecHitProducerGPU.kernelsVersion = 0
 #process.ecalUncalibRecHitProducerGPU.kernelMinimizeThreads = cms.vuint32(16, 1, 1)
 
@@ -159,6 +160,9 @@ process.ecalMultiFitUncalibRecHit.algoPSet = cms.PSet(
 process.load('Configuration.StandardSequences.Reconstruction_cff')
 #process.ecalRecHit
 
+    
+    
+process.load("RecoLocalCalo.EcalRecProducers.ecalADCToGeVConstantGPUESProducer_cfi")
     
     
 process.load("RecoLocalCalo.EcalRecProducers.ecalRecHitGPU_cfi")
