@@ -330,6 +330,14 @@ namespace ecal {
     ecal::UncalibratedRecHit<ecal::Tag::ptr> const& ebUncalibRecHits;
     ecal::UncalibratedRecHit<ecal::Tag::ptr> const& eeUncalibRecHits;
   };
+      
+  // const refs products to conditions
+  struct ConditionsProducts {
+    EcalADCToGeVConstantGPU::Product const& ADCToGeVConstantProduct;
+//     
+//     
+//     
+  };
   
   
   

@@ -13,7 +13,7 @@ namespace ecal {
     
     __global__
     void kernel_create_ecal_rehit(
-// input
+      // input
       uint32_t const* did_eb,
       uint32_t const* did_ee,
       ::ecal::reco::StorageScalarType const* amplitude_eb,   // in adc counts  
@@ -23,6 +23,7 @@ namespace ecal {
       ::ecal::reco::StorageScalarType const* chi2_eb,   
       ::ecal::reco::StorageScalarType const* chi2_ee,   
       // output
+      uint32_t *did,
       ::ecal::reco::StorageScalarType* energy,   // in energy [GeV]  
       ::ecal::reco::StorageScalarType* time,  
       ::ecal::reco::StorageScalarType* chi2,  
@@ -39,7 +40,7 @@ namespace ecal {
       EventInputDataGPU const& eventInputGPU,
       EventOutputDataGPU&      eventOutputGPU,
       //     eventDataForScratchGPU_,
-      //     conditions,
+      ConditionsProducts const& conditions, 
       //     configParameters_,
       uint32_t const offsetForInput, 
       cuda::stream_t<>& cudaStream

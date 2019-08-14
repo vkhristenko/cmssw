@@ -25,6 +25,7 @@ namespace ecal {
                      ::ecal::reco::StorageScalarType const* chi2_eb,   
                      ::ecal::reco::StorageScalarType const* chi2_ee,   
                      // output
+                     uint32_t *did,
                      ::ecal::reco::StorageScalarType* energy,   // in energy [GeV]  
                      ::ecal::reco::StorageScalarType* time,  
                      ::ecal::reco::StorageScalarType* chi2,  
@@ -52,10 +53,11 @@ namespace ecal {
 //                         
 // not used? ... yet ... it will be used to get IC, Laser Correction, ...
 //                         
-//       uint32_t const * did = ch >= offsetForInput
-//                         ? did_ee
-//                         : did_eb;
+      uint32_t const * didCh = ch >= offsetForInput
+                        ? did_ee
+                        : did_eb;
       
+
                         
       // first EB and then EE
                         
@@ -74,6 +76,8 @@ namespace ecal {
       if (ch < nchannels) {
         
         // simple copy
+        did[ch] = didCh[inputCh];
+
         energy[ch] = amplitude[inputCh];
         
         // FIXME
@@ -108,7 +112,7 @@ namespace ecal {
                   EventInputDataGPU const& eventInputGPU,
                   EventOutputDataGPU&      eventOutputGPU,
                   //     eventDataForScratchGPU_,
-                  //     conditions,
+                  ConditionsProducts const& conditions, 
                   //     configParameters_,
                   uint32_t const  offsetForInput,
                   cuda::stream_t<>& cudaStream
@@ -139,6 +143,7 @@ namespace ecal {
         eventInputGPU.ebUncalibRecHits.chi2, 
         eventInputGPU.eeUncalibRecHits.chi2, 
 // output
+        eventOutputGPU.did,
         eventOutputGPU.energy,
         eventOutputGPU.time,
         eventOutputGPU.chi2,

@@ -172,8 +172,8 @@ void EcalRecHitProducerGPU::acquire(
   auto const& ADCToGeVConstantProduct = ADCToGeVConstantHandle_->getProduct(ctx.stream());
   
   // bundle up conditions
-//   ecal::reco::ConditionsProducts conditions {
-  //     ADCToGeVConstantProduct, 
+  ecal::rechit::ConditionsProducts conditions {
+      ADCToGeVConstantProduct
 //     gainsProduct, pulseShapesProduct,
 //     pulseCovariancesProduct, 
 //     samplesCorrelationProduct,
@@ -182,7 +182,7 @@ void EcalRecHitProducerGPU::acquire(
 //     *sampleMaskHandle_,
 //     *timeOffsetConstantHandle_,
 //     timeCalibConstantsHandle_->getOffset()
-//   };
+  };
   
   
   
@@ -201,7 +201,7 @@ void EcalRecHitProducerGPU::acquire(
     inputDataGPU,
     eventOutputDataGPU_,
 //     eventDataForScratchGPU_,
-//     conditions,    ---> to be restored
+    conditions,  
 //     configParameters_,
     offsetForInput,
     ctx.stream()
@@ -234,10 +234,13 @@ void EcalRecHitProducerGPU::produce(
   eeRecHits.size = nee_;
   
   // shift ptrs for ee
-  eeRecHits.energy += neb_;
-  eeRecHits.chi2 += neb_;
-  eeRecHits.did += neb_;
-   
+  eeRecHits.energy   += neb_;
+  eeRecHits.chi2     += neb_;
+  eeRecHits.did      += neb_;
+  eeRecHits.time     += neb_;
+  eeRecHits.flagBits += neb_;
+  eeRecHits.extra    += neb_;
+ 
   // put into the event
   ctx.emplace(event, recHitsTokenEB_, std::move(ebRecHits));
   ctx.emplace(event, recHitsTokenEE_, std::move(eeRecHits));
