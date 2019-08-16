@@ -29,7 +29,17 @@ ecalRecHitGPU = cms.EDProducer("EcalRecHitProducerGPU",
                                                'kNonRespondingIsolated',
                                                'kDeadVFE',
                                                'kDeadFE',
-                                               'kNoDataNoTP',),
+                                               'kNoDataNoTP',
+                                               #
+                                               # AM should I add them here?????
+                                               # next ones from "flagsMapDBReco"
+                                               # but not defined in "EcalChannelStatusCode.h"
+                                               # but they are defined in "EcalRecHit.h"
+                                               #
+                                               #'kKilled',
+                                               #'kTPSaturated',
+                                               #'kL1SpikeFlag',
+                                               ),
     
     ## avoid propagation of dead channels other than after recovery
     #killDeadChannels = cms.bool(True),
@@ -58,7 +68,16 @@ ecalRecHitGPU = cms.EDProducer("EcalRecHitProducerGPU",
 										   #'kDeadVFE'),
         #kTowerRecovered = cms.vstring('kDeadFE'),
         #kDead           = cms.vstring('kNoDataNoTP')
-        #),                        
+        #), 
+        
+#//         flagmask_ |= 0x1 << EcalRecHit::kNeighboursRecovered;
+#//         flagmask_ |= 0x1 << EcalRecHit::kTowerRecovered;
+#//         flagmask_ |= 0x1 << EcalRecHit::kDead;
+#//         flagmask_ |= 0x1 << EcalRecHit::kKilled;
+#//         flagmask_ |= 0x1 << EcalRecHit::kTPSaturated;
+#//         flagmask_ |= 0x1 << EcalRecHit::kL1SpikeFlag;
+
+
                             
     ## for channel recovery
     #algoRecover = cms.string("EcalRecHitWorkerRecover"),

@@ -8,7 +8,7 @@
 //           It will allow this to be used by other namespaces, such as "rechit"
 //
 
-namespace ecal { namespace multifit {
+namespace ecal { namespace reconstruction {
 
 namespace internal {
 

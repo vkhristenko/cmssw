@@ -103,8 +103,8 @@ void kernel_prep_1d_and_initialize(
         auto const isBarrel = did.subdetId() == EcalBarrel;
         // TODO offset for ee, 0 for eb
         auto const hashedId = isBarrel
-            ? hashedIndexEB(did.rawId())
-            : offsetForHashes + hashedIndexEE(did.rawId());
+            ? ecal::reconstruction::hashedIndexEB(did.rawId())
+            : offsetForHashes + ecal::reconstruction::hashedIndexEE(did.rawId());
 
 
         //
@@ -394,8 +394,8 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
     auto const did = DetId{dids[inputCh]};
     auto const isBarrel = did.subdetId() == EcalBarrel;
     auto const hashedId = isBarrel
-        ? hashedIndexEB(did.rawId())
-        : offsetForHashes + hashedIndexEE(did.rawId());
+        ? ecal::reconstruction::hashedIndexEB(did.rawId())
+        : offsetForHashes + ecal::reconstruction::hashedIndexEE(did.rawId());
     auto const G12SamplesCorrelation = isBarrel
         ? G12SamplesCorrelationEB
         : G12SamplesCorrelationEE;

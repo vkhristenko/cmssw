@@ -58,11 +58,7 @@ namespace ecal {
         int const inputCh = ch >= offsetForInput
                           ? ch - offsetForInput
                           : ch;
-  
-  //       int const inputCh = ch < offsetForInput
-  //                         ? ch
-  //                         : ch - offsetForInput;
-                          
+                            
   //                         
   // not used? ... yet ... it will be used to get IC, Laser Correction, ...
   //                         
@@ -97,13 +93,13 @@ namespace ecal {
         auto const did_to_use = DetId{didCh[inputCh]};
         
         //
-        // AM FIXME: move hashedIndexEB outside ecal::multifit
+        // AM FIXME: move hashedIndexEB outside ecal::multifit   ---> change into reconstruction
         //
         
         auto const isBarrel = did_to_use.subdetId() == EcalBarrel;
         auto const hashedId = isBarrel
-                            ? ecal::multifit::hashedIndexEB(did_to_use.rawId())
-                            : offsetForHashes + ecal::multifit::hashedIndexEE(did_to_use.rawId());
+                            ? ecal::reconstruction::hashedIndexEB(did_to_use.rawId())
+                            : offsetForHashes + ecal::reconstruction::hashedIndexEE(did_to_use.rawId());
 
         float const intercalib_to_use = intercalib[hashedId];
        
@@ -125,17 +121,13 @@ namespace ecal {
         
         
         //
-        // check for channels to be excluded from reconstruction
+        // Check for channels to be excluded from reconstruction
+        //        
         //
-//         EcalChannelStatusMap::const_iterator chit = chStatus->find(detid);
-//         EcalChannelStatusCode::Code dbstatus = chit->getStatusCode();  ------>     Code  getStatusCode() const { return Code(status_&chStatusMask); }
-//          static const int chStatusMask      = 0x1F;     
-//         // check for channels to be excluded from reconstruction
-//         if (!v_chstatus_.empty()) {
-//           std::vector<int>::const_iterator res = std::find(v_chstatus_.begin(), v_chstatus_.end(), dbstatus);
-//           if (res != v_chstatus_.end())
-//             return false;
-//         }
+        // Default energy? Not to be updated if "ChannelStatusToBeExcluded"
+        // Exploited later by the module "EcalRecHitConvertGPU2CPUFormat"
+        //
+        energy[ch] = -1;
         
         static const int chStatusMask      = 0x1F;
         int dbstatus = (status[hashedId]) & chStatusMask;
@@ -147,6 +139,19 @@ namespace ecal {
           }
         }
         
+        //
+        // why are these channels killed in a different way?
+        // and not via configuration, as the other bits?
+        // is it like this from the past development????
+        // ----> make it uniform!
+        //
+//         flagmask_ = 0;
+//         flagmask_ |= 0x1 << EcalRecHit::kNeighboursRecovered;
+//         flagmask_ |= 0x1 << EcalRecHit::kTowerRecovered;
+//         flagmask_ |= 0x1 << EcalRecHit::kDead;
+//         flagmask_ |= 0x1 << EcalRecHit::kKilled;
+//         flagmask_ |= 0x1 << EcalRecHit::kTPSaturated;
+//         flagmask_ |= 0x1 << EcalRecHit::kL1SpikeFlag;
         
         
         
@@ -154,18 +159,6 @@ namespace ecal {
         
         energy[ch] = amplitude[inputCh] * adc2gev_to_use * intercalib_to_use * lasercalib;
         
-        // FIXME
-        // 
-        //  From: https://github.com/cms-sw/cmssw/blob/master/RecoLocalCalo/EcalRecProducers/plugins/EcalRecHitWorkerSimple.cc 
-        //
-        // - get ADCToGeVConstant
-        // - get IC
-        // - get Laser Correction
-        //
-        // - correct from the "jitter" to "time" properly
-        //
-        // - what is "extra" ?
-        //
         
         // Time is not saved so far, FIXME
 //         time[ch] = time_in[inputCh];

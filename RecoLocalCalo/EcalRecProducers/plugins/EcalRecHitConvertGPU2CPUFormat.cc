@@ -73,13 +73,23 @@ void EcalRecHitConvertGPU2CPUFormat::produce(
     recHitsCPUEE->reserve(hRecHitsGPUEE->energy.size());
 
     for (uint32_t i=0; i<hRecHitsGPUEB->energy.size(); ++i) {
+      
+      //
+      // Save only if energy is >= 0 !
+      // This is extremely important because the channels that were supposed 
+      // to be excluded get "-1" as energy
+      //
+      
+      if (hRecHitsGPUEB->energy[i] >=0) {
         recHitsCPUEB->emplace_back(
-            DetId{hRecHitsGPUEB->did[i]},
-            hRecHitsGPUEB->energy[i],
-            hRecHitsGPUEB->time[i],
-            hRecHitsGPUEB->chi2[i],
-            hRecHitsGPUEB->flagBits[i]
+          DetId{hRecHitsGPUEB->did[i]},
+          hRecHitsGPUEB->energy[i],
+          hRecHitsGPUEB->time[i],
+          hRecHitsGPUEB->chi2[i],
+          hRecHitsGPUEB->flagBits[i]
         );
+      }
+      
 //         (*recHitsCPUEB)[i].setJitterError(hRecHitsGPUEB->timeError[i]);
 //         auto const offset = i * EcalDataFrame::MAXSAMPLES;
 //         for (uint32_t sample=0; sample<EcalDataFrame::MAXSAMPLES; ++sample) 
@@ -88,13 +98,22 @@ void EcalRecHitConvertGPU2CPUFormat::produce(
     }
 
     for (uint32_t i=0; i<hRecHitsGPUEE->energy.size(); ++i) {
+      //
+      // Save only if energy is >= 0 !
+      // This is extremely important because the channels that were supposed 
+      // to be excluded get "-1" as energy
+      //
+      
+      if (hRecHitsGPUEE->energy[i] >=0) {
         recHitsCPUEE->emplace_back(
-            DetId{hRecHitsGPUEE->did[i]},
-            hRecHitsGPUEE->energy[i],
-            hRecHitsGPUEE->time[i],
-            hRecHitsGPUEE->chi2[i],
-            hRecHitsGPUEE->flagBits[i]
+          DetId{hRecHitsGPUEE->did[i]},
+          hRecHitsGPUEE->energy[i],
+          hRecHitsGPUEE->time[i],
+          hRecHitsGPUEE->chi2[i],
+          hRecHitsGPUEE->flagBits[i]
         );
+      }
+      
 //         (*recHitsCPUEE)[i].setJitterError(hRecHitsGPUEE->timeError[i]);
 //         auto const offset = i * EcalDataFrame::MAXSAMPLES;
 //         for (uint32_t sample=0; sample<EcalDataFrame::MAXSAMPLES; ++sample) 
