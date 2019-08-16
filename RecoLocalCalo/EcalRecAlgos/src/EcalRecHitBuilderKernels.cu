@@ -18,9 +18,13 @@ namespace ecal {
     
     __global__
     void kernel_create_ecal_rehit(
+                     // configuration 
+                     int const* ChannelStatusToBeExcluded,
+                     uint32_t ChannelStatusToBeExcludedSize,                     
                      // conditions
                      float const* adc2gev,
                      float const* intercalib,
+                     uint32_t const* status,
                      // input
                      uint32_t const* did_eb,
                      uint32_t const* did_ee,
@@ -104,10 +108,51 @@ namespace ecal {
         float const intercalib_to_use = intercalib[hashedId];
        
         
+        // get laser coefficient
+        float lasercalib = 1.;
+//         lasercalib = laser->getLaserCorrection(detid, evt.time());
+        //
+        // AM: ideas
+        //
+        //    One possibility is to create the map of laser corrections once on CPU
+        //    for all crystals and push them on GPU.
+        //    Then only if the LS is different, update the laser correction
+        //    The variation within a LS is not worth pursuing (<< 0.1% !!)
+        //    and below the precision we can claim on the laser corrections (right?).
+        //    This will save quite some time (also for the CPU version?)    
+        //
+        
+        
+        
+        //
+        // check for channels to be excluded from reconstruction
+        //
+//         EcalChannelStatusMap::const_iterator chit = chStatus->find(detid);
+//         EcalChannelStatusCode::Code dbstatus = chit->getStatusCode();  ------>     Code  getStatusCode() const { return Code(status_&chStatusMask); }
+//          static const int chStatusMask      = 0x1F;     
+//         // check for channels to be excluded from reconstruction
+//         if (!v_chstatus_.empty()) {
+//           std::vector<int>::const_iterator res = std::find(v_chstatus_.begin(), v_chstatus_.end(), dbstatus);
+//           if (res != v_chstatus_.end())
+//             return false;
+//         }
+        
+        static const int chStatusMask      = 0x1F;
+        int dbstatus = (status[hashedId]) & chStatusMask;
+        if (ChannelStatusToBeExcludedSize != 0) {
+          for (int ich_to_check = 0; ich_to_check<ChannelStatusToBeExcludedSize; ich_to_check++) {
+            if ( ChannelStatusToBeExcluded[ich_to_check] == dbstatus ) {
+              return;
+            }
+          }
+        }
+        
+        
+        
         
         // multiply the adc counts with factors to get GeV
         
-        energy[ch] = amplitude[inputCh] * adc2gev_to_use * intercalib_to_use;
+        energy[ch] = amplitude[inputCh] * adc2gev_to_use * intercalib_to_use * lasercalib;
         
         // FIXME
         // 
@@ -142,7 +187,7 @@ namespace ecal {
                   EventOutputDataGPU&      eventOutputGPU,
                   //     eventDataForScratchGPU_,
                   ConditionsProducts const& conditions, 
-                  //     configParameters_,
+                  ConfigurationParameters const& configParameters,
                   uint32_t const  offsetForInput,
                   cuda::stream_t<>& cudaStream
              ){
@@ -162,9 +207,13 @@ namespace ecal {
       // kernel
       //
       kernel_create_ecal_rehit <<< blocks_1d, threads_1d >>> (
+// configuration 
+        configParameters.ChannelStatusToBeExcluded,
+        configParameters.ChannelStatusToBeExcludedSize,
 // conditions
         conditions.ADCToGeV.adc2gev,
-        conditions.Intercalib.values,        
+        conditions.Intercalib.values,  
+        conditions.ChannelStatus.status,  
 // input
         eventInputGPU.ebUncalibRecHits.did,
         eventInputGPU.eeUncalibRecHits.did,

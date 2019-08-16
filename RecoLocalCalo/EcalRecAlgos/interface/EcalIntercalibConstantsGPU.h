@@ -14,11 +14,11 @@ class EcalIntercalibConstantsGPU {
 public:
   struct Product {
     ~Product();
-    float *values=nullptr;
+    float *values = nullptr;
   };
   
   #ifndef __CUDACC__
-  // rearrange pedestals
+  // 
   EcalIntercalibConstantsGPU(EcalIntercalibConstants const&);
   
   // will call dealloation for Product thru ~Product

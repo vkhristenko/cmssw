@@ -25,10 +25,16 @@
 // conditions cpu
 #include "CondFormats/DataRecord/interface/EcalADCToGeVConstantRcd.h"
 #include "CondFormats/DataRecord/interface/EcalIntercalibConstantsRcd.h"
+#include "CondFormats/DataRecord/interface/EcalChannelStatusRcd.h"
+
 // conditions gpu
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalADCToGeVConstantGPU.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalIntercalibConstantsGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalChannelStatusGPU.h"
 
+
+// configuration
+#include "CommonTools/Utils/interface/StringToEnumValue.h"
 
 
 class EcalRecHitProducerGPU: public edm::stream::EDProducer<edm::ExternalWork> {
@@ -54,6 +60,10 @@ private:
 //   std::string recHitsLabelEB_, recHitsLabelEE_;
 //   
 //   edm::EDGetTokenT<ecal::SoAUncalibratedRecHitCollection> uncalibrechitToken_; // EB and EE input together
+
+   // data
+  uint32_t neb_, nee_; // extremely important, in particular neb_
+  
   
   // gpu input  
   edm::EDGetTokenT<CUDAProduct< ecal::UncalibratedRecHit<ecal::Tag::ptr> > > uncalibRecHitsInEBToken_;
@@ -72,14 +82,21 @@ private:
   
   
   // configuration parameters
-  
+  ecal::rechit::ConfigurationParameters configParameters_;
   uint32_t maxNumberHits_;
-  uint32_t neb_, nee_; // extremely important, in particular neb_
   
   
   // conditions handles
-  edm::ESHandle<EcalADCToGeVConstantGPU> ADCToGeVConstantHandle_;
+  edm::ESHandle<EcalADCToGeVConstantGPU>    ADCToGeVConstantHandle_;
   edm::ESHandle<EcalIntercalibConstantsGPU> IntercalibConstantsHandle_;
+  edm::ESHandle<EcalChannelStatusGPU>       ChannelStatusHandle_;
+  
+  
+  
+  // configuration
+  std::vector<int> v_chstatus_;
+  
+  
   
 };
 
@@ -107,15 +124,33 @@ EcalRecHitProducerGPU::EcalRecHitProducerGPU(const edm::ParameterSet& ps)   {
   recHitsTokenEE_ = produces<CUDAProduct<ecal::RecHit<ecal::Tag::ptr>>>( ps.getParameter<std::string>("recHitsLabelEE") );
   
   
+  //---- db statuses to be exluded from reconstruction
+  v_chstatus_ = StringToEnumValue<EcalChannelStatusCode::Code>( ps.getParameter<std::vector<std::string> >("ChannelStatusToBeExcluded"));
+  
+  
   
   
   // max number of digis to allocate for
   maxNumberHits_ = ps.getParameter<uint32_t>("maxNumberHits");
   
   // allocate event output data
-//   eventOutputDataGPU_.allocate(configParameters_, maxNumberHits_);
-  eventOutputDataGPU_.allocate(maxNumberHits_);
+  eventOutputDataGPU_.allocate(configParameters_, maxNumberHits_);
+//   eventOutputDataGPU_.allocate(maxNumberHits_);
   
+  
+//   configParameters_.timeFitLimitsFirstEE = EEtimeFitLimits.first;
+//   configParameters_.timeFitLimitsSecondEE = EEtimeFitLimits.second;
+  
+  
+  configParameters_.ChannelStatusToBeExcludedSize = v_chstatus_.size();
+  
+  cudaCheck( cudaMalloc((void**)&configParameters_.ChannelStatusToBeExcluded, 
+                        sizeof(int) * v_chstatus_.size()) 
+           );
+  cudaCheck( cudaMemcpy(configParameters_.ChannelStatusToBeExcluded, 
+                        v_chstatus_.data(),
+                        v_chstatus_.size() * sizeof(int),
+                        cudaMemcpyHostToDevice) );
   
   
 }
@@ -124,8 +159,8 @@ EcalRecHitProducerGPU::EcalRecHitProducerGPU(const edm::ParameterSet& ps)   {
 EcalRecHitProducerGPU::~EcalRecHitProducerGPU() {
   
   // free event ouput data 
-//   eventOutputDataGPU_.deallocate(configParameters_);
-  eventOutputDataGPU_.deallocate();
+  eventOutputDataGPU_.deallocate(configParameters_);
+//   eventOutputDataGPU_.deallocate();
   
 }
 
@@ -169,15 +204,18 @@ void EcalRecHitProducerGPU::acquire(
 //   
   setup.get<EcalADCToGeVConstantRcd>()   .get(ADCToGeVConstantHandle_);
   setup.get<EcalIntercalibConstantsRcd>().get(IntercalibConstantsHandle_);
+  setup.get<EcalChannelStatusRcd>()      .get(ChannelStatusHandle_);
 //   
 
   auto const& ADCToGeVConstantProduct    = ADCToGeVConstantHandle_    -> getProduct(ctx.stream());
   auto const& IntercalibConstantsProduct = IntercalibConstantsHandle_ -> getProduct(ctx.stream());
+  auto const& ChannelStatusProduct       = ChannelStatusHandle_       -> getProduct(ctx.stream());
   
   // bundle up conditions
   ecal::rechit::ConditionsProducts conditions {
       ADCToGeVConstantProduct,
       IntercalibConstantsProduct,
+      ChannelStatusProduct,
 //     gainsProduct, pulseShapesProduct,
 //     pulseCovariancesProduct, 
 //     samplesCorrelationProduct,
@@ -206,7 +244,7 @@ void EcalRecHitProducerGPU::acquire(
     eventOutputDataGPU_,
 //     eventDataForScratchGPU_,
     conditions,  
-//     configParameters_,
+    configParameters_,
     offsetForInput,
     ctx.stream()
   );

@@ -17,9 +17,9 @@ public:
     float *adc2gev = nullptr;
   };
   
-  #ifndef __CUDACC__
+#ifndef __CUDACC__
   
-  // rearrange pedestals
+  // 
   EcalADCToGeVConstantGPU(EcalADCToGeVConstant const&);
   
   // will call dealloation for Product thru ~Product
@@ -38,7 +38,7 @@ private:
   
   CUDAESProduct<Product> product_;
   
-  #endif
+#endif
 };
 
 

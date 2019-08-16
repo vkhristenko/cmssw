@@ -13,9 +13,13 @@ namespace ecal {
     
     __global__
     void kernel_create_ecal_rehit(
+      // configuration 
+      int const* ChannelStatusToBeExcluded,
+      uint32_t ChannelStatusToBeExcludedSize,                     
       // conditions
       float const* adc2gev,
       float const* intercalib,
+      uint32_t const* status,
       // input
       uint32_t const* did_eb,
       uint32_t const* did_ee,
@@ -45,7 +49,7 @@ namespace ecal {
       EventOutputDataGPU&      eventOutputGPU,
       //     eventDataForScratchGPU_,
       ConditionsProducts const& conditions, 
-      //     configParameters_,
+      ConfigurationParameters const& configParameters,
       uint32_t const offsetForInput, 
       cuda::stream_t<>& cudaStream
     );

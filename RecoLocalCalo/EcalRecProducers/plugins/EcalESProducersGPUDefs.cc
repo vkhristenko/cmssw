@@ -11,6 +11,7 @@
 // for rechit
 #include "CondFormats/DataRecord/interface/EcalADCToGeVConstantRcd.h"
 #include "CondFormats/DataRecord/interface/EcalIntercalibConstantsRcd.h"
+#include "CondFormats/DataRecord/interface/EcalChannelStatusRcd.h"
 
 
 // for uncalibrechit
@@ -24,6 +25,7 @@
 // for rechit
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalADCToGeVConstantGPU.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalIntercalibConstantsGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalChannelStatusGPU.h"
 
 
 #include <iostream>
@@ -62,6 +64,10 @@ using EcalADCToGeVConstantGPUESProducer = EcalESProducerGPU<EcalADCToGeVConstant
 using EcalIntercalibConstantsGPUESProducer = EcalESProducerGPU<EcalIntercalibConstantsGPU,
     EcalIntercalibConstants,
     EcalIntercalibConstantsRcd>;
+
+using EcalChannelStatusGPUESProducer = EcalESProducerGPU<EcalChannelStatusGPU,
+    EcalChannelStatus,
+    EcalChannelStatusRcd>;
     
 DEFINE_FWK_EVENTSETUP_MODULE(EcalPedestalsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(EcalGainRatiosGPUESProducer);
@@ -72,6 +78,7 @@ DEFINE_FWK_EVENTSETUP_MODULE(EcalTimeBiasCorrectionsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(EcalTimeCalibConstantsGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(EcalADCToGeVConstantGPUESProducer);
 DEFINE_FWK_EVENTSETUP_MODULE(EcalIntercalibConstantsGPUESProducer);
+DEFINE_FWK_EVENTSETUP_MODULE(EcalChannelStatusGPUESProducer);
 
 
 

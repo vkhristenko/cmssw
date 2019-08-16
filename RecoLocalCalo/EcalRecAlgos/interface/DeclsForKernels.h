@@ -288,16 +288,49 @@ struct conf_data {
 
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalADCToGeVConstantGPU.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalIntercalibConstantsGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalChannelStatusGPU.h"
 
 
 namespace ecal { 
   namespace rechit {
     
+    // parameters that are read in the configuration file for rechit producer
+    struct ConfigurationParameters {
+      // device ptrs
+      int *ChannelStatusToBeExcluded=nullptr; 
+      uint32_t ChannelStatusToBeExcludedSize;
+      
+//       std::array<uint32_t, 3> kernelMinimizeThreads;
+//       
+//       bool shouldRunTimingComputation;
+    };
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
    struct EventOutputDataGPU final : public ::ecal::RecHit<::ecal::Tag::ptr> {
     
-//      void allocate(ConfigurationParameters const& configParameters, uint32_t size) {
-     void allocate(uint32_t size) {
-       
+     void allocate(ConfigurationParameters const& configParameters, uint32_t size) {
+       //      void allocate(uint32_t size) {
+       //---- configParameters -> needed only to decide if to save the timing information or not
+
       cudaCheck( cudaMalloc((void**)&energy,
                             size * sizeof(::ecal::reco::StorageScalarType)) );
       cudaCheck( cudaMalloc((void**)&time,
@@ -314,8 +347,10 @@ namespace ecal {
     }
     
     
-//     void deallocate(ConfigurationParameters const& configParameters) {
-    void deallocate() {
+    void deallocate(ConfigurationParameters const& configParameters) {
+//     void deallocate() {
+ //---- configParameters -> needed only to decide if to save the timing information or not
+      
       cudaCheck( cudaFree(energy) );
       cudaCheck( cudaFree(time) );
       cudaCheck( cudaFree(chi2) );
@@ -336,6 +371,7 @@ namespace ecal {
   struct ConditionsProducts {
     EcalADCToGeVConstantGPU::Product    const& ADCToGeV;
     EcalIntercalibConstantsGPU::Product const& Intercalib;
+    EcalChannelStatusGPU::Product       const& ChannelStatus;
 //     
 //     
 //     
