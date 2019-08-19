@@ -27,10 +27,21 @@
 #include "CondFormats/DataRecord/interface/EcalIntercalibConstantsRcd.h"
 #include "CondFormats/DataRecord/interface/EcalChannelStatusRcd.h"
 
+#include "CondFormats/DataRecord/interface/EcalLaserAPDPNRatiosRcd.h"
+#include "CondFormats/DataRecord/interface/EcalLaserAPDPNRatiosRefRcd.h"
+#include "CondFormats/DataRecord/interface/EcalLaserAlphasRcd.h"
+#include "CondFormats/DataRecord/interface/EcalLinearCorrectionsRcd.h"
+
+
 // conditions gpu
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalADCToGeVConstantGPU.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalIntercalibConstantsGPU.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalChannelStatusGPU.h"
+
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalLaserAPDPNRatiosGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalLaserAPDPNRatiosRefGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalLaserAlphasGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalLinearCorrectionsGPU.h"
 
 
 // configuration
@@ -91,8 +102,11 @@ private:
   edm::ESHandle<EcalIntercalibConstantsGPU> IntercalibConstantsHandle_;
   edm::ESHandle<EcalChannelStatusGPU>       ChannelStatusHandle_;
   
-  
-  
+  edm::ESHandle<EcalLaserAPDPNRatiosGPU>    LaserAPDPNRatiosHandle_;
+  edm::ESHandle<EcalLaserAPDPNRatiosRefGPU> LaserAPDPNRatiosRefHandle_;
+  edm::ESHandle<EcalLaserAlphasGPU>         LaserAlphasHandle_;
+  edm::ESHandle<EcalLinearCorrectionsGPU>   LinearCorrectionsHandle_;
+
   // configuration
   std::vector<int> v_chstatus_;
   
@@ -205,17 +219,35 @@ void EcalRecHitProducerGPU::acquire(
   setup.get<EcalADCToGeVConstantRcd>()   .get(ADCToGeVConstantHandle_);
   setup.get<EcalIntercalibConstantsRcd>().get(IntercalibConstantsHandle_);
   setup.get<EcalChannelStatusRcd>()      .get(ChannelStatusHandle_);
+  
+  setup.get<EcalLaserAPDPNRatiosRcd>()     .get(LaserAPDPNRatiosHandle_);
+  setup.get<EcalLaserAPDPNRatiosRefRcd>()  .get(LaserAPDPNRatiosRefHandle_);
+  setup.get<EcalLaserAlphasRcd>()          .get(LaserAlphasHandle_);
+  setup.get<EcalLinearCorrectionsRcd>()    .get(LinearCorrectionsHandle_);
+  
 //   
 
   auto const& ADCToGeVConstantProduct    = ADCToGeVConstantHandle_    -> getProduct(ctx.stream());
   auto const& IntercalibConstantsProduct = IntercalibConstantsHandle_ -> getProduct(ctx.stream());
   auto const& ChannelStatusProduct       = ChannelStatusHandle_       -> getProduct(ctx.stream());
   
+  auto const& LaserAPDPNRatiosProduct     = LaserAPDPNRatiosHandle_     -> getProduct(ctx.stream());
+  auto const& LaserAPDPNRatiosRefProduct  = LaserAPDPNRatiosRefHandle_  -> getProduct(ctx.stream());
+  auto const& LaserAlphasProduct          = LaserAlphasHandle_          -> getProduct(ctx.stream());
+  auto const& LinearCorrectionsProduct    = LinearCorrectionsHandle_    -> getProduct(ctx.stream());
+  
+  
   // bundle up conditions
   ecal::rechit::ConditionsProducts conditions {
       ADCToGeVConstantProduct,
       IntercalibConstantsProduct,
       ChannelStatusProduct,
+//       
+      LaserAPDPNRatiosProduct,   
+      LaserAPDPNRatiosRefProduct,
+      LaserAlphasProduct,        
+      LinearCorrectionsProduct,  
+//       
 //     gainsProduct, pulseShapesProduct,
 //     pulseCovariancesProduct, 
 //     samplesCorrelationProduct,

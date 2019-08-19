@@ -291,6 +291,14 @@ struct conf_data {
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalChannelStatusGPU.h"
 
 
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalLaserAPDPNRatiosGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalLaserAPDPNRatiosRefGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalLaserAlphasGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalLinearCorrectionsGPU.h"
+
+
+
+
 namespace ecal { 
   namespace rechit {
     
@@ -304,21 +312,6 @@ namespace ecal {
 //       
 //       bool shouldRunTimingComputation;
     };
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     
     
     
@@ -373,6 +366,10 @@ namespace ecal {
     EcalIntercalibConstantsGPU::Product const& Intercalib;
     EcalChannelStatusGPU::Product       const& ChannelStatus;
 //     
+    EcalLaserAPDPNRatiosGPU::Product     const& LaserAPDPNRatios   ;
+    EcalLaserAPDPNRatiosRefGPU::Product  const& LaserAPDPNRatiosRef;
+    EcalLaserAlphasGPU::Product          const& LaserAlphas        ;
+    EcalLinearCorrectionsGPU::Product    const& LinearCorrections  ;
 //     
 //     
     uint32_t offsetForHashes;    
@@ -382,14 +379,6 @@ namespace ecal {
   
   }
 }
-
-
-
-
-
-
-
-
 
 
 

@@ -90,6 +90,8 @@ void EcalCPUUncalibRecHitProducer::acquire(
     recHitsEB_.resize(ebRecHits.size);
     recHitsEE_.resize(eeRecHits.size);
 
+    // AM: FIXME : why all "uint32_t" and not "float" where needed?
+    
     // enqeue transfers
     cudaCheck( cudaMemcpyAsync(recHitsEB_.did.data(),
                                ebRecHits.did,
@@ -104,45 +106,45 @@ void EcalCPUUncalibRecHitProducer::acquire(
 
     cudaCheck( cudaMemcpyAsync(recHitsEB_.amplitudesAll.data(),
                                ebRecHits.amplitudesAll,
-                               recHitsEB_.amplitudesAll.size() * sizeof(uint32_t),
+                               recHitsEB_.amplitudesAll.size() * sizeof(float),   // AM: FIX
                                cudaMemcpyDeviceToHost,
                                ctx.stream().id()) );
     cudaCheck( cudaMemcpyAsync(recHitsEE_.amplitudesAll.data(),
                                eeRecHits.amplitudesAll,
-                               recHitsEE_.amplitudesAll.size() * sizeof(uint32_t),
+                               recHitsEE_.amplitudesAll.size() * sizeof(float),   // AM: FIX
                                cudaMemcpyDeviceToHost,
                                ctx.stream().id()) );
     
     cudaCheck( cudaMemcpyAsync(recHitsEB_.amplitude.data(),
                                ebRecHits.amplitude,
-                               recHitsEB_.amplitude.size() * sizeof(uint32_t),
+                               recHitsEB_.amplitude.size() * sizeof(float),   // AM: FIX
                                cudaMemcpyDeviceToHost,
                                ctx.stream().id()) );
     cudaCheck( cudaMemcpyAsync(recHitsEE_.amplitude.data(),
                                eeRecHits.amplitude,
-                               recHitsEE_.amplitude.size() * sizeof(uint32_t),
+                               recHitsEE_.amplitude.size() * sizeof(float),   // AM: FIX
                                cudaMemcpyDeviceToHost,
                                ctx.stream().id()) );
     
     cudaCheck( cudaMemcpyAsync(recHitsEB_.chi2.data(),
                                ebRecHits.chi2,
-                               recHitsEB_.chi2.size() * sizeof(uint32_t),
+                               recHitsEB_.chi2.size() * sizeof(float),   // AM: FIX
                                cudaMemcpyDeviceToHost,
                                ctx.stream().id()) );
     cudaCheck( cudaMemcpyAsync(recHitsEE_.chi2.data(),
                                eeRecHits.chi2,
-                               recHitsEE_.chi2.size() * sizeof(uint32_t),
+                               recHitsEE_.chi2.size() * sizeof(float),   // AM: FIX
                                cudaMemcpyDeviceToHost,
                                ctx.stream().id()) );
     
     cudaCheck( cudaMemcpyAsync(recHitsEB_.pedestal.data(),
                                ebRecHits.pedestal,
-                               recHitsEB_.pedestal.size() * sizeof(uint32_t),
+                               recHitsEB_.pedestal.size() * sizeof(float),   // AM: FIX
                                cudaMemcpyDeviceToHost,
                                ctx.stream().id()) );
     cudaCheck( cudaMemcpyAsync(recHitsEE_.pedestal.data(),
                                eeRecHits.pedestal,
-                               recHitsEE_.pedestal.size() * sizeof(uint32_t),
+                               recHitsEE_.pedestal.size() * sizeof(float),   // AM: FIX
                                cudaMemcpyDeviceToHost,
                                ctx.stream().id()) );
     
@@ -160,23 +162,23 @@ void EcalCPUUncalibRecHitProducer::acquire(
     if (containsTimingInformation_) {
         cudaCheck( cudaMemcpyAsync(recHitsEB_.jitter.data(),
                                    ebRecHits.jitter,
-                                   recHitsEB_.jitter.size() * sizeof(uint32_t),
+                                   recHitsEB_.jitter.size() * sizeof(float),   // AM: FIX
                                    cudaMemcpyDeviceToHost,
                                    ctx.stream().id()) );
         cudaCheck( cudaMemcpyAsync(recHitsEE_.jitter.data(),
                                    eeRecHits.jitter,
-                                   recHitsEE_.jitter.size() * sizeof(uint32_t),
+                                   recHitsEE_.jitter.size() * sizeof(float),   // AM: FIX
                                    cudaMemcpyDeviceToHost,
                                    ctx.stream().id()) );
         
         cudaCheck( cudaMemcpyAsync(recHitsEB_.jitterError.data(),
                                    ebRecHits.jitterError,
-                                   recHitsEB_.jitterError.size() * sizeof(uint32_t),
+                                   recHitsEB_.jitterError.size() * sizeof(float),   // AM: FIX
                                    cudaMemcpyDeviceToHost,
                                    ctx.stream().id()) );
         cudaCheck( cudaMemcpyAsync(recHitsEE_.jitterError.data(),
                                    eeRecHits.jitterError,
-                                   recHitsEE_.jitterError.size() * sizeof(uint32_t),
+                                   recHitsEE_.jitterError.size() * sizeof(float),   // AM: FIX
                                    cudaMemcpyDeviceToHost,
                                    ctx.stream().id()) );
     }

@@ -15,6 +15,162 @@
 
 namespace ecal {
   namespace rechit {
+
+
+    __global__
+    void kernel_create_laser_corrections(
+      // input
+      float const* p1,
+      float const* p2,
+      float const* p3,
+      edm::TimeValue_t const* t1,
+      edm::TimeValue_t const* t2,
+      edm::TimeValue_t const* t3,
+      // output
+      float *laser_corrections_out,
+      // support
+      int const nchannels
+    ) {
+      
+      //
+      // Calculate laser corrections:
+      //
+      
+      int ch = threadIdx.x + blockDim.x*blockIdx.x;
+      
+      if (ch < nchannels) {
+        
+        laser_corrections_out[ch] = 1.;
+                
+        //       
+        //       https://github.com/cms-sw/cmssw/blob/5d27b6509171a20b6e6a4bbbaf29ca471d612913/CalibCalorimetry/EcalLaserCorrection/src/EcalLaserDbService.cc
+        //       ./CalibCalorimetry/EcalLaserCorrection/src/EcalLaserDbService.cc
+        //       
+        
+        
+        //       
+        //       iLM = MEEBGeom::lmr(ebid.ieta(), ebid.iphi());
+        //       iLM = MEEEGeom::lmr(iX, iY, eeid.zside());
+        //             
+        
+        //         int MEEBGeom::lmr(EBGlobalCoord ieta, EBGlobalCoord iphi) {
+        //            int idcc = dcc(ieta, iphi);
+        //            int ism = idcc - 9;
+        //            int iside = side(ieta, iphi);
+        //            int ilmr = 1 + 2 * (ism - 1) + iside;
+        //            return ilmr;
+        //          }
+//         
+//         
+//         int MEEBGeom::dcc(EBGlobalCoord ieta, EBGlobalCoord iphi) {
+//             int ism = sm(ieta, iphi);
+//             return dccFromSm(ism);
+//           }
+//           
+//           int MEEBGeom::dccFromSm(int ism) {
+//                assert(ism >= 1 && ism <= 36);
+//                int iz = 1;
+//                if (ism > 18)
+//                  iz = -1;
+//                if (iz == -1)
+//                  ism -= 18;
+//                assert(ism >= 1 && ism <= 18);
+//                int idcc = 9 + ism;
+//                if (iz == +1)
+//                  idcc += 18;
+//                return idcc;
+//              }
+//         
+//         
+        //       if (iLM - 1 < (int)laserTimeMap.size()) {
+        //         timestamp = laserTimeMap[iLM - 1];
+        //       } 
+        //       
+        //       timestamp = laserTimeMap[iLM - 1];
+        //       
+        //       
+        //       void  setValue(uint32_t rawId, const EcalLaserAPDPNpair& value) { laser_map[rawId] = value; };
+        //       const EcalLaserAPDPNRatiosMap& getLaserMap() const { return laser_map; }
+        //       
+        //       void setTime(int hashedIndex, const EcalLaserTimeStamp& value) { time_map[hashedIndex] = value; };
+        //       const EcalLaserTimeStampMap& getTimeMap() const { return time_map; }  
+        // 
+        
+        // interpolation
+        
+        //
+        // FIXME: calculate iLM (i-laser monitoring region)
+        //
+        int iLM = 1;
+       
+//         auto const isBarrel = did_to_use.subdetId() == EcalBarrel;
+//         auto const hashedId = isBarrel
+// 
+//         if (isBarrel) {
+//           iLM = ...
+//         }
+//         else {
+//           iLM = ...
+//         }
+//         
+//         
+        
+        //       edm::TimeValue_t t = iTime.value();
+        edm::TimeValue_t t = 0.;  // FIXME
+        long long t_i = 0, t_f = 0;
+        float p_i = 0, p_f = 0;
+        long long lt_i = 0, lt_f = 0;
+        float lp_i = 0, lp_f = 0;
+        
+        if (t >= t1[iLM - 1] && t < t2[iLM - 1]) {
+          t_i = t1[iLM - 1];
+          t_f = t2[iLM - 1];
+          p_i = p1[ch];
+          p_f = p2[ch];
+        } else if (t >= t2[iLM - 1] && t <= t3[iLM - 1]) {
+          t_i = t2[iLM - 1];
+          t_f = t3[iLM - 1];
+          p_i = p2[ch];
+          p_f = p3[ch];
+        } else if (t < t1[iLM - 1]) {
+          t_i = t1[iLM - 1];
+          t_f = t2[iLM - 1];
+          p_i = p1[ch];
+          p_f = p2[ch];
+          
+        } else if (t > t3[iLM - 1]) {
+          t_i = t2[iLM - 1];
+          t_f = t3[iLM - 1];
+          p_i = p2[ch];
+          p_f = p3[ch];
+        }
+        
+        float apdpnref = 1.;
+        float alpha = 1.;
+        
+        if (apdpnref != 0 && (t_i - t_f) != 0 && (lt_i - lt_f) != 0) {
+          long long tt = t;  // never subtract two unsigned!
+          float interpolatedLaserResponse =   p_i / apdpnref + float(tt - t_i)  * (p_f - p_i)   / (apdpnref * float(t_f - t_i));
+          float interpolatedLinearResponse = lp_i / apdpnref + float(tt - lt_i) * (lp_f - lp_i) / (apdpnref * float(lt_f - lt_i));  // FIXED BY FC
+          
+          if (interpolatedLinearResponse > 2.f || interpolatedLinearResponse < 0.1f) {
+            interpolatedLinearResponse = 1.f;
+          }
+          if (interpolatedLaserResponse <= 0.) {
+            // how the heck is it possible?
+            interpolatedLaserResponse = 0.0001;
+          }
+          
+          float interpolatedTransparencyResponse = interpolatedLaserResponse / interpolatedLinearResponse;
+          
+          laser_corrections_out[ch] = 1.f / (std::pow(interpolatedTransparencyResponse, alpha) * interpolatedLinearResponse);
+        }
+       
+      
+      }
+      
+    }
+
     
     __global__
     void kernel_create_ecal_rehit(
@@ -25,6 +181,7 @@ namespace ecal {
                      float const* adc2gev,
                      float const* intercalib,
                      uint32_t const* status,
+                     float const* device_laser_corrections,
                      // input
                      uint32_t const* did_eb,
                      uint32_t const* did_ee,
@@ -34,6 +191,13 @@ namespace ecal {
                      ::ecal::reco::StorageScalarType const* time_ee,   
                      ::ecal::reco::StorageScalarType const* chi2_eb,   
                      ::ecal::reco::StorageScalarType const* chi2_ee,   
+                     // input for transparency corrections
+                     float const* p1,
+                     float const* p2,
+                     float const* p3,
+                     edm::TimeValue_t const* t1,
+                     edm::TimeValue_t const* t2,
+                     edm::TimeValue_t const* t3,                    
                      // output
                      uint32_t *did,
                      ::ecal::reco::StorageScalarType* energy,   // in energy [GeV]  
@@ -93,7 +257,7 @@ namespace ecal {
         auto const did_to_use = DetId{didCh[inputCh]};
         
         //
-        // AM FIXME: move hashedIndexEB outside ecal::multifit   ---> change into reconstruction
+        // AM: move hashedIndexEB outside ecal::multifit   ---> change into reconstruction   [done]
         //
         
         auto const isBarrel = did_to_use.subdetId() == EcalBarrel;
@@ -106,6 +270,11 @@ namespace ecal {
         
         // get laser coefficient
         float lasercalib = 1.;
+//         lasercalib = device_laser_corrections[hashedId];
+        // transparency corrections have already been pre-digested,
+        // and, according to "CondObjectContainer" you should use "hashedId"
+        
+        
 //         lasercalib = laser->getLaserCorrection(detid, evt.time());
         //
         // AM: ideas
@@ -117,6 +286,134 @@ namespace ecal {
         //    and below the precision we can claim on the laser corrections (right?).
         //    This will save quite some time (also for the CPU version?)    
         //
+        
+        
+        //       
+        //       https://github.com/cms-sw/cmssw/blob/5d27b6509171a20b6e6a4bbbaf29ca471d612913/CalibCalorimetry/EcalLaserCorrection/src/EcalLaserDbService.cc
+        //       ./CalibCalorimetry/EcalLaserCorrection/src/EcalLaserDbService.cc
+        //       
+        
+        
+        //       
+        //       iLM = MEEBGeom::lmr(ebid.ieta(), ebid.iphi());
+        //       iLM = MEEEGeom::lmr(iX, iY, eeid.zside());
+        //             
+        
+        //         int MEEBGeom::lmr(EBGlobalCoord ieta, EBGlobalCoord iphi) {
+        //            int idcc = dcc(ieta, iphi);
+        //            int ism = idcc - 9;
+        //            int iside = side(ieta, iphi);
+        //            int ilmr = 1 + 2 * (ism - 1) + iside;
+        //            return ilmr;
+        //          }
+        //         
+        //         
+        //         int MEEBGeom::dcc(EBGlobalCoord ieta, EBGlobalCoord iphi) {
+        //             int ism = sm(ieta, iphi);
+        //             return dccFromSm(ism);
+        //           }
+        //           
+        //           int MEEBGeom::dccFromSm(int ism) {
+        //                assert(ism >= 1 && ism <= 36);
+        //                int iz = 1;
+        //                if (ism > 18)
+        //                  iz = -1;
+        //                if (iz == -1)
+        //                  ism -= 18;
+        //                assert(ism >= 1 && ism <= 18);
+        //                int idcc = 9 + ism;
+        //                if (iz == +1)
+        //                  idcc += 18;
+        //                return idcc;
+        //              }
+        //         
+        //         
+//         
+//          int MEEBGeom::sm(EBGlobalCoord ieta, EBGlobalCoord iphi) {
+//              int iz = 1;
+//              if (ieta < 0)
+//                iz = -1;
+//              ieta *= iz;
+//              assert(ieta > 0 && ieta <= 85);
+//            
+//              //  int iphi_ = iphi+10;
+//              int iphi_ = iphi;
+//              if (iphi_ > 360)
+//                iphi_ -= 360;
+//              assert(iphi_ > 0 && iphi_ <= 360);
+//            
+//              int ism = (iphi_ - 1) / 20 + 1;
+//              assert(ism >= 1 && ism <= 18);
+//              //  if( iz==1 ) ism += 18;
+//              if (iz == -1)
+//                ism += 18;
+//            
+//              return ism;
+//            }
+        
+        int iLM = 1;
+        
+        if (isBarrel) {
+          iLM = ecal::reconstruction::laser_monitoring_region_EB (did_to_use.rawId());
+        }
+        else {
+          iLM = ecal::reconstruction::laser_monitoring_region_EE (did_to_use.rawId());
+          //           iLM = ...
+        }
+        
+        
+        //       edm::TimeValue_t t = iTime.value();
+        edm::TimeValue_t t = 0.;  // FIXME
+        long long t_i = 0, t_f = 0;
+        float p_i = 0, p_f = 0;
+        long long lt_i = 0, lt_f = 0;
+        float lp_i = 0, lp_f = 0;
+        
+        if (t >= t1[iLM - 1] && t < t2[iLM - 1]) {
+          t_i = t1[iLM - 1];
+          t_f = t2[iLM - 1];
+          p_i = p1[ch];
+          p_f = p2[ch];
+        } else if (t >= t2[iLM - 1] && t <= t3[iLM - 1]) {
+          t_i = t2[iLM - 1];
+          t_f = t3[iLM - 1];
+          p_i = p2[ch];
+          p_f = p3[ch];
+        } else if (t < t1[iLM - 1]) {
+          t_i = t1[iLM - 1];
+          t_f = t2[iLM - 1];
+          p_i = p1[ch];
+          p_f = p2[ch];
+          
+        } else if (t > t3[iLM - 1]) {
+          t_i = t2[iLM - 1];
+          t_f = t3[iLM - 1];
+          p_i = p2[ch];
+          p_f = p3[ch];
+        }
+        
+        float apdpnref = 1.;
+        float alpha = 1.;
+        
+        if (apdpnref != 0 && (t_i - t_f) != 0 && (lt_i - lt_f) != 0) {
+          long long tt = t;  // never subtract two unsigned!
+          float interpolatedLaserResponse =   p_i / apdpnref + float(tt - t_i)  * (p_f - p_i)   / (apdpnref * float(t_f - t_i));
+          float interpolatedLinearResponse = lp_i / apdpnref + float(tt - lt_i) * (lp_f - lp_i) / (apdpnref * float(lt_f - lt_i));  // FIXED BY FC
+          
+          if (interpolatedLinearResponse > 2.f || interpolatedLinearResponse < 0.1f) {
+            interpolatedLinearResponse = 1.f;
+          }
+          if (interpolatedLaserResponse <= 0.) {
+            // how the heck is it possible?
+            interpolatedLaserResponse = 0.0001;
+          }
+          
+          float interpolatedTransparencyResponse = interpolatedLaserResponse / interpolatedLinearResponse;
+          
+          // ... and now this:
+          lasercalib = 1.f / (std::pow(interpolatedTransparencyResponse, alpha) * interpolatedLinearResponse);
+        }
+        
         
         
         
@@ -197,7 +494,38 @@ namespace ecal {
       unsigned int blocks_1d = 2;
       
       // 
-      // kernel
+      // kernel update laser corrections
+      //
+      
+      float* device_laser_corrections;
+      cudaCheck( cudaMalloc((void**)&device_laser_corrections, 
+                            sizeof(float) * nchannels) 
+      );   
+      
+      kernel_create_laser_corrections <<< blocks_1d, threads_1d >>> (
+        // input
+        conditions.LaserAPDPNRatios.p1,
+        conditions.LaserAPDPNRatios.p2,
+        conditions.LaserAPDPNRatios.p3,
+        conditions.LaserAPDPNRatios.t1,
+        conditions.LaserAPDPNRatios.t2,
+        conditions.LaserAPDPNRatios.t3,
+        // output
+        device_laser_corrections,
+        // support
+        nchannels       
+        );
+        
+//       
+//       LaserAPDPNRatios   
+//       LaserAPDPNRatiosRef
+//       LaserAlphas        
+//       LinearCorrections  
+//       
+      
+      
+      // 
+      // kernel create rechit
       //
       kernel_create_ecal_rehit <<< blocks_1d, threads_1d >>> (
 // configuration 
@@ -207,6 +535,7 @@ namespace ecal {
         conditions.ADCToGeV.adc2gev,
         conditions.Intercalib.values,  
         conditions.ChannelStatus.status,  
+        device_laser_corrections,
 // input
         eventInputGPU.ebUncalibRecHits.did,
         eventInputGPU.eeUncalibRecHits.did,
@@ -216,6 +545,13 @@ namespace ecal {
         eventInputGPU.eeUncalibRecHits.jitter, 
         eventInputGPU.ebUncalibRecHits.chi2, 
         eventInputGPU.eeUncalibRecHits.chi2, 
+// input for transparency corrections
+        conditions.LaserAPDPNRatios.p1,
+        conditions.LaserAPDPNRatios.p2,
+        conditions.LaserAPDPNRatios.p3,
+        conditions.LaserAPDPNRatios.t1,
+        conditions.LaserAPDPNRatios.t2,
+        conditions.LaserAPDPNRatios.t3,
 // output
         eventOutputGPU.did,
         eventOutputGPU.energy,

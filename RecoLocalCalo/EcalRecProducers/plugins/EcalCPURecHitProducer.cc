@@ -85,6 +85,9 @@ void EcalCPURecHitProducer::acquire(
 //     std::cout << " [EcalCPURecHitProducer::acquire] ebRecHits.size = " << ebRecHits.size << std::endl;
 //     std::cout << " [EcalCPURecHitProducer::acquire] eeRecHits.size = " << eeRecHits.size << std::endl;
     
+   
+    // AM: FIXME : why all "uint32_t" and not "float" where needed?
+    
     
     // enqeue transfers
     cudaCheck( cudaMemcpyAsync(recHitsEB_.did.data(),
@@ -100,23 +103,23 @@ void EcalCPURecHitProducer::acquire(
 
     cudaCheck( cudaMemcpyAsync(recHitsEB_.energy.data(),
                                ebRecHits.energy,
-                               recHitsEB_.energy.size() * sizeof(uint32_t),
+                               recHitsEB_.energy.size() * sizeof(::ecal::reco::StorageScalarType),   // AM: FIX
                                cudaMemcpyDeviceToHost,
                                ctx.stream().id()) );
     cudaCheck( cudaMemcpyAsync(recHitsEE_.energy.data(),
                                eeRecHits.energy,
-                               recHitsEE_.energy.size() * sizeof(uint32_t),
+                               recHitsEE_.energy.size() * sizeof(::ecal::reco::StorageScalarType),   // AM: FIX
                                cudaMemcpyDeviceToHost,
                                ctx.stream().id()) );
     
     cudaCheck( cudaMemcpyAsync(recHitsEB_.chi2.data(),
                                ebRecHits.chi2,
-                               recHitsEB_.chi2.size() * sizeof(uint32_t),
+                               recHitsEB_.chi2.size() * sizeof(::ecal::reco::StorageScalarType),   // AM: FIX
                                cudaMemcpyDeviceToHost,
                                ctx.stream().id()) );
     cudaCheck( cudaMemcpyAsync(recHitsEE_.chi2.data(),
                                eeRecHits.chi2,
-                               recHitsEE_.chi2.size() * sizeof(uint32_t),
+                               recHitsEE_.chi2.size() * sizeof(::ecal::reco::StorageScalarType),   // AM: FIX
                                cudaMemcpyDeviceToHost,
                                ctx.stream().id()) );
     

@@ -10,6 +10,22 @@
 
 namespace ecal { 
   namespace rechit {
+ 
+    __global__
+    void kernel_create_laser_corrections(
+      // input
+      float const* p1,
+      float const* p2,
+      float const* p3,
+      edm::TimeValue_t const* t1,
+      edm::TimeValue_t const* t2,
+      edm::TimeValue_t const* t3,
+      // output
+      float *laser_corrections_out,
+      // support
+      int const nchannels
+    );
+    
     
     __global__
     void kernel_create_ecal_rehit(
@@ -20,6 +36,7 @@ namespace ecal {
       float const* adc2gev,
       float const* intercalib,
       uint32_t const* status,
+      float const* device_laser_corrections,
       // input
       uint32_t const* did_eb,
       uint32_t const* did_ee,
@@ -29,6 +46,13 @@ namespace ecal {
       ::ecal::reco::StorageScalarType const* time_ee,   
       ::ecal::reco::StorageScalarType const* chi2_eb,   
       ::ecal::reco::StorageScalarType const* chi2_ee,   
+      // input for transparency corrections
+      float const* p1,
+      float const* p2,
+      float const* p3,
+      edm::TimeValue_t const* t1,
+      edm::TimeValue_t const* t2,
+      edm::TimeValue_t const* t3,  
       // output
       uint32_t *did,
       ::ecal::reco::StorageScalarType* energy,   // in energy [GeV]  

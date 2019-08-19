@@ -166,7 +166,12 @@ process.load("RecoLocalCalo.EcalRecProducers.ecalADCToGeVConstantGPUESProducer_c
 process.load("RecoLocalCalo.EcalRecProducers.ecalIntercalibConstantsGPUESProducer_cfi")
 process.load("RecoLocalCalo.EcalRecProducers.ecalChannelStatusGPUESProducer_cfi")
     
+process.load("RecoLocalCalo.EcalRecProducers.ecalLaserAPDPNRatiosGPUESProducer_cfi")
+process.load("RecoLocalCalo.EcalRecProducers.ecalLaserAPDPNRatiosRefGPUESProducer_cfi")
+process.load("RecoLocalCalo.EcalRecProducers.ecalLaserAlphasGPUESProducer_cfi")
+process.load("RecoLocalCalo.EcalRecProducers.ecalLinearCorrectionsGPUESProducer_cfi")
     
+
 process.load("RecoLocalCalo.EcalRecProducers.ecalRecHitGPU_cfi")
 process.ecalRecHitProducerGPU = process.ecalRecHitGPU.clone()
     
