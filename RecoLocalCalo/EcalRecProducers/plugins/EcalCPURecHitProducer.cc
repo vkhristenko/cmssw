@@ -81,7 +81,6 @@ void EcalCPURecHitProducer::acquire(
     recHitsEB_.resize(ebRecHits.size);
     recHitsEE_.resize(eeRecHits.size);
 
-//     AM DEBUG FIXME
 //     std::cout << " [EcalCPURecHitProducer::acquire] ebRecHits.size = " << ebRecHits.size << std::endl;
 //     std::cout << " [EcalCPURecHitProducer::acquire] eeRecHits.size = " << eeRecHits.size << std::endl;
     
@@ -134,6 +133,22 @@ void EcalCPURecHitProducer::acquire(
                                cudaMemcpyDeviceToHost,
                                ctx.stream().id()) );
  
+    
+    
+    
+//     
+//     for (unsigned int ieb = 0; ieb <  ebRecHits.size ; ieb++) {
+//       if (recHitsEB_.energy[ieb] != 0 ) std::cout << " [ " << ieb << " :: " << ebRecHits.size << " ] [ " << recHitsEB_.did[ieb] << " ] eb energy = " << recHitsEB_.energy[ieb] << std::endl;
+//     }
+//     
+//     for (unsigned int iee = 0; iee <  eeRecHits.size ; iee++) {
+//       if (recHitsEE_.energy[iee] != 0 ) std::cout << " [ " << iee << " :: " << eeRecHits.size << " ] [ " << recHitsEE_.did[iee] << " ] ee energy = " << recHitsEE_.energy[iee] << std::endl;
+//     }
+//     
+    
+    
+    
+    
 }
 
 void EcalCPURecHitProducer::produce(

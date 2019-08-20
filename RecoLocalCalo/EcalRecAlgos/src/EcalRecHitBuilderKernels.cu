@@ -466,7 +466,8 @@ namespace ecal {
 //       unsigned int threads_1d = 10 * nchannels_per_block;
       unsigned int threads_1d = nchannels_per_block;
       //   unsigned int blocks_1d = threads_1d > 10*totalChannels  ? 1 : (totalChannels*10 + threads_1d - 1) / threads_1d;
-      unsigned int blocks_1d = 2;
+//       unsigned int blocks_1d = 2;
+      unsigned int blocks_1d = (nchannels + threads_1d) / threads_1d; // TEST 
       
       // 
       // kernel update laser corrections
