@@ -278,15 +278,18 @@ uint32_t hashedIndexEE(uint32_t id) {
 
 // 
 // https://cmssdt.cern.ch/lxr/source/CalibCalorimetry/EcalLaserAnalyzer/src/MEEEGeom.cc
+// https://github.com/cms-sw/cmssw/blob/master/CalibCalorimetry/EcalLaserCorrection/src/EcalLaserDbService.cc
 // 
 
 __device__ 
 int laser_monitoring_region_EE(uint32_t id) {
   using namespace internal::endcap;
   
-  uint32_t iX = ix(id);
-  uint32_t iY = iy(id);
+  // SuperCrysCoord
+  uint32_t iX = (ix(id) - 1) / 5 + 1;
+  uint32_t iY = (iy(id) - 1) / 5 + 1;
 
+  
   // AM FIXME Check if correct convention  
   int iz = positiveZ(id) ? 1 : 0;
   

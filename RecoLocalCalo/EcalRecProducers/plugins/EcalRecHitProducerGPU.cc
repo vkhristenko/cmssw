@@ -62,17 +62,10 @@ private:
                edm::EventSetup const&,
                edm::WaitingTaskWithArenaHolder) override;
   void produce(edm::Event&, edm::EventSetup const&) override;
-               
-  void transferToHost(RecHitType& ebRecHits, RecHitType& eeRecHits, cuda::stream_t<>& cudaStream);
-  
   
 private:
-  
-//   std::string recHitsLabelEB_, recHitsLabelEE_;
-//   
-//   edm::EDGetTokenT<ecal::SoAUncalibratedRecHitCollection> uncalibrechitToken_; // EB and EE input together
-
-   // data
+ 
+  // data
   uint32_t neb_, nee_; // extremely important, in particular neb_
   
   
@@ -203,17 +196,12 @@ void EcalRecHitProducerGPU::acquire(
 
   int nchannelsEB = ebUncalibRecHits.size;
   int offsetForInput = nchannelsEB;  // first EB and then EE
-  
-//   int totalChannels = 10000; // FIXME
-
 
   // conditions
   // - laser correction 
   // - IC
   // - adt2gev
   
-
-
 
 //   
   setup.get<EcalADCToGeVConstantRcd>()   .get(ADCToGeVConstantHandle_);
@@ -248,25 +236,9 @@ void EcalRecHitProducerGPU::acquire(
       LaserAlphasProduct,        
       LinearCorrectionsProduct,  
 //       
-//     gainsProduct, pulseShapesProduct,
-//     pulseCovariancesProduct, 
-//     samplesCorrelationProduct,
-//     timeBiasCorrectionsProduct,
-//     timeCalibConstantsProduct,
-//     *sampleMaskHandle_,
-//     *timeOffsetConstantHandle_,
       IntercalibConstantsHandle_->getOffset()
   };
   
-  
-  
-  // 
-  // kernel
-  //
-  unsigned int nchannels_per_block = 32;
-  unsigned int threads_1d = 10 * nchannels_per_block;
-//   unsigned int blocks_1d = threads_1d > 10*totalChannels  ? 1 : (totalChannels*10 + threads_1d - 1) / threads_1d;
-  unsigned int blocks_1d = 2;
   
   //
   // schedule algorithms
@@ -327,28 +299,6 @@ void EcalRecHitProducerGPU::produce(
 }
 
 
-
-
-void EcalRecHitProducerGPU::transferToHost(
-  RecHitType& ebRecHits, RecHitType& eeRecHits,
-  cuda::stream_t<>& cudaStream) {
-  
-  // copy from eventOutputDataGPU_ to ebRecHits/eeRecHits
-//   cudaCheck( cudaMemcpyAsync(ebRecHits.energy.data(),
-//                              eventOutputDataGPU_.energy,
-//                              ebRecHits.energy.size() * sizeof(ecal::reco::StorageScalarType),
-//                              cudaMemcpyDeviceToHost,
-//                              cudaStream.id()) );
-//   cudaCheck( cudaMemcpyAsync(eeRecHits.energy.data(),
-//                              eventOutputDataGPU_.energy + ebRecHits.energy.size(),
-//                              eeRecHits.energy.size() * sizeof(ecal::reco::StorageScalarType),
-//                              cudaMemcpyDeviceToHost,
-//                              cudaStream.id()) );
-  
-    
-}
-  
-  
 
     
 DEFINE_FWK_MODULE(EcalRecHitProducerGPU);

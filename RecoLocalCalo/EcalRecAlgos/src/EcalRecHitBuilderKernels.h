@@ -11,21 +11,6 @@
 namespace ecal { 
   namespace rechit {
  
-    __global__
-    void kernel_create_laser_corrections(
-      // input
-      float const* p1,
-      float const* p2,
-      float const* p3,
-      edm::TimeValue_t const* t1,
-      edm::TimeValue_t const* t2,
-      edm::TimeValue_t const* t3,
-      // output
-      float *laser_corrections_out,
-      // support
-      int const nchannels
-    );
-    
     
     __global__
     void kernel_create_ecal_rehit(
