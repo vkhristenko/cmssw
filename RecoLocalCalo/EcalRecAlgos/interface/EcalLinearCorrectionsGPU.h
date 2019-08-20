@@ -17,9 +17,9 @@ public:
     float *p1=nullptr;
     float *p2=nullptr;
     float *p3=nullptr;
-    edm::Timestamp *t1=nullptr;
-    edm::Timestamp *t2=nullptr;
-    edm::Timestamp *t3=nullptr;
+    edm::TimeValue_t *t1=nullptr;
+    edm::TimeValue_t *t2=nullptr;
+    edm::TimeValue_t *t3=nullptr;
   };
   
   #ifndef __CUDACC__
@@ -41,6 +41,11 @@ private:
   // store eb first then ee
   std::vector<float, CUDAHostAllocator<float>> p1_;
   std::vector<float, CUDAHostAllocator<float>> p2_;
+  std::vector<float, CUDAHostAllocator<float>> p3_;
+  
+  std::vector<edm::TimeValue_t, CUDAHostAllocator<edm::TimeValue_t>> t1_;
+  std::vector<edm::TimeValue_t, CUDAHostAllocator<edm::TimeValue_t>> t2_;
+  std::vector<edm::TimeValue_t, CUDAHostAllocator<edm::TimeValue_t>> t3_;
   
   CUDAESProduct<Product> product_;
   
@@ -52,38 +57,4 @@ private:
 
 
 
-// public:
-//   struct EcalLaserAPDPNpair{
-//     EcalLaserAPDPNpair() : p1(0), p2(0), p3(0) {}
-//     float p1;
-//     float p2;
-//     float p3;
-//     
-//     COND_SERIALIZABLE;
-//   };
-//   struct EcalLaserTimeStamp{
-//     EcalLaserTimeStamp() : t1(), t2(), t3() {}
-//     edm::Timestamp t1;
-//     edm::Timestamp t2;
-//     edm::Timestamp t3;
-//     
-//     COND_SERIALIZABLE;
-//   };
-//   
-//   typedef EcalCondObjectContainer<EcalLaserAPDPNpair> EcalLinearCorrectionsMap;
-//   typedef std::vector<EcalLaserTimeStamp> EcalLaserTimeStampMap;
-//   
-//   EcalLinearCorrections() : time_map(92) {}; // FIXME
-//   ~EcalLinearCorrections() {};
-//   
-//   void  setValue(uint32_t rawId, const EcalLaserAPDPNpair& value) { laser_map[rawId] = value; };
-//   const EcalLinearCorrectionsMap& getLaserMap() const { return laser_map; }
-//   
-//   void setTime(int hashedIndex, const EcalLaserTimeStamp& value) { time_map[hashedIndex] = value; };
-//   const EcalLaserTimeStampMap& getTimeMap() const { return time_map; }  
-//   
-//   private:
-//     EcalLinearCorrectionsMap laser_map;
-//     EcalLaserTimeStampMap time_map;
-    
     

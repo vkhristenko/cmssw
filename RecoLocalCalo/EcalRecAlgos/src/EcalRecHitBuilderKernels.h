@@ -36,7 +36,24 @@ namespace ecal {
       float const* adc2gev,
       float const* intercalib,
       uint32_t const* status,
-      float const* device_laser_corrections,
+      float const* apdpnrefs,
+      float const* alphas,
+      // input for transparency corrections
+      float const* p1,
+      float const* p2,
+      float const* p3,
+      edm::TimeValue_t const* t1,
+      edm::TimeValue_t const* t2,
+      edm::TimeValue_t const* t3,  
+      // input for linear corrections
+      float const* lp1,
+      float const* lp2,
+      float const* lp3,
+      edm::TimeValue_t const* lt1,
+      edm::TimeValue_t const* lt2,
+      edm::TimeValue_t const* lt3,                    
+      // time, used for time dependent corrections
+      edm::TimeValue_t const event_time,
       // input
       uint32_t const* did_eb,
       uint32_t const* did_ee,
@@ -46,13 +63,6 @@ namespace ecal {
       ::ecal::reco::StorageScalarType const* time_ee,   
       ::ecal::reco::StorageScalarType const* chi2_eb,   
       ::ecal::reco::StorageScalarType const* chi2_ee,   
-      // input for transparency corrections
-      float const* p1,
-      float const* p2,
-      float const* p3,
-      edm::TimeValue_t const* t1,
-      edm::TimeValue_t const* t2,
-      edm::TimeValue_t const* t3,  
       // output
       uint32_t *did,
       ::ecal::reco::StorageScalarType* energy,   // in energy [GeV]  
@@ -75,6 +85,7 @@ namespace ecal {
       ConditionsProducts const& conditions, 
       ConfigurationParameters const& configParameters,
       uint32_t const offsetForInput, 
+      edm::TimeValue_t const event_time,
       cuda::stream_t<>& cudaStream
     );
     

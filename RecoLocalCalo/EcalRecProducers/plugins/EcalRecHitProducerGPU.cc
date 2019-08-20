@@ -271,6 +271,10 @@ void EcalRecHitProducerGPU::acquire(
   //
   // schedule algorithms
   //
+  
+  edm::TimeValue_t event_time = event.time().value();
+  
+  
   ecal::rechit::create_ecal_rehit(
     inputDataGPU,
     eventOutputDataGPU_,
@@ -278,6 +282,7 @@ void EcalRecHitProducerGPU::acquire(
     conditions,  
     configParameters_,
     offsetForInput,
+    event_time,
     ctx.stream()
   );
   
