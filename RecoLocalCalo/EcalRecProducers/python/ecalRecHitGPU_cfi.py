@@ -42,7 +42,7 @@ ecalRecHitGPU = cms.EDProducer("EcalRecHitProducerGPU",
                                                ),
     
     ## avoid propagation of dead channels other than after recovery
-    #killDeadChannels = cms.bool(True),
+    killDeadChannels = cms.bool(True),
     #algo = cms.string("EcalRecHitWorkerSimple"),
     
     ## define maximal and minimal values for the laser corrections

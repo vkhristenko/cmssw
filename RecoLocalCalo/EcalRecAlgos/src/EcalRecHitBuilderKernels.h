@@ -16,12 +16,14 @@ namespace ecal {
     void kernel_create_ecal_rehit(
       // configuration 
       int const* ChannelStatusToBeExcluded,
-      uint32_t ChannelStatusToBeExcludedSize,                     
+      uint32_t ChannelStatusToBeExcludedSize, 
+      bool killDeadChannels,
       // for flags setting
       uint32_t const* expanded_v_DB_reco_flags,
       uint32_t const* expanded_Sizes_v_DB_reco_flags,
       uint32_t const* expanded_flagbit_v_DB_reco_flags,
       uint32_t expanded_v_DB_reco_flagsSize,
+      uint32_t flagmask,
       // conditions
       float const* adc2gev,
       float const* intercalib,

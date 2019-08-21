@@ -22,12 +22,14 @@ namespace ecal {
     void kernel_create_ecal_rehit(
                      // configuration 
                      int const* ChannelStatusToBeExcluded,
-                     uint32_t ChannelStatusToBeExcludedSize,                     
+                     uint32_t ChannelStatusToBeExcludedSize,   
+                     bool killDeadChannels,
                      // for flags setting
                      uint32_t const* expanded_v_DB_reco_flags,
                      uint32_t const* expanded_Sizes_v_DB_reco_flags,
                      uint32_t const* expanded_flagbit_v_DB_reco_flags,
                      uint32_t expanded_v_DB_reco_flagsSize,
+                     uint32_t flagmask,
                      // conditions
                      float const* adc2gev,
                      float const* intercalib,
@@ -257,8 +259,6 @@ namespace ecal {
         
         
         
-        
-        
         // Take our association map of dbstatuses-> recHit flagbits and return the apporpriate flagbit word
         int iterator_flags = 0;
         bool need_to_exit = false;
@@ -285,24 +285,29 @@ namespace ecal {
 //         }
         
         
-        
-        
-        
-        
-        
-        //
+        // AM: FIXME
         // why are these channels killed in a different way?
         // and not via configuration, as the other bits?
         // is it like this from the past development????
         // ----> make it uniform!
         //
-//         flagmask_ = 0;
-//         flagmask_ |= 0x1 << EcalRecHit::kNeighboursRecovered;
-//         flagmask_ |= 0x1 << EcalRecHit::kTowerRecovered;
-//         flagmask_ |= 0x1 << EcalRecHit::kDead;
-//         flagmask_ |= 0x1 << EcalRecHit::kKilled;
-//         flagmask_ |= 0x1 << EcalRecHit::kTPSaturated;
-//         flagmask_ |= 0x1 << EcalRecHit::kL1SpikeFlag;
+        //         flagmask_ = 0;
+        //         flagmask_ |= 0x1 << EcalRecHit::kNeighboursRecovered;
+        //         flagmask_ |= 0x1 << EcalRecHit::kTowerRecovered;
+        //         flagmask_ |= 0x1 << EcalRecHit::kDead;
+        //         flagmask_ |= 0x1 << EcalRecHit::kKilled;
+        //         flagmask_ |= 0x1 << EcalRecHit::kTPSaturated;
+        //         flagmask_ |= 0x1 << EcalRecHit::kL1SpikeFlag;
+        //       
+        //         if (!(flagmask_ & flagBits) || !killDeadChannels_) {
+        
+        //         bool killDeadChannels = true;
+        
+        if ( (flagmask & flagBits[ch]) && killDeadChannels ) {
+          return;
+        }
+        
+        
         
         
         
@@ -315,10 +320,75 @@ namespace ecal {
 //         time[ch] = time_in[inputCh];
         chi2[ch] = chi2_in[inputCh];
         
-        // FIXME: calculate the flagBits
-//         flagBits[ch] = 0;
+        // FIXME: calculate the flagBits extra
         extra[ch] = 0;
         
+        //
+        // extra packing ...
+        //
+        
+        uint32_t offset;
+        uint32_t width;
+        uint32_t value;
+        
+        float chi2_temp = chi2[ch];
+        if (chi2_temp > 64) chi2_temp = 64;
+        // use 7 bits
+        uint32_t rawChi2 = lround(chi2_temp / 64. * ((1<<7)-1));
+        
+//         extra_ = setMasked(extra_, rawChi2, 0, 7);
+        
+        offset = 0;
+        width = 7;
+        value = 0; // default: https://github.com/cms-sw/cmssw/blob/266e21cfc9eb409b093e4cf064f4c0a24c6ac293/DataFormats/EcalRecHit/interface/EcalRecHit.h#L65
+        
+        uint32_t mask = ((1 << width) - 1) << offset;
+        value &= ~mask;
+        value |= (rawChi2 & ((1U << width) - 1)) << offset;
+        
+//         extra[ch] = value;
+//         
+//         https://github.com/cms-sw/cmssw/blob/266e21cfc9eb409b093e4cf064f4c0a24c6ac293/DataFormats/EcalRecHit/interface/EcalRecHit.h#L126-L133
+//         
+        
+        
+        uint32_t rawEnergy = 0;
+        
+        if (energy[ch] > 0.001) {
+//           uint16_t exponent = getPower10(energy[ch]);
+
+          static constexpr float p10[] = {1.e-2f,1.e-1f,1.f,1.e1f,1.e2f,1.e3f,1.e4f,1.e5f,1.e6f};
+          int b = energy[ch]<p10[4] ? 0 : 5;
+          for (;b<9;++b) if (energy[ch]<p10[b]) break;
+          
+          uint16_t exponent = b;
+          
+          static constexpr float ip10[] = {1.e5f,1.e4f,1.e3f,1.e2f,1.e1f,1.e0f,1.e-1f,1.e-2f,1.e-3f,1.e-4};
+          uint16_t significand = lround( energy[ch] * ip10[exponent]);
+          // use 13 bits (3 exponent, 10 significand)
+          rawEnergy = exponent << 10 | significand;
+          /* here for doc and regression test
+           *             u int16_t exponent_old = lround(floor(log10(*energy))) + 3;  
+           *             uint16_t significand_old = lround(energy/pow(10, exponent - 5));
+           *             std::cout << energy << ' ' << exponent << ' ' << significand 
+           *             << ' ' << exponent_old <<     ' ' << significand_old << std::endl;
+           *             assert(exponent==exponent_old);
+           *             assert(significand==significand_old);
+           */
+        }
+        
+//         extra_ = setMasked(extra_, rawEnergy, 8, 13);
+        
+        offset = 8;
+        width = 13;
+        // value from last change, ok
+        
+        mask = ((1 << width) - 1) << offset;
+        value &= ~mask;
+        value |= (rawEnergy & ((1U << width) - 1)) << offset;
+        
+        extra[ch] = value;
+          
         
       }
       
@@ -352,12 +422,14 @@ namespace ecal {
 // configuration 
         configParameters.ChannelStatusToBeExcluded,
         configParameters.ChannelStatusToBeExcludedSize,
+        configParameters.killDeadChannels,
 // for flags setting
         configParameters.expanded_v_DB_reco_flags,
         configParameters.expanded_Sizes_v_DB_reco_flags,
         configParameters.expanded_flagbit_v_DB_reco_flags,
         configParameters.expanded_v_DB_reco_flagsSize,
-// conditions
+        configParameters.flagmask,
+        // conditions
         conditions.ADCToGeV.adc2gev,
         conditions.Intercalib.values,  
         conditions.ChannelStatus.status,  

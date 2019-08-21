@@ -174,6 +174,9 @@ EcalRecHitProducerGPU::EcalRecHitProducerGPU(const edm::ParameterSet& ps)   {
   v_chstatus_ = StringToEnumValue<EcalChannelStatusCode::Code>( ps.getParameter<std::vector<std::string> >("ChannelStatusToBeExcluded"));
   
   
+  bool killDeadChannels = ps.getParameter<bool>("killDeadChannels");
+  configParameters_.killDeadChannels = killDeadChannels;
+  
   
   
   // max number of digis to allocate for
@@ -266,6 +269,8 @@ EcalRecHitProducerGPU::EcalRecHitProducerGPU(const edm::ParameterSet& ps)   {
   flagmask_ |= 0x1 << EcalRecHit::kKilled;
   flagmask_ |= 0x1 << EcalRecHit::kTPSaturated;
   flagmask_ |= 0x1 << EcalRecHit::kL1SpikeFlag;
+  
+  configParameters_.flagmask = flagmask_;
   
   
 }
