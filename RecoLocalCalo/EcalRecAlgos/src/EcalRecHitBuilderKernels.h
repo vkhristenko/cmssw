@@ -17,6 +17,11 @@ namespace ecal {
       // configuration 
       int const* ChannelStatusToBeExcluded,
       uint32_t ChannelStatusToBeExcludedSize,                     
+      // for flags setting
+      uint32_t const* expanded_v_DB_reco_flags,
+      uint32_t const* expanded_Sizes_v_DB_reco_flags,
+      uint32_t const* expanded_flagbit_v_DB_reco_flags,
+      uint32_t expanded_v_DB_reco_flagsSize,
       // conditions
       float const* adc2gev,
       float const* intercalib,

@@ -19,6 +19,9 @@
 #include "CUDADataFormats/EcalRecHitSoA/interface/RecoTypes.h"
 
 
+// needed for definition of flags
+#include "DataFormats/EcalRecHit/interface/EcalRecHit.h"
+
 // the kernels
 #include "RecoLocalCalo/EcalRecAlgos/src/EcalRecHitBuilderKernels.h"
 
@@ -104,6 +107,19 @@ private:
   std::vector<int> v_chstatus_;
   
   
+  //
+  // https://github.com/cms-sw/cmssw/blob/266e21cfc9eb409b093e4cf064f4c0a24c6ac293/RecoLocalCalo/EcalRecProducers/plugins/EcalRecHitWorkerSimple.h
+  //
+  
+  // Associate reco flagbit ( outer vector) to many db status flags (inner vector)
+//   std::vector<std::vector<uint32_t> > v_DB_reco_flags_;
+  std::vector<uint32_t> expanded_v_DB_reco_flags_;         // Transform a map in a vector
+  std::vector<uint32_t> expanded_Sizes_v_DB_reco_flags_;   // Saving the size for each piece
+  std::vector<uint32_t> expanded_flagbit_v_DB_reco_flags_; // And the "key" for each key
+  
+  
+  uint32_t flagmask_;  // do not propagate channels with these flags on
+  
   
 };
 
@@ -115,7 +131,30 @@ void EcalRecHitProducerGPU::fillDescriptions(
   
   edm::ParameterSetDescription desc;
   
-  //     desc.add<edm::InputTag>("digisLabelEB", edm::InputTag("ecalDigis", "ebDigis"));
+  desc.add<edm::InputTag>("uncalibrecHitsInLabelEB", edm::InputTag("ecalUncalibRecHitProducerGPU", "EcalUncalibRecHitsEB"));
+  desc.add<edm::InputTag>("uncalibrecHitsInLabelEE", edm::InputTag("ecalUncalibRecHitProducerGPU", "EcalUncalibRecHitsEE"));
+  
+  desc.add<std::string>("recHitsLabelEB", "EcalRecHitsGPUEB");
+  desc.add<std::string>("recHitsLabelEE", "EcalRecHitsGPUEE");
+
+  desc.add<uint32_t>("maxNumberHits", 20000);
+
+  // ## db statuses to be exluded from reconstruction (some will be recovered)
+  edm::ParameterSetDescription desc_ChannelStatusToBeExcluded;
+  desc_ChannelStatusToBeExcluded.add<std::string>("kDAC");
+  desc_ChannelStatusToBeExcluded.add<std::string>("kNoisy");
+  desc_ChannelStatusToBeExcluded.add<std::string>("kNNoisy");
+  desc_ChannelStatusToBeExcluded.add<std::string>("kFixedG6");
+  desc_ChannelStatusToBeExcluded.add<std::string>("kFixedG1");
+  desc_ChannelStatusToBeExcluded.add<std::string>("kFixedG0");
+  desc_ChannelStatusToBeExcluded.add<std::string>("kNonRespondingIsolated");
+  desc_ChannelStatusToBeExcluded.add<std::string>("kDeadVFE");
+  desc_ChannelStatusToBeExcluded.add<std::string>("kDeadFE");
+  desc_ChannelStatusToBeExcluded.add<std::string>("kNoDataNoTP");
+  
+  std::vector<edm::ParameterSet> default_ChannelStatusToBeExcluded(1);
+  
+  desc.addVPSet("ChannelStatusToBeExcluded", desc_ChannelStatusToBeExcluded, default_ChannelStatusToBeExcluded);
   
 }
 
@@ -142,12 +181,6 @@ EcalRecHitProducerGPU::EcalRecHitProducerGPU(const edm::ParameterSet& ps)   {
   
   // allocate event output data
   eventOutputDataGPU_.allocate(configParameters_, maxNumberHits_);
-//   eventOutputDataGPU_.allocate(maxNumberHits_);
-  
-  
-//   configParameters_.timeFitLimitsFirstEE = EEtimeFitLimits.first;
-//   configParameters_.timeFitLimitsSecondEE = EEtimeFitLimits.second;
-  
   
   configParameters_.ChannelStatusToBeExcludedSize = v_chstatus_.size();
   
@@ -160,6 +193,81 @@ EcalRecHitProducerGPU::EcalRecHitProducerGPU(const edm::ParameterSet& ps)   {
                         cudaMemcpyHostToDevice) );
   
   
+  
+  //
+  //     https://github.com/cms-sw/cmssw/blob/266e21cfc9eb409b093e4cf064f4c0a24c6ac293/RecoLocalCalo/EcalRecProducers/plugins/EcalRecHitWorkerSimple.cc
+  //   
+  
+  // Traslate string representation of flagsMapDBReco into enum values
+  const edm::ParameterSet& p = ps.getParameter<edm::ParameterSet>("flagsMapDBReco");
+  std::vector<std::string> recoflagbitsStrings = p.getParameterNames();
+//   v_DB_reco_flags_.resize(32);
+  
+  for (unsigned int i = 0; i != recoflagbitsStrings.size(); ++i) {
+    EcalRecHit::Flags recoflagbit = (EcalRecHit::Flags)StringToEnumValue<EcalRecHit::Flags>(recoflagbitsStrings[i]);
+    std::vector<std::string> dbstatus_s = p.getParameter<std::vector<std::string> >(recoflagbitsStrings[i]);
+//     std::vector<uint32_t> dbstatuses;
+    for (unsigned int j = 0; j != dbstatus_s.size(); ++j) {
+      EcalChannelStatusCode::Code dbstatus =
+      (EcalChannelStatusCode::Code)StringToEnumValue<EcalChannelStatusCode::Code>(dbstatus_s[j]);
+//       dbstatuses.push_back(dbstatus);
+      expanded_v_DB_reco_flags_.push_back(dbstatus);
+    }
+    
+    expanded_Sizes_v_DB_reco_flags_.push_back( dbstatus_s.size() );
+    expanded_flagbit_v_DB_reco_flags_.push_back( recoflagbit );
+    
+//     v_DB_reco_flags_[recoflagbit] = dbstatuses;
+  }
+  
+  // actual values
+  cudaCheck( cudaMalloc((void**)&configParameters_.expanded_v_DB_reco_flags, 
+                        sizeof(uint32_t) * expanded_v_DB_reco_flags_.size()) 
+  );
+  
+  cudaCheck( cudaMemcpy(configParameters_.expanded_v_DB_reco_flags, 
+                        expanded_v_DB_reco_flags_.data(),
+                        expanded_v_DB_reco_flags_.size() * sizeof(uint32_t),
+                        cudaMemcpyHostToDevice) 
+  );
+  
+  
+  // sizes
+  cudaCheck( cudaMalloc((void**)&configParameters_.expanded_Sizes_v_DB_reco_flags, 
+                        sizeof(uint32_t) * expanded_Sizes_v_DB_reco_flags_.size() ) 
+  );
+  
+  cudaCheck( cudaMemcpy(configParameters_.expanded_Sizes_v_DB_reco_flags, 
+                        expanded_Sizes_v_DB_reco_flags_.data(),
+                        expanded_Sizes_v_DB_reco_flags_.size() * sizeof(uint32_t),
+                        cudaMemcpyHostToDevice) 
+  );
+  
+  // keys
+  cudaCheck( cudaMalloc((void**)&configParameters_.expanded_flagbit_v_DB_reco_flags, 
+                        sizeof(uint32_t) * expanded_flagbit_v_DB_reco_flags_.size() ) 
+  );
+  
+  cudaCheck( cudaMemcpy(configParameters_.expanded_flagbit_v_DB_reco_flags, 
+                        expanded_flagbit_v_DB_reco_flags_.data(),
+                        expanded_flagbit_v_DB_reco_flags_.size() * sizeof(uint32_t),
+                        cudaMemcpyHostToDevice) 
+  );
+  
+  
+  configParameters_.expanded_v_DB_reco_flagsSize = expanded_flagbit_v_DB_reco_flags_.size();
+  
+  
+  
+  flagmask_ = 0;
+  flagmask_ |= 0x1 << EcalRecHit::kNeighboursRecovered;
+  flagmask_ |= 0x1 << EcalRecHit::kTowerRecovered;
+  flagmask_ |= 0x1 << EcalRecHit::kDead;
+  flagmask_ |= 0x1 << EcalRecHit::kKilled;
+  flagmask_ |= 0x1 << EcalRecHit::kTPSaturated;
+  flagmask_ |= 0x1 << EcalRecHit::kL1SpikeFlag;
+  
+  
 }
 
 
@@ -167,7 +275,14 @@ EcalRecHitProducerGPU::~EcalRecHitProducerGPU() {
   
   // free event ouput data 
   eventOutputDataGPU_.deallocate(configParameters_);
-//   eventOutputDataGPU_.deallocate();
+  
+  // FIXME AM: do I need to do this?
+  //           Or can I do it as part of "deallocate" ?
+  cudaCheck( cudaFree(configParameters_.ChannelStatusToBeExcluded) );
+
+  cudaCheck( cudaFree(configParameters_.expanded_v_DB_reco_flags) );
+  cudaCheck( cudaFree(configParameters_.expanded_Sizes_v_DB_reco_flags) );
+  cudaCheck( cudaFree(configParameters_.expanded_flagbit_v_DB_reco_flags) );
   
 }
 

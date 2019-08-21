@@ -60,15 +60,15 @@ ecalRecHitGPU = cms.EDProducer("EcalRecHitProducerGPU",
     #laserCorrection = cms.bool(True),
                             
     ## reco flags association to DB flag
-    #flagsMapDBReco = cms.PSet(
-        #kGood  = cms.vstring('kOk','kDAC','kNoLaser','kNoisy'),
-        #kNoisy = cms.vstring('kNNoisy','kFixedG6','kFixedG1'),
-        #kNeighboursRecovered = cms.vstring('kFixedG0',
-										   #'kNonRespondingIsolated',
-										   #'kDeadVFE'),
-        #kTowerRecovered = cms.vstring('kDeadFE'),
-        #kDead           = cms.vstring('kNoDataNoTP')
-        #), 
+    flagsMapDBReco = cms.PSet(
+        kGood  = cms.vstring('kOk','kDAC','kNoLaser','kNoisy'),
+        kNoisy = cms.vstring('kNNoisy','kFixedG6','kFixedG1'),
+        kNeighboursRecovered = cms.vstring('kFixedG0',
+                                           'kNonRespondingIsolated',
+                                           'kDeadVFE'),
+        kTowerRecovered = cms.vstring('kDeadFE'),
+        kDead           = cms.vstring('kNoDataNoTP')
+        ), 
         
 #//         flagmask_ |= 0x1 << EcalRecHit::kNeighboursRecovered;
 #//         flagmask_ |= 0x1 << EcalRecHit::kTowerRecovered;

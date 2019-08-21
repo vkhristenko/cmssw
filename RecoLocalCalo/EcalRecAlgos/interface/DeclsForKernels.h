@@ -308,6 +308,13 @@ namespace ecal {
       int *ChannelStatusToBeExcluded=nullptr; 
       uint32_t ChannelStatusToBeExcludedSize;
       
+//       std::vector<std::vector<uint32_t> > v_DB_reco_flags;
+      uint32_t* expanded_v_DB_reco_flags;
+      uint32_t* expanded_Sizes_v_DB_reco_flags;
+      uint32_t* expanded_flagbit_v_DB_reco_flags;
+      uint32_t expanded_v_DB_reco_flagsSize;
+      
+      
 //       std::array<uint32_t, 3> kernelMinimizeThreads;
 //       
 //       bool shouldRunTimingComputation;

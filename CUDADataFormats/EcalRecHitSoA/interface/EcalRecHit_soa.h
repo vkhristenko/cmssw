@@ -4,8 +4,6 @@
 #include <vector>
 #include <array>
 
-// #include "DataFormats/EcalDigi/interface/EcalDataFrame.h"   -> why?
-
 #include "CUDADataFormats/EcalRecHitSoA/interface/RecoTypes.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
 

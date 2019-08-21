@@ -17,166 +17,17 @@ namespace ecal {
   namespace rechit {
 
 
-    __global__
-    void kernel_create_laser_corrections(
-      // input
-      float const* p1,
-      float const* p2,
-      float const* p3,
-      edm::TimeValue_t const* t1,
-      edm::TimeValue_t const* t2,
-      edm::TimeValue_t const* t3,
-      // output
-      float *laser_corrections_out,
-      // support
-      int const nchannels
-    ) {
-      
-      //
-      // Calculate laser corrections:
-      //
-      
-      int ch = threadIdx.x + blockDim.x*blockIdx.x;
-      
-      if (ch < nchannels) {
-        
-        laser_corrections_out[ch] = 1.;
-                
-        //       
-        //       https://github.com/cms-sw/cmssw/blob/5d27b6509171a20b6e6a4bbbaf29ca471d612913/CalibCalorimetry/EcalLaserCorrection/src/EcalLaserDbService.cc
-        //       ./CalibCalorimetry/EcalLaserCorrection/src/EcalLaserDbService.cc
-        //       
-        
-        
-        //       
-        //       iLM = MEEBGeom::lmr(ebid.ieta(), ebid.iphi());
-        //       iLM = MEEEGeom::lmr(iX, iY, eeid.zside());
-        //             
-        
-        //         int MEEBGeom::lmr(EBGlobalCoord ieta, EBGlobalCoord iphi) {
-        //            int idcc = dcc(ieta, iphi);
-        //            int ism = idcc - 9;
-        //            int iside = side(ieta, iphi);
-        //            int ilmr = 1 + 2 * (ism - 1) + iside;
-        //            return ilmr;
-        //          }
-//         
-//         
-//         int MEEBGeom::dcc(EBGlobalCoord ieta, EBGlobalCoord iphi) {
-//             int ism = sm(ieta, iphi);
-//             return dccFromSm(ism);
-//           }
-//           
-//           int MEEBGeom::dccFromSm(int ism) {
-//                assert(ism >= 1 && ism <= 36);
-//                int iz = 1;
-//                if (ism > 18)
-//                  iz = -1;
-//                if (iz == -1)
-//                  ism -= 18;
-//                assert(ism >= 1 && ism <= 18);
-//                int idcc = 9 + ism;
-//                if (iz == +1)
-//                  idcc += 18;
-//                return idcc;
-//              }
-//         
-//         
-        //       if (iLM - 1 < (int)laserTimeMap.size()) {
-        //         timestamp = laserTimeMap[iLM - 1];
-        //       } 
-        //       
-        //       timestamp = laserTimeMap[iLM - 1];
-        //       
-        //       
-        //       void  setValue(uint32_t rawId, const EcalLaserAPDPNpair& value) { laser_map[rawId] = value; };
-        //       const EcalLaserAPDPNRatiosMap& getLaserMap() const { return laser_map; }
-        //       
-        //       void setTime(int hashedIndex, const EcalLaserTimeStamp& value) { time_map[hashedIndex] = value; };
-        //       const EcalLaserTimeStampMap& getTimeMap() const { return time_map; }  
-        // 
-        
-        // interpolation
-        
-        //
-        // FIXME: calculate iLM (i-laser monitoring region)
-        //
-        int iLM = 1;
-       
-//         auto const isBarrel = did_to_use.subdetId() == EcalBarrel;
-//         auto const hashedId = isBarrel
-// 
-//         if (isBarrel) {
-//           iLM = ...
-//         }
-//         else {
-//           iLM = ...
-//         }
-//         
-//         
-        
-        //       edm::TimeValue_t t = iTime.value();
-        edm::TimeValue_t t = 0.;  // FIXME
-        long long t_i = 0, t_f = 0;
-        float p_i = 0, p_f = 0;
-        long long lt_i = 0, lt_f = 0;
-        float lp_i = 0, lp_f = 0;
-        
-        if (t >= t1[iLM - 1] && t < t2[iLM - 1]) {
-          t_i = t1[iLM - 1];
-          t_f = t2[iLM - 1];
-          p_i = p1[ch];
-          p_f = p2[ch];
-        } else if (t >= t2[iLM - 1] && t <= t3[iLM - 1]) {
-          t_i = t2[iLM - 1];
-          t_f = t3[iLM - 1];
-          p_i = p2[ch];
-          p_f = p3[ch];
-        } else if (t < t1[iLM - 1]) {
-          t_i = t1[iLM - 1];
-          t_f = t2[iLM - 1];
-          p_i = p1[ch];
-          p_f = p2[ch];
-          
-        } else if (t > t3[iLM - 1]) {
-          t_i = t2[iLM - 1];
-          t_f = t3[iLM - 1];
-          p_i = p2[ch];
-          p_f = p3[ch];
-        }
-        
-        float apdpnref = 1.;
-        float alpha = 1.;
-        
-        if (apdpnref != 0 && (t_i - t_f) != 0 && (lt_i - lt_f) != 0) {
-          long long tt = t;  // never subtract two unsigned!
-          float interpolatedLaserResponse =   p_i / apdpnref + float(tt - t_i)  * (p_f - p_i)   / (apdpnref * float(t_f - t_i));
-          float interpolatedLinearResponse = lp_i / apdpnref + float(tt - lt_i) * (lp_f - lp_i) / (apdpnref * float(lt_f - lt_i));  // FIXED BY FC
-          
-          if (interpolatedLinearResponse > 2.f || interpolatedLinearResponse < 0.1f) {
-            interpolatedLinearResponse = 1.f;
-          }
-          if (interpolatedLaserResponse <= 0.) {
-            // how the heck is it possible?
-            interpolatedLaserResponse = 0.0001;
-          }
-          
-          float interpolatedTransparencyResponse = interpolatedLaserResponse / interpolatedLinearResponse;
-          
-          laser_corrections_out[ch] = 1.f / (std::pow(interpolatedTransparencyResponse, alpha) * interpolatedLinearResponse);
-        }
-       
-      
-      }
-      
-    }
-
     
     __global__
     void kernel_create_ecal_rehit(
                      // configuration 
                      int const* ChannelStatusToBeExcluded,
                      uint32_t ChannelStatusToBeExcludedSize,                     
+                     // for flags setting
+                     uint32_t const* expanded_v_DB_reco_flags,
+                     uint32_t const* expanded_Sizes_v_DB_reco_flags,
+                     uint32_t const* expanded_flagbit_v_DB_reco_flags,
+                     uint32_t expanded_v_DB_reco_flagsSize,
                      // conditions
                      float const* adc2gev,
                      float const* intercalib,
@@ -233,9 +84,6 @@ namespace ecal {
                           ? ch - offsetForInput
                           : ch;
                             
-  //                         
-  // not used? ... yet ... it will be used to get IC, Laser Correction, ...
-  //                         
         uint32_t const * didCh = ch >= offsetForInput
                           ? did_ee
                           : did_eb;
@@ -305,7 +153,6 @@ namespace ecal {
         }
         else {
           iLM = ecal::reconstruction::laser_monitoring_region_EE (did_to_use.rawId());
-          //           iLM = ...
         }
         
         
@@ -389,8 +236,6 @@ namespace ecal {
         }
         
         
-        
-        
         //
         // Check for channels to be excluded from reconstruction
         //        
@@ -409,6 +254,41 @@ namespace ecal {
             }
           }
         }
+        
+        
+        
+        
+        
+        // Take our association map of dbstatuses-> recHit flagbits and return the apporpriate flagbit word
+        int iterator_flags = 0;
+        bool need_to_exit = false;
+        for (unsigned int i = 0; i != expanded_v_DB_reco_flagsSize; ++i) {
+          
+          for (unsigned int j = 0; j != expanded_Sizes_v_DB_reco_flags[i]; j++) {
+            if ( expanded_v_DB_reco_flags[iterator_flags] == dbstatus ) {
+              flagBits[ch] =  0x1 << expanded_flagbit_v_DB_reco_flags[i];
+              need_to_exit = true;
+              break; // from the big loop!!!
+            }
+            if (need_to_exit) {
+              break;
+            }
+            iterator_flags++;
+          }
+        }
+                    
+//         for (unsigned int i = 0; i != v_DB_reco_flags_.size(); ++i) {
+//           if (std::find(v_DB_reco_flags_[i].begin(), v_DB_reco_flags_[i].end(), dbstatus) != v_DB_reco_flags_[i].end()) {
+//             flagBits[ch] =  0x1 << i;
+//             break;
+//           }
+//         }
+        
+        
+        
+        
+        
+        
         
         //
         // why are these channels killed in a different way?
@@ -436,8 +316,9 @@ namespace ecal {
         chi2[ch] = chi2_in[inputCh];
         
         // FIXME: calculate the flagBits
-        flagBits[ch] = 0;
+//         flagBits[ch] = 0;
         extra[ch] = 0;
+        
         
       }
       
@@ -458,46 +339,10 @@ namespace ecal {
              ){
     
       int nchannels = eventInputGPU.ebUncalibRecHits.size + eventInputGPU.eeUncalibRecHits.size ;
-      
-//       unsigned int totalChannels = 10; //eventInputGPU.ebUncalibRecHits.nchannels +
-//       eventInputGPU.eeUncalibRecHits.nchannels;
-      
+            
       unsigned int nchannels_per_block = 32;
-//       unsigned int threads_1d = 10 * nchannels_per_block;
       unsigned int threads_1d = nchannels_per_block;
-      //   unsigned int blocks_1d = threads_1d > 10*totalChannels  ? 1 : (totalChannels*10 + threads_1d - 1) / threads_1d;
-//       unsigned int blocks_1d = 2;
-      unsigned int blocks_1d = (nchannels + threads_1d) / threads_1d; // TEST 
-      
-      // 
-      // kernel update laser corrections
-      //
-      
-//       float* device_laser_corrections;
-//       cudaCheck( cudaMalloc((void**)&device_laser_corrections, 
-//                             sizeof(float) * nchannels) 
-//       );   
-      
-//       kernel_create_laser_corrections <<< blocks_1d, threads_1d >>> (
-//         // input
-//         conditions.LaserAPDPNRatios.p1,
-//         conditions.LaserAPDPNRatios.p2,
-//         conditions.LaserAPDPNRatios.p3,
-//         conditions.LaserAPDPNRatios.t1,
-//         conditions.LaserAPDPNRatios.t2,
-//         conditions.LaserAPDPNRatios.t3,
-//         // output
-//         device_laser_corrections,
-//         // support
-//         nchannels       
-//         );
-        
-//       
-//       LaserAPDPNRatios   
-//       LaserAPDPNRatiosRef
-//       LaserAlphas        
-//       LinearCorrections  
-//       
+      unsigned int blocks_1d = (nchannels + threads_1d) / threads_1d; // TEST : to be optimized (AM)
       
       
       // 
@@ -507,6 +352,11 @@ namespace ecal {
 // configuration 
         configParameters.ChannelStatusToBeExcluded,
         configParameters.ChannelStatusToBeExcludedSize,
+// for flags setting
+        configParameters.expanded_v_DB_reco_flags,
+        configParameters.expanded_Sizes_v_DB_reco_flags,
+        configParameters.expanded_flagbit_v_DB_reco_flags,
+        configParameters.expanded_v_DB_reco_flagsSize,
 // conditions
         conditions.ADCToGeV.adc2gev,
         conditions.Intercalib.values,  
@@ -552,10 +402,6 @@ namespace ecal {
       );
       
       
-//       /afs/cern.ch/work/a/amassiro/ECAL/GPU/onGPU/3July2019/CMSSW_10_6_0_Patatrack/src/RecoLocalCalo/EcalRecAlgos/src/EcalRecHitBuilderKernels.cu(66): error: no suitable conversion function from "const std::vector<uint32_t, CUDAHostAllocator<uint32_t, 0U>>" to "const uint32_t *" exists
-      
-      
-
       
     }
     
