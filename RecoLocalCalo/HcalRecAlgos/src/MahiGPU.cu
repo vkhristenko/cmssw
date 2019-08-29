@@ -1164,16 +1164,148 @@ void kernel_minimize(
 
         // obtain AtA and Atb required for fast nnls
         matrixDecomposition.compute(covarianceMatrix);
-        auto const& A = matrixDecomposition
-            .matrixL()
-            .solve(pulseMatrixView);
-        auto const& b = matrixDecomposition
-            .matrixL()
-            .solve(inputAmplitudesView);
+        auto const& matrixL = matrixDecomposition.matrixL();
+
+        //
+        // replace eigen
+        //
+        //auto const& A = matrixDecomposition
+        //    .matrixL()
+        //    .solve(pulseMatrixView);
+        ColMajorMatrix<NSAMPLES, NPULSES> A;
+        #pragma unroll
+        for (int icol=0; icol<NPULSES; icol++) {
+            float reg_b[NSAMPLES];
+            float reg_L[NSAMPLES];
+
+            // preload a column and load column 0 of cholesky
+            #pragma unroll
+            for (int i=0; i<NSAMPLES; i++) {
+                reg_b[i] = pulseMatrixView(i, icol);
+                reg_L[i] = matrixL(i, 0);
+            }
+
+            // compute x0 and store it
+            auto x_prev = reg_b[0] / reg_L[0];
+            A(0, icol) = x_prev;
+
+            // iterate
+            #pragma unroll
+            for (int iL=1; iL<NSAMPLES; iL++) {
+                // update accum
+                #pragma unroll
+                for (int counter=iL; counter<NSAMPLES; counter++)
+                    reg_b[counter] -= x_prev * reg_L[counter];
+
+                // load the next column of cholesky
+                #pragma unroll
+                for (int counter=iL; counter<NSAMPLES; counter++)
+                    reg_L[counter] = matrixL(counter, iL);
+
+                // compute the next x for M(iL, icol)
+                x_prev = reg_b[iL] / reg_L[iL];
+
+                // store the result value
+                A(iL, icol) = x_prev;
+            }
+        }
+
+        // 
+        // remove eigen
+        //
+        //auto const& b = matrixL
+        //   .solve(inputAmplitudesView);
+        //
+        float reg_b[NSAMPLES];
+        {
+            float reg_b_tmp[NSAMPLES];
+            float reg_L[NSAMPLES];
+
+            // preload a column and load column 0 of cholesky
+            #pragma unroll
+            for (int i=0; i<NSAMPLES; i++) {
+                reg_b_tmp[i] = inputAmplitudesView(i);
+                reg_L[i] = matrixL(i, 0);
+            }
+
+            // compute x0 and store it
+            auto x_prev = reg_b_tmp[0] / reg_L[0];
+            reg_b[0] = x_prev;
+
+            // iterate
+            #pragma unroll
+            for (int iL=1; iL<NSAMPLES; iL++) {
+                // update accum
+                #pragma unroll
+                for (int counter=iL; counter<NSAMPLES; counter++)
+                    reg_b_tmp[counter] -= x_prev * reg_L[counter];
+
+                // load the next column of cholesky
+                #pragma unroll
+                for (int counter=iL; counter<NSAMPLES; counter++)
+                    reg_L[counter] = matrixL(counter, iL);
+
+                // compute the next x for M(iL, icol)
+                x_prev = reg_b_tmp[iL] / reg_L[iL];
+
+                // store the result value
+                reg_b[iL] = x_prev;
+            }
+        }
+
         // TODO: we do not really need to change these matrcies
         // will be fixed in the optimized version
-        ColMajorMatrix<NPULSES, NPULSES> AtA = A.transpose() * A;
-        ColumnVector<NPULSES> Atb = A.transpose() * b;
+        //ColMajorMatrix<NPULSES, NPULSES> AtA = A.transpose() * A;
+        //ColumnVector<NPULSES> Atb = A.transpose() * b;
+        ColMajorMatrix<NPULSES, NPULSES> AtA;
+        ColumnVector<NPULSES> Atb;
+        #pragma unroll
+        for (int icol=0; icol<NPULSES; icol++) {
+            float reg_ai[NSAMPLES];
+
+            // load column icol
+            #pragma unroll
+            for(int counter=0; counter<NSAMPLES; counter++)
+                reg_ai[counter] = A(counter, icol);
+
+            // compute diagonal 
+            float sum = 0.f;
+            #pragma unroll
+            for (int counter=0; counter<NSAMPLES; counter++)
+                sum += reg_ai[counter] * reg_ai[counter];
+
+            // store 
+            AtA(icol, icol) = sum;
+
+            // go thru the other columns
+            #pragma unroll
+            for (int j=icol+1; j<NPULSES; j++) {
+                // load column j
+                float reg_aj[NSAMPLES];
+                #pragma unroll
+                for (int counter=0; counter<NSAMPLES; counter++)
+                    reg_aj[counter] = A(counter, j);
+
+                // accum
+                float sum = 0.f;
+                #pragma unroll
+                for (int counter=0; counter<NSAMPLES; counter++)
+                    sum += reg_aj[counter] * reg_ai[counter];
+
+                // store 
+                AtA(icol, j) = sum;
+                AtA(j, icol) = sum;
+            }
+
+            // Atb accum
+            float sum_atb = 0;
+            #pragma unroll
+            for (int counter=0; counter<NSAMPLES; counter++)
+                sum_atb += reg_ai[counter] * reg_b[counter];
+
+            // store atb
+            Atb(icol) = sum_atb;
+        }
 
 #ifdef HCAL_MAHI_GPUDEBUG
         printf("AtA\n");
