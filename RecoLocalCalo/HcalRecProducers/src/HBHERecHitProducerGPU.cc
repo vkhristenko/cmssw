@@ -118,6 +118,12 @@ HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps)
     configParameters_.slopeTimeSlew = slopeValues[HcalTimeSlew::Medium];
     configParameters_.tmaxTimeSlew = tmaxValues[HcalTimeSlew::Medium];
 
+    auto threadsMinimize = ps.getParameter<std::vector<uint32_t>>(
+        "kernelMinimizeThreads");
+    configParameters_.kernelMinimizeThreads[0] = threadsMinimize[0];
+    configParameters_.kernelMinimizeThreads[1] = threadsMinimize[1];
+    configParameters_.kernelMinimizeThreads[2] = threadsMinimize[2];
+
     outputGPU_.allocate(configParameters_);
     scratchGPU_.allocate(configParameters_);
 
@@ -165,6 +171,7 @@ void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cde
         {-3.178648, -1.5610227, -1.075824});
     desc.add<std::vector<double>>("tmaxTimeSlewParameters", 
         {16.00, 10.00, 6.25});
+    desc.add<std::vector<uint32_t>>("kernelMinimizeThreads", {32, 1, 1});
 
     std::string label = "hbheRecHitProducerGPU";
     cdesc.add(label, desc);
