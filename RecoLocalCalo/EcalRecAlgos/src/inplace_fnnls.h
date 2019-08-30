@@ -10,8 +10,8 @@ using vector_t = SampleVector;
 
 __device__
 bool
-inplace_fnnls(matrix_t const& A,
-              vector_t const& b,
+inplace_fnnls(matrix_t& AtA,
+              vector_t& Atb,
               vector_t& x,
               int& npassive,
               BXVectorType& activeBXs,
