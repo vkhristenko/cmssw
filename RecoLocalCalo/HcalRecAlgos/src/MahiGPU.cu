@@ -1524,7 +1524,7 @@ void entryPoint(
 
     if (f01nsamples==8 && configParameters.pulseOffsets.size() == 8u) {
         // FIXME: provide constants from configuration
-        uint32_t threadsPerBlock = 16;
+        uint32_t threadsPerBlock = configParameters.kernelMinimizeThreads[0];
         uint32_t blocks = threadsPerBlock > totalChannels
             ? 1
             : (totalChannels + threadsPerBlock - 1) / threadsPerBlock;
