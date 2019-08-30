@@ -68,6 +68,8 @@ struct ConfigParameters {
     std::vector<int> pulseOffsets;
     int* pulseOffsetsDevice=nullptr;
 
+    std::array<uint32_t, 3> kernelMinimizeThreads;
+
     // FIXME: 
     //   - add "getters" to HcalTimeSlew calib formats
     //   - add ES Producer to consume what is produced above not to replicate.
