@@ -296,7 +296,7 @@ public:
     __device__
     HBHERecHit reconstruct(const HBHEChannelInfo& info,
                            const HcalRecoParam* params,
-                           const HcalCalibrations& calibs,
+//                           const HcalCalibrations& calibs,
                            bool isRealData,
                            float const* pshape /* this is added */);
 
@@ -334,7 +334,7 @@ protected:
     __device__
     float m0Time(const HBHEChannelInfo& info,
                  double reconstructedCharge,
-                 const HcalCalibrations& calibs,
+//                 const HcalCalibrations& calibs,
                  int nSamplesToExamine) const;
 private:
     // TODO:resolve this
@@ -377,7 +377,7 @@ SimpleHBHEPhase1Algo::SimpleHBHEPhase1Algo()
 __device__
 HBHERecHit SimpleHBHEPhase1Algo::reconstruct(const HBHEChannelInfo& info,
                                              const HcalRecoParam* params,
-                                             const HcalCalibrations& calibs,
+//                                             const HcalCalibrations& calibs,
                                              const bool isData,
                                              float const* pshape) {
     HBHERecHit rh;
@@ -396,7 +396,7 @@ HBHERecHit SimpleHBHEPhase1Algo::reconstruct(const HBHEChannelInfo& info,
         const float phasens = params ? params->correctionPhaseNS() : phaseNS_;
         m0E = m0Energy(info, fc_ampl, applyContainment, phasens, nSamplesToAdd);
         m0E *= hbminusCorrectionFactor(channelId, m0E, isData);
-        m0t = m0Time(info, fc_ampl, calibs, nSamplesToAdd);
+        m0t = m0Time(info, fc_ampl, /*calibs,*/ nSamplesToAdd);
     }
 
     // Run "Method 2"
@@ -513,7 +513,7 @@ float SimpleHBHEPhase1Algo::m0Energy(const HBHEChannelInfo& info,
 __device__
 float SimpleHBHEPhase1Algo::m0Time(const HBHEChannelInfo& info,
                                    const double fc_ampl,
-                                   const HcalCalibrations& calibs,
+//                                   const HcalCalibrations& calibs,
                                    const int nSamplesToExamine) const
 {
     float time = -9999.f; // historic value
@@ -556,18 +556,18 @@ float SimpleHBHEPhase1Algo::m0Time(const HBHEChannelInfo& info,
 /// mahi/multifit kernel
 __global__ 
 void kernel_reconstruct(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
-                            HcalRecoParam *vparams, HcalCalibrations *vcalibs,
+                            HcalRecoParam *vparams, /*HcalCalibrations *vcalibs,*/
                             int* hashes, float* psdata, int size) {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
     if (idx < size) {
         auto info = vinfos[idx];
         auto params = vparams[idx];
-        auto calibs = vcalibs[idx];
+//        auto calibs = vcalibs[idx];
         auto *pshape = psdata + hashes[info.recoShape()] * 256;
 
         SimpleHBHEPhase1Algo algo{};
-        auto rh = algo.reconstruct(info, &params, calibs,  
+        auto rh = algo.reconstruct(info, &params, /*calibs,*/
             /* TODO: drag this boolean from the host */ true,
             pshape);
 
@@ -578,13 +578,14 @@ void kernel_reconstruct(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
 void reconstruct(DeviceData ddata,
           HBHEChannelInfoCollection& vinfos, HBHERecHitCollection& vrechits, 
           std::vector<HcalRecoParam> const& vparams, 
-          std::vector<HcalCalibrations> const& vcalibs, 
+//          std::vector<HcalCalibrations> const& vcalibs, 
           PulseShapeData &psdata, bool,
           cudaStream_t custream) {
     // resize the output vector
     vrechits.resize(vinfos.size());
 
-    std::cout << "size = " << vinfos.size() << std::endl;
+    std::cout << "size(info) = " << vinfos.size() << std::endl;
+    std::cout << " size(vparams) = " << vparams.size() << std::endl;
 
     // transfer to the device
     cudaMemcpyAsync(ddata.vinfos, &(*vinfos.begin()), 
@@ -593,16 +594,18 @@ void reconstruct(DeviceData ddata,
     cudaMemcpyAsync(ddata.vparams, &(*vparams.begin()), 
         vinfos.size() * sizeof(HcalRecoParam),
         cudaMemcpyHostToDevice, custream);
+/*
     cudaMemcpyAsync(ddata.vcalibs, &(*vcalibs.begin()), 
         vinfos.size() * sizeof(HcalCalibrations),
         cudaMemcpyHostToDevice, custream);
+*/
 
     // call the kernel
     int nthreadsPerBlock = 256;
     int nblocks = (vinfos.size() + nthreadsPerBlock - 1) / nthreadsPerBlock;
     kernel_reconstruct<<<nblocks, nthreadsPerBlock, 0, custream>>>(
         ddata.vinfos, ddata.vrechits,
-        ddata.vparams, ddata.vcalibs, psdata.hashes, psdata.data, vinfos.size());
+        ddata.vparams, /*ddata.vcalibs,*/ psdata.hashes, psdata.data, vinfos.size());
 //    cudaDeviceSynchronize();
 //    hcal::cuda::assert_if_error();
 

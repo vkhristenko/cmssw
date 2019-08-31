@@ -8,7 +8,7 @@
 #include <cuda_runtime.h>
 
 #include "DataFormats/HcalRecHit/interface/HcalRecHitCollections.h"
-#include "CalibFormats/HcalObjects/interface/HcalCalibrations.h"
+//#include "CalibFormats/HcalObjects/interface/HcalCalibrations.h"
 #include "CondFormats/HcalObjects/interface/HcalRecoParam.h"
 
 // Base class header
@@ -145,27 +145,27 @@ struct DeviceData {
     HBHEChannelInfo         *vinfos;
     HBHERecHit              *vrechits;
     HcalRecoParam           *vparams;
-    HcalCalibrations        *vcalibs;
+  //    HcalCalibrations        *vcalibs;
 
     void allocate(int size) {
         cudaMalloc((void**)&vinfos, size * sizeof(HBHEChannelInfo));
         cudaMalloc((void**)&vrechits, size * sizeof(HBHERecHit));
         cudaMalloc((void**)&vparams, size * sizeof(HcalRecoParam));
-        cudaMalloc((void**)&vcalibs, size* sizeof(HcalCalibrations));
+	//        cudaMalloc((void**)&vcalibs, size* sizeof(HcalCalibrations));
     }
     
     void free() {
             cudaFree(vinfos);
             cudaFree(vrechits);
             cudaFree(vparams);
-            cudaFree(vcalibs);
+	    //            cudaFree(vcalibs);
     }
 };
 
 void reconstruct(DeviceData,
                  HBHEChannelInfoCollection&, HBHERecHitCollection&, 
                  std::vector<HcalRecoParam> const&, 
-                 std::vector<HcalCalibrations> const&, 
+		 //                 std::vector<HcalCalibrations> const&, 
                  PulseShapeData &, bool,
                  cudaStream_t custream);
 
