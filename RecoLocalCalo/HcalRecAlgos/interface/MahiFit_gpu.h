@@ -15,10 +15,9 @@ struct MahiNnlsWorkspace {
   unsigned int nPulseTot;
   unsigned int tsSize;
   unsigned int tsOffset;
-  unsigned int fullTSOffset;
   int bxOffset;
   int maxoffset;
-  double dt;
+  float dt;
 
   //holds active bunch crossings
   BXVector bxs;  
@@ -30,11 +29,11 @@ struct MahiNnlsWorkspace {
   SampleVector noiseTerms;
 
   //holds flat pedestal uncertainty
-  SampleMatrix pedConstraint;
+  float pedVal;
   
   //holds full covariance matrix for a pulse shape 
   //varied in time
-  FullSampleMatrix pulseCovArray[MaxPVSize];
+  SampleMatrix pulseCovArray[MaxPVSize];
 
   //holds matrix of pulse shape templates for each BX
   SamplePulseMatrix pulseMat;
@@ -156,21 +155,20 @@ class MahiFit
   mutable MahiNnlsWorkspace nnlsWork_;
 
   //hard coded in initializer
-  const unsigned int fullTSSize_;
-  const unsigned int fullTSofInterest_;
-
   static constexpr int pedestalBX_ = 100;
 
   // used to restrict returned time value to a 25 ns window centered 
   // on the nominal arrival time
   static constexpr float timeLimit_ = 12.5;
 
+  bool calculateArrivalTime_ {true};
+
   // Python-configurables
   bool dynamicPed_ {false};
   float ts4Thresh_ {0.0};
   float chiSqSwitch_{15.0}; 
 
-  bool applyTimeSlew_{true}; 
+  bool applyTimeSlew_{false};
   /* HcalTimeSlew::BiasSetting */ int slewFlavor_{1};
   float tsDelay1GeV_{10.0};
 

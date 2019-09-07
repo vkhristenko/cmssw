@@ -51,14 +51,11 @@ SiPixelRawToDigi::SiPixelRawToDigi( const edm::ParameterSet& conf )
   
   includeErrors = config_.getParameter<bool>("IncludeErrors");
   useQuality = config_.getParameter<bool>("UseQualityInfo");
-  if (config_.exists("ErrorList")) {
-    tkerrorlist = config_.getParameter<std::vector<int> > ("ErrorList");
-  }
-  if (config_.exists("UserErrorList")) {
-    usererrorlist = config_.getParameter<std::vector<int> > ("UserErrorList");
-  }
+
+  tkerrorlist = config_.getParameter<std::vector<int> > ("ErrorList");
+  usererrorlist = config_.getParameter<std::vector<int> > ("UserErrorList");
+
   tFEDRawDataCollection = consumes <FEDRawDataCollection> (config_.getParameter<edm::InputTag>("InputLabel"));
-  theBadPixelFEDChannelsLabel = consumes<PixelFEDChannelCollection>(config_.getParameter<edm::InputTag>("BadPixelFEDChannelsInputLabel"));
   
   //start counters
   ndigis = 0;
@@ -74,11 +71,8 @@ SiPixelRawToDigi::SiPixelRawToDigi( const edm::ParameterSet& conf )
   }
   
   // regions
-  if (config_.exists("Regions")) {
-    if(!config_.getParameter<edm::ParameterSet>("Regions").getParameterNames().empty())
-    {
-      regions_ = new PixelUnpackingRegions(config_, consumesCollector());
-    }
+  if(!config_.getParameter<edm::ParameterSet>("Regions").getParameterNames().empty()) {
+    regions_ = new PixelUnpackingRegions(config_, consumesCollector());
   }
 
   // Timing
@@ -90,18 +84,13 @@ SiPixelRawToDigi::SiPixelRawToDigi( const edm::ParameterSet& conf )
   }
 
   // Control the usage of pilot-blade data, FED=40
-  usePilotBlade = false; 
-  if (config_.exists("UsePilotBlade")) {
-    usePilotBlade = config_.getParameter<bool> ("UsePilotBlade");
-    if(usePilotBlade) edm::LogInfo("SiPixelRawToDigi")  << " Use pilot blade data (FED 40)";
-  }
+  usePilotBlade = config_.getParameter<bool> ("UsePilotBlade");
+  if(usePilotBlade) edm::LogInfo("SiPixelRawToDigi")  << " Use pilot blade data (FED 40)";
 
   // Control the usage of phase1
-  usePhase1 = false;
-  if (config_.exists("UsePhase1")) {
-    usePhase1 = config_.getParameter<bool> ("UsePhase1");
-    if(usePhase1) edm::LogInfo("SiPixelRawToDigi")  << " Using phase1";
-  }
+  usePhase1 = config_.getParameter<bool> ("UsePhase1");
+  if(usePhase1) edm::LogInfo("SiPixelRawToDigi")  << " Using phase1";
+
   //CablingMap could have a label //Tav
   cablingMapLabel = config_.getParameter<std::string> ("CablingMapLabel");
 
@@ -153,7 +142,6 @@ SiPixelRawToDigi::fillDescriptions(edm::ConfigurationDescriptions& descriptions)
   desc.add<bool>("UsePhase1",false)->setComment("##  Use phase1");
   desc.add<std::string>("CablingMapLabel","")->setComment("CablingMap label"); //Tav
   desc.addOptional<bool>("CheckPixelOrder");  // never used, kept for back-compatibility
-  desc.add<edm::InputTag>("BadPixelFEDChannelsInputLabel",edm::InputTag("mix"));  
   descriptions.add("siPixelRawToDigi",desc);
   
 }
@@ -199,7 +187,6 @@ void SiPixelRawToDigi::produce( edm::Event& ev,
   auto usererror_detidcollection = std::make_unique<DetIdCollection>();
   auto disabled_channelcollection = std::make_unique<edmNew::DetSetVector<PixelFEDChannel> >();
 
-  //PixelDataFormatter formatter(cabling_.get()); // phase 0 only
   PixelDataFormatter formatter(cabling_.get(), usePhase1); // for phase 1 & 0
 
   formatter.setErrorStatus(includeErrors);
@@ -254,7 +241,7 @@ void SiPixelRawToDigi::produce( edm::Event& ev,
 	  for (auto const& aPixelError : errorDetSet) {
 	    // For the time being, we extend the error handling functionality with ErrorType 25
 	    // In the future, we should sort out how the usage of tkerrorlist can be generalized
-	    if (aPixelError.getType()==25) {
+	    if (usePhase1 && aPixelError.getType()==25) {
 	      assert(aPixelError.getFedId()==fedId);
 	      const sipixelobjects::PixelFEDCabling* fed = cabling_->fed(fedId);
 	      if (fed) {
@@ -317,29 +304,12 @@ void SiPixelRawToDigi::produce( edm::Event& ev,
     hDigi->Fill(formatter.nDigis());
   }
   
-
-  //------------------------------------
-  //send digis and errors back to framework 
-
-  edm::Handle<PixelFEDChannelCollection> pixelFEDChannelCollectionHandle;
-  std::unique_ptr<PixelFEDChannelCollection> PixelFEDChannelCollection_ = nullptr;  
-  if (ev.getByToken(theBadPixelFEDChannelsLabel, pixelFEDChannelCollectionHandle)){
-    
-    const PixelFEDChannelCollection * pfcc= pixelFEDChannelCollectionHandle.product();
-    PixelFEDChannelCollection_ = std::make_unique<PixelFEDChannelCollection>(*pfcc);
-  }
-  
   ev.put(std::move(collection));
   if(includeErrors){
     ev.put(std::move(errorcollection));
     ev.put(std::move(tkerror_detidcollection));
     ev.put(std::move(usererror_detidcollection), "UserErrorModules");      
-    if (PixelFEDChannelCollection_  == nullptr){
-      ev.put(std::move(disabled_channelcollection));
-    }
-    else{
-      ev.put(std::move(PixelFEDChannelCollection_));
-    }
+    ev.put(std::move(disabled_channelcollection));
   }
 }
 // declare this as a framework plugin

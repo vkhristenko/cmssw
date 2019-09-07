@@ -1,10 +1,12 @@
-#include "Fireworks/Core/interface/FWHeatmapProxyBuilderTemplate.h"
+#include "Fireworks/Calo/interface/FWHeatmapProxyBuilderTemplate.h"
 #include "Fireworks/Core/interface/FWEventItem.h"
 #include "Fireworks/Core/interface/FWGeometry.h"
 #include "Fireworks/Core/interface/BuilderUtils.h"
-#include "DataFormats/CaloRecHit/interface/CaloCluster.h"
+#include "DataFormats/CaloRecHit/interface/CaloClusterFwd.h"
+#include "DataFormats/Common/interface/ValueMap.h"
 
 #include "TEveBoxSet.h"
+#include "TEveStraightLineSet.h"
 
 class FWCaloClusterProxyBuilder : public FWHeatmapProxyBuilderTemplate<reco::CaloCluster>
 {
@@ -15,25 +17,71 @@ class FWCaloClusterProxyBuilder : public FWHeatmapProxyBuilderTemplate<reco::Cal
    REGISTER_PROXYBUILDER_METHODS();
 
  private:
+   edm::Handle<edm::ValueMap<float>> TimeValueMapHandle;
+   double timeLowerBound, timeUpperBound;
+   long layer;
+   double saturation_energy;
+   bool heatmap;
+   bool z_plus;
+   bool z_minus;
+   bool enableTimeFilter;
+
    FWCaloClusterProxyBuilder(const FWCaloClusterProxyBuilder &) = delete;                  // stop default
    const FWCaloClusterProxyBuilder &operator=(const FWCaloClusterProxyBuilder &) = delete; // stop default
-   
+
+   void setItem(const FWEventItem *iItem) override;
+
+   void build(const FWEventItem *iItem, TEveElementList *product, const FWViewContext *vc) override;
    void build(const reco::CaloCluster &iData, unsigned int iIndex, TEveElement &oItemHolder, const FWViewContext *) override;
 };
 
+void FWCaloClusterProxyBuilder::setItem(const FWEventItem *iItem)
+{
+   FWHeatmapProxyBuilderTemplate::setItem(iItem);
+   if (iItem)
+   {
+      iItem->getConfig()->assertParam("Cluster(0)/RecHit(1)", false);
+      iItem->getConfig()->assertParam("EnableTimeFilter", false);
+      iItem->getConfig()->assertParam("TimeLowerBound(ns)", 0.01, 0.0, 75.0);
+      iItem->getConfig()->assertParam("TimeUpperBound(ns)", 0.01, 0.0, 75.0);
+   }
+}
+
+void FWCaloClusterProxyBuilder::build(const FWEventItem *iItem, TEveElementList *product, const FWViewContext *vc)
+{
+   iItem->getEvent()->getByLabel(edm::InputTag("hgcalLayerClusters", "timeLayerCluster"), TimeValueMapHandle);
+   if(TimeValueMapHandle.isValid()){
+      timeLowerBound = std::min(item()->getConfig()->value<double>("TimeLowerBound(ns)"), item()->getConfig()->value<double>("TimeUpperBound(ns)"));
+      timeUpperBound = std::max(item()->getConfig()->value<double>("TimeLowerBound(ns)"), item()->getConfig()->value<double>("TimeUpperBound(ns)"));
+   }
+   else {
+      std::cerr << "Warning: couldn't locate 'timeLayerCluster' ValueMap in root file." << std::endl;
+   }
+
+   layer = item()->getConfig()->value<long>("Layer");
+   saturation_energy = item()->getConfig()->value<double>("EnergyCutOff");
+   heatmap = item()->getConfig()->value<bool>("Heatmap");
+   z_plus = item()->getConfig()->value<bool>("Z+");
+   z_minus = item()->getConfig()->value<bool>("Z-");
+   enableTimeFilter = item()->getConfig()->value<bool>("EnableTimeFilter");
+
+   FWHeatmapProxyBuilderTemplate::build(iItem, product, vc);
+}
+
 void FWCaloClusterProxyBuilder::build(const reco::CaloCluster &iData, unsigned int iIndex, TEveElement &oItemHolder, const FWViewContext *)
 {
-   const long layer = item()->getConfig()->value<long>("Layer");
-   const double saturation_energy = item()->getConfig()->value<double>("EnergyCutOff");
-   const bool heatmap = item()->getConfig()->value<bool>("Heatmap");
-   const bool z_plus = item()->getConfig()->value<bool>("Z+");
-   const bool z_minus = item()->getConfig()->value<bool>("Z-");
+   if (enableTimeFilter && TimeValueMapHandle.isValid())
+   {
+      const float time = TimeValueMapHandle->get(iIndex);
+      if (time < timeLowerBound || time > timeUpperBound)
+         return;
+   }
 
    std::vector<std::pair<DetId, float>> clusterDetIds = iData.hitsAndFractions();
 
    bool h_hex(false);
    TEveBoxSet *hex_boxset = new TEveBoxSet();
-   if(!heatmap)
+   if (!heatmap)
       hex_boxset->UseSingleColor();
    hex_boxset->SetPickable(true);
    hex_boxset->Reset(TEveBoxSet::kBT_Hex, true, 64);
@@ -41,7 +89,7 @@ void FWCaloClusterProxyBuilder::build(const reco::CaloCluster &iData, unsigned i
 
    bool h_box(false);
    TEveBoxSet *boxset = new TEveBoxSet();
-   if(!heatmap)
+   if (!heatmap)
       boxset->UseSingleColor();
    boxset->SetPickable(true);
    boxset->Reset(TEveBoxSet::kBT_FreeBox, true, 64);
@@ -51,10 +99,16 @@ void FWCaloClusterProxyBuilder::build(const reco::CaloCluster &iData, unsigned i
         it != itEnd; ++it)
    {
       const uint8_t type = ((it->first >> 28) & 0xF);
+
+      const float *corners = item()->getGeom()->getCorners(it->first);
+      if (corners == nullptr)
+         continue;
+
       // HGCal
-      if (type >= 8 && type <= 10)
+      if (iData.algo() == 8 || (type >= 8 && type <= 10))
       {
-         if(heatmap && hitmap.find(it->first) == hitmap.end())
+
+         if (heatmap && hitmap.find(it->first) == hitmap.end())
             continue;
 
          const bool z = (it->first >> 25) & 0x1;
@@ -65,14 +119,11 @@ void FWCaloClusterProxyBuilder::build(const reco::CaloCluster &iData, unsigned i
              (((z_plus | z_minus) == 0) || !(z == z_minus || z == !z_plus)))
             continue;
 
-         const float *corners = item()->getGeom()->getCorners(it->first);
          const float *parameters = item()->getGeom()->getParameters(it->first);
          const float *shapes = item()->getGeom()->getShapePars(it->first);
 
-         if (corners == nullptr || parameters == nullptr || shapes == nullptr)
-         {
+         if (parameters == nullptr || shapes == nullptr)
             continue;
-         }
 
          const int total_points = parameters[0];
          const bool isScintillator = (total_points == 4);
@@ -100,6 +151,33 @@ void FWCaloClusterProxyBuilder::build(const reco::CaloCluster &iData, unsigned i
                continue;
          }
 
+         // seed
+         if (iData.seed().rawId() == it->first.rawId())
+         {
+            TEveStraightLineSet *marker = new TEveStraightLineSet;
+            marker->SetLineWidth(1);
+
+            // center of RecHit
+            const float center[3] = { corners[total_points*3 + 0], corners[total_points*3+ 1], corners[total_points*3 + 2] + shapes[3] * 0.5f };
+
+            // draw 3D cross
+            const float crossScale = 1.0f + fmin(iData.energy(), 5.0f);
+            marker->AddLine(
+                center[0] - crossScale, center[1], center[2],
+                center[0] + crossScale, center[1], center[2]);
+            marker->AddLine(
+                center[0], center[1] - crossScale, center[2],
+                center[0], center[1] + crossScale, center[2]);
+            marker->AddLine(
+                center[0], center[1], center[2] - crossScale,
+                center[0], center[1], center[2] + crossScale);
+
+            oItemHolder.AddElement(marker);
+         }
+
+         const float energy = fmin((item()->getConfig()->value<bool>("Cluster(0)/RecHit(1)") ? hitmap[it->first]->energy() : iData.energy()) / saturation_energy, 1.0f);
+         const uint8_t colorFactor = gradient_steps*energy;
+
          // Scintillator
          if (isScintillator)
          {
@@ -117,9 +195,11 @@ void FWCaloClusterProxyBuilder::build(const reco::CaloCluster &iData, unsigned i
                pnts[(i * 3 + 2) + total_vertices] = corners[i * 3 + 2] + shapes[3];
             }
             boxset->AddBox(&pnts[0]);
-            if(heatmap) {
-               const uint8_t colorFactor = gradient_steps*(fmin(hitmap[it->first]->energy()/saturation_energy, 1.0f));   
-               boxset->DigitColor(gradient[0][colorFactor], gradient[1][colorFactor], gradient[2][colorFactor]);
+            if (heatmap)
+            {
+               energy ? 
+                  boxset->DigitColor(gradient[0][colorFactor], gradient[1][colorFactor], gradient[2][colorFactor]) : 
+                  boxset->DigitColor(64, 64, 64);
             }
 
             h_box = true;
@@ -127,16 +207,18 @@ void FWCaloClusterProxyBuilder::build(const reco::CaloCluster &iData, unsigned i
          // Silicon
          else
          {
-            const int offset = 9;
+            constexpr int offset = 9;
 
             float centerX = (corners[6] + corners[6 + offset]) / 2;
             float centerY = (corners[7] + corners[7 + offset]) / 2;
             float radius = fabs(corners[6] - corners[6 + offset]) / 2;
             hex_boxset->AddHex(TEveVector(centerX, centerY, corners[2]),
                                radius, 90.0, shapes[3]);
-            if(heatmap) {
-               const uint8_t colorFactor = gradient_steps*(fmin(hitmap[it->first]->energy()/saturation_energy, 1.0f));   
-               hex_boxset->DigitColor(gradient[0][colorFactor], gradient[1][colorFactor], gradient[2][colorFactor]);
+            if (heatmap)
+            {
+               energy ? 
+                  hex_boxset->DigitColor(gradient[0][colorFactor], gradient[1][colorFactor], gradient[2][colorFactor]) : 
+                  hex_boxset->DigitColor(64, 64, 64);
             }
 
             h_hex = true;
@@ -145,11 +227,6 @@ void FWCaloClusterProxyBuilder::build(const reco::CaloCluster &iData, unsigned i
       // Not HGCal
       else
       {
-         const float *corners = item()->getGeom()->getCorners(it->first);
-
-         if (corners == nullptr)
-            continue;
-
          h_box = true;
 
          std::vector<float> pnts(24);
@@ -162,13 +239,13 @@ void FWCaloClusterProxyBuilder::build(const reco::CaloCluster &iData, unsigned i
    {
       hex_boxset->RefitPlex();
 
+      hex_boxset->CSCTakeAnyParentAsMaster();
       if (!heatmap)
       {
-         hex_boxset->SetPickable(true);
-         hex_boxset->CSCTakeAnyParentAsMaster();
          hex_boxset->CSCApplyMainColorToMatchingChildren();
          hex_boxset->CSCApplyMainTransparencyToMatchingChildren();
          hex_boxset->SetMainColor(item()->modelInfo(iIndex).displayProperties().color());
+         hex_boxset->SetMainTransparency(item()->defaultDisplayProperties().transparency());
       }
       oItemHolder.AddElement(hex_boxset);
    }
@@ -177,13 +254,13 @@ void FWCaloClusterProxyBuilder::build(const reco::CaloCluster &iData, unsigned i
    {
       boxset->RefitPlex();
 
+      boxset->CSCTakeAnyParentAsMaster();
       if (!heatmap)
       {
-         boxset->SetPickable(true);
-         boxset->CSCTakeAnyParentAsMaster();
          boxset->CSCApplyMainColorToMatchingChildren();
          boxset->CSCApplyMainTransparencyToMatchingChildren();
          boxset->SetMainColor(item()->modelInfo(iIndex).displayProperties().color());
+         boxset->SetMainTransparency(item()->defaultDisplayProperties().transparency());
       }
       oItemHolder.AddElement(boxset);
    }

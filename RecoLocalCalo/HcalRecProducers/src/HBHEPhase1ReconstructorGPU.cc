@@ -356,7 +356,7 @@ private:
                 std::vector<HcalCalibrations> &vcalibs);
     void scatter(HBHEChannelInfoCollection *infos,
                  std::vector<HcalRecoParam> const& vparams,
-                 std::vector<HcalCalibrations> const& vcalibs,
+		 //                 std::vector<HcalCalibrations> const& vcalibs,
                  bool const isRealData,
                  HBHERecHitCollection *rechits);
 
@@ -404,7 +404,8 @@ HBHEPhase1ReconstructorGPU::HBHEPhase1ReconstructorGPU(const edm::ParameterSet& 
       setPulseShapeFlagsQIE11_(conf.getParameter<bool>("setPulseShapeFlagsQIE11")),
       reco_(parseHBHEPhase1AlgoDescription(conf.getParameter<edm::ParameterSet>("algorithm"))),
       negEFilter_(nullptr),
-      ddata_{nullptr, nullptr, nullptr, nullptr}
+//      ddata_{nullptr, nullptr, nullptr, nullptr}
+      ddata_{nullptr, nullptr, nullptr}
 {
     // Check that the reco algorithm has been successfully configured
     if (!reco_.get())
@@ -611,11 +612,11 @@ void HBHEPhase1ReconstructorGPU::gather(C const& coll,
     
 void HBHEPhase1ReconstructorGPU::scatter(HBHEChannelInfoCollection *infos,
              std::vector<HcalRecoParam> const& vparams,
-             std::vector<HcalCalibrations> const& vcalibs,
+					 //             std::vector<HcalCalibrations> const& vcalibs,
              bool const isRealData,
              HBHERecHitCollection *rechits) {
     hcal::mahi::reconstruct(ddata_, *infos, *rechits, 
-                            vparams, vcalibs, psdata_, isRealData, custream_);
+                            vparams, /*vcalibs,*/ psdata_, isRealData, custream_);
 }
 
 
@@ -886,7 +887,7 @@ HBHEPhase1ReconstructorGPU::produce(edm::Event& e, const edm::EventSetup& eventS
     }
 
     // offload the kernel
-    scatter(infos.get(), vparams, vcalibs, isData, out.get());
+    scatter(infos.get(), vparams, /*vcalibs,*/ isData, out.get());
 
     // Add the output collections to the event record
     if (saveInfos_)
@@ -987,7 +988,7 @@ HBHEPhase1ReconstructorGPU::fillDescriptions(edm::ConfigurationDescriptions& des
     desc.add<bool>("setLegacyFlagsQIE8");
     desc.add<bool>("setLegacyFlagsQIE11");
 
-    add_param_set(algorithm);
+    desc.add<edm::ParameterSetDescription>("algorithm",fillDescriptionForParseHBHEPhase1Algo());
     add_param_set(flagParametersQIE8);
     add_param_set(flagParametersQIE11);
     add_param_set(pulseShapeParametersQIE8);

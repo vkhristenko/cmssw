@@ -29,6 +29,9 @@
 #include "CondFormats/CTPPSReadoutObjects/interface/CTPPSPixelDAQMapping.h"
 #include "CondFormats/CTPPSReadoutObjects/interface/CTPPSPixelAnalysisMask.h"
 #include "CondFormats/CTPPSReadoutObjects/interface/CTPPSPixelGainCalibrations.h"
+#include "CondFormats/CTPPSReadoutObjects/interface/CTPPSRPAlignmentCorrectionsData.h"
+#include "CondFormats/CTPPSReadoutObjects/interface/PPSTimingCalibration.h"
+#include "CondFormats/CTPPSReadoutObjects/interface/LHCOpticalFunctionsSetCollection.h"
 #include "CondFormats/DTObjects/interface/DTCCBConfig.h"
 #include "CondFormats/DTObjects/interface/DTDeadFlag.h"
 #include "CondFormats/DTObjects/interface/DTHVStatus.h"
@@ -187,6 +190,7 @@
 #include "CondFormats/EcalObjects/interface/EcalTPGWeightGroup.h"
 #include "CondFormats/EcalObjects/interface/EcalTPGWeightIdMap.h"
 #include "CondFormats/EcalObjects/interface/EcalWeightXtalGroups.h"
+#include "CondFormats/EcalObjects/interface/EcalSimPulseShape.h"
 #include "CondFormats/Common/interface/FileBlob.h"
 //#include "CondFormats/GeometryObjects/interface/GeometryFile.h"
 #include "CondFormats/HcalObjects/interface/HcalChannelQuality.h"
@@ -258,7 +262,8 @@
 #include "CondFormats/BTauObjects/interface/TrackProbabilityCalibration.h"
 #include "CondFormats/MFObjects/interface/MagFieldConfig.h"
 #include "CondFormats/PCLConfig/interface/AlignPCLThresholds.h"
-
+#include "CondFormats/SiPhase2TrackerObjects/interface/TrackerDetToDTCELinkCablingMap.h"
+#include "CondFormats/SiPhase2TrackerObjects/interface/DTCELinkId.h"
 #include "CondFormats/Common/interface/BaseKeyed.h"
 
 #include "CondFormats/External/interface/DetID.h"

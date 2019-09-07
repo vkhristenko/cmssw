@@ -3,7 +3,7 @@
 #include "FWCore/Framework/interface/ESTransientHandle.h"
 #include "FWCore/Framework/interface/EventSetup.h"
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
-#include "DetectorDescription/DDCMS/interface/DDSpecParRegistryRcd.h"
+#include "Geometry/Records/interface/DDSpecParRegistryRcd.h"
 #include "DetectorDescription/DDCMS/interface/DDSpecParRegistry.h"
 
 #include <iostream>
@@ -37,37 +37,26 @@ DDTestSpecParsFilter::analyze(const Event&, const EventSetup& iEventSetup)
   ESTransientHandle<DDSpecParRegistry> registry;
   iEventSetup.get<DDSpecParRegistryRcd>().get(m_tag.module(), registry);
 
-  LogVerbatim("Geometry") << "DDTestSpecParsFilter::analyze: " << m_tag.module() << " for attribute " << m_attribute << " and value " << m_value;
+  LogVerbatim("Geometry") << "DDTestSpecParsFilter::analyze: " << m_tag.module()
+			  << " for attribute " << m_attribute << " and value " << m_value;
   LogVerbatim("Geometry") << "DD SpecPar Registry size: " << registry->specpars.size();
 
-  DDSpecParRegistry myReg;
-  bool found(false);
-  for(const auto& i: registry->specpars) {
-    found = false;
-    for(const auto& l : i.second.spars) {
-      if(l.first == m_attribute) {
-	for(const auto& il : l.second) {
-	  if(il == m_value) {
-	    found = true;
-	  }
-	}
-      }
-    }
-    if(found) {
-      myReg.specpars.emplace(i);
-    }
-  }
+  DDSpecParRefs myReg;
+  registry->filter(myReg, m_attribute, m_value);
+
   LogVerbatim("Geometry").log([&myReg](auto& log) {
-      log << "Filtered DD SpecPar Registry size: " << myReg.specpars.size();
-      for(const auto& t: myReg.specpars) {
-	log << " " << t.first << " => ";
-	for(const auto& ki : t.second.paths)
+      log << "Filtered DD SpecPar Registry size: " << myReg.size();
+      for(const auto& t: myReg) {
+	log << " = { ";
+	for(const auto& ki : t->paths)
 	  log << ki << ", ";
-	for(const auto& kl : t.second.spars) {
-	  log << kl.first << " => ";
+	log << " };\n ";
+	for(const auto& kl : t->spars) {
+	  log << kl.first << " = { ";
 	  for(const auto& kil : kl.second) {
 	    log << kil << ", ";
 	  }
+	log << " };\n ";
 	}
       }
     });

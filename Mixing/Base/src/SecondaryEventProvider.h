@@ -17,15 +17,15 @@ namespace edm {
              ProductRegistry& pregistry,
              std::shared_ptr<ProcessConfiguration> processConfiguration);
 
-    void beginRun(RunPrincipal& run, const edm::EventSetup& setup, ModuleCallingContext const*, StreamContext& sContext);
-    void beginLuminosityBlock(LuminosityBlockPrincipal& lumi, const edm::EventSetup& setup, ModuleCallingContext const*, StreamContext& sContext);
+    void beginRun(RunPrincipal& run, const edm::EventSetupImpl& setup, ModuleCallingContext const*, StreamContext& sContext);
+    void beginLuminosityBlock(LuminosityBlockPrincipal& lumi, const edm::EventSetupImpl& setup, ModuleCallingContext const*, StreamContext& sContext);
 
-    void endRun(RunPrincipal& run, const edm::EventSetup& setup, ModuleCallingContext const*, StreamContext& sContext);
-    void endLuminosityBlock(LuminosityBlockPrincipal& lumi, const edm::EventSetup& setup, ModuleCallingContext const*, StreamContext& sContext);
+    void endRun(RunPrincipal& run, const edm::EventSetupImpl& setup, ModuleCallingContext const*, StreamContext& sContext);
+    void endLuminosityBlock(LuminosityBlockPrincipal& lumi, const edm::EventSetupImpl& setup, ModuleCallingContext const*, StreamContext& sContext);
 
-    void setupPileUpEvent(EventPrincipal& ep, const EventSetup& setup, StreamContext& sContext);
+    void setupPileUpEvent(EventPrincipal& ep, const EventSetupImpl& setup, StreamContext& sContext);
 
-    void beginJob(ProductRegistry const& iRegistry) {workerManager_.beginJob(iRegistry);}
+    void beginJob(ProductRegistry const& iRegistry, eventsetup::ESRecordsToProxyIndices const& );
     void endJob() {workerManager_.endJob();}
 
     void beginStream(edm::StreamID iID, StreamContext& sContext);

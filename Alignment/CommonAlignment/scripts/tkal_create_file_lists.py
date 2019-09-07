@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 
+from builtins import range
 import os
 import re
 import sys
@@ -215,7 +216,7 @@ class FileListCreator(object):
                 self._args.events = float("inf")
                 print_msg("Using all tracks for alignment")
             elif (self._args.tracks is None) and (self._args.rate is None):
-                msg = ("either -n/--events-for-alignment or both of "
+                msg = ("either -n/--events-for-alignment, --all-events, or both of "
                        "--tracks-for-alignment and --track-rate are required")
                 self._parser.error(msg)
             elif (((self._args.tracks is not None) and (self._args.rate is None)) or
@@ -461,7 +462,7 @@ class FileListCreator(object):
             eventsinthisjob = float("inf")
             for fileinfo in self._files_alignment:
                 if fileinfo.dataset != dataset: continue
-                miniiovs = self._get_iovs(fileinfo.runs, useminiiovs=True)
+                miniiovs = set(self._get_iovs(fileinfo.runs, useminiiovs=True))
                 if miniiov not in miniiovs: continue
                 if len(miniiovs) > 1:
                     hippyjobs[dataset,miniiov] = []
@@ -581,7 +582,7 @@ class FileListCreator(object):
         name += "_JSON.txt"
         print_msg("Creating JSON file: "+name)
 
-        json_file = LumiList.LumiList(runs = xrange(first, last+1))
+        json_file = LumiList.LumiList(runs = range(first, last+1))
         if self._args.json:
             global_json = LumiList.LumiList(filename = self._args.json)
             json_file = json_file & global_json
@@ -912,7 +913,7 @@ def das_client(query, check_key = None):
     """
 
     error = True
-    for i in xrange(5):         # maximum of 5 tries
+    for i in range(5):         # maximum of 5 tries
         try:
             das_data = cmssw_das_client.get_data(query, limit = 0)
         except IOError as e:
@@ -1127,7 +1128,7 @@ def get_chunks(long_list, chunk_size):
     - `chunk_size`: maximum size of created sub-lists
     """
 
-    for i in xrange(0, len(long_list), chunk_size):
+    for i in range(0, len(long_list), chunk_size):
         yield long_list[i:i+chunk_size]
 
 

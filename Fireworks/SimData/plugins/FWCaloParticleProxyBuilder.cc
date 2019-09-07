@@ -6,21 +6,12 @@
  *
  */
 
-#include "Fireworks/Core/interface/FWHeatmapProxyBuilderTemplate.h"
+#include "Fireworks/Calo/interface/FWHeatmapProxyBuilderTemplate.h"
 #include "Fireworks/Core/interface/Context.h"
-#include "Fireworks/Core/interface/FWEventItem.h"
 #include "Fireworks/Core/interface/FWGeometry.h"
-#include "Fireworks/Core/interface/BuilderUtils.h"
 #include "SimDataFormats/CaloAnalysis/interface/CaloParticle.h"
 #include "SimDataFormats/CaloAnalysis/interface/CaloParticleFwd.h"
 #include "SimDataFormats/CaloAnalysis/interface/SimCluster.h"
-
-#include "FWCore/Common/interface/EventBase.h"
-
-#include "DataFormats/HGCRecHit/interface/HGCRecHitCollections.h"
-#include "DataFormats/DetId/interface/DetId.h"
-
-#include "Fireworks/Core/interface/FWProxyBuilderConfiguration.h"
 
 #include "TEveBoxSet.h"
 
@@ -164,13 +155,13 @@ void FWCaloParticleProxyBuilder::build(const CaloParticle &iData, unsigned int i
    {
       hex_boxset->RefitPlex();
 
+      hex_boxset->CSCTakeAnyParentAsMaster();
       if (!heatmap)
       {
-         hex_boxset->SetPickable(true);
-         hex_boxset->CSCTakeAnyParentAsMaster();
          hex_boxset->CSCApplyMainColorToMatchingChildren();
          hex_boxset->CSCApplyMainTransparencyToMatchingChildren();
          hex_boxset->SetMainColor(item()->modelInfo(iIndex).displayProperties().color());
+         hex_boxset->SetMainTransparency(item()->defaultDisplayProperties().transparency());
       }
       oItemHolder.AddElement(hex_boxset);
    }
@@ -179,13 +170,13 @@ void FWCaloParticleProxyBuilder::build(const CaloParticle &iData, unsigned int i
    {
       boxset->RefitPlex();
 
+      boxset->CSCTakeAnyParentAsMaster();
       if (!heatmap)
       {
-         boxset->SetPickable(true);
-         boxset->CSCTakeAnyParentAsMaster();
          boxset->CSCApplyMainColorToMatchingChildren();
          boxset->CSCApplyMainTransparencyToMatchingChildren();
          boxset->SetMainColor(item()->modelInfo(iIndex).displayProperties().color());
+         boxset->SetMainTransparency(item()->defaultDisplayProperties().transparency());
       }
       oItemHolder.AddElement(boxset);
    }

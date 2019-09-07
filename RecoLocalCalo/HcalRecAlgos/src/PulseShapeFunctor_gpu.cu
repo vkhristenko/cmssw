@@ -77,7 +77,7 @@ namespace FitterFuncs{
 
   __device__
   void PulseShapeFunctor::funcShape(double ntmpbin[HcalConst::maxSamples],
-    const double pulseTime, const double pulseHeight,const double slew) {
+    const double pulseTime, /*const double pulseHeight,*/const double slew) {
 
     // pulse shape components over a range of time 0 ns to 255 ns in 1 ns steps
     constexpr int ns_per_bx = HcalConst::nsPerBX;
@@ -111,11 +111,12 @@ namespace FitterFuncs{
 	int bin_idx = distTo25ns_start + 1 + (iTS-iTS_start-1)*ns_per_bx + bin_0_start;
 	ntmpbin[iTS] = acc25nsVec[bin_idx] + factor * diff25nsItvlVec[bin_idx];
       }
+/*
       //Scale the pulse 
       for(int i=iTS_start; i < num_bx; ++i) {
 	ntmpbin[i]     *= pulseHeight;
       }
-
+*/
     }
 
     return;
@@ -123,20 +124,15 @@ namespace FitterFuncs{
 
 
   __device__
-  void PulseShapeFunctor::EvalPulse(const double *pars) {
+  void PulseShapeFunctor::EvalPulse(const float *pars) {
 
     int time = (pars[0]+timeShift_-timeMean_)*HcalConst::invertnsPerBx;
-    funcShape(pulse_shape_, pars[0],pars[1],psFit_slew[time]);
+    funcShape(pulse_shape_, pars[0],psFit_slew[time]);
 
     return;
 
   }
   
-  __device__
-  void PulseShapeFunctor::singlePulseShapeFunc(const double * x) {
-    return EvalPulse(x);
-  }
-
 }
 
 }}

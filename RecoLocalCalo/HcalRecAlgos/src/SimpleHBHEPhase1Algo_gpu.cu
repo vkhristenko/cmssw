@@ -22,6 +22,7 @@ SimpleHBHEPhase1Algo::SimpleHBHEPhase1Algo(
     const float phaseNS,
     const float timeShift,
     const bool correctForPhaseContainment,
+    bool applyLegacyHBMCorrection,
     std::unique_ptr<PulseShapeFitOOTPileupCorrection> m2,
     std::unique_ptr<HcalDeterministicFit> detFit,
     std::unique_ptr<MahiFit> mahi)
@@ -32,6 +33,7 @@ SimpleHBHEPhase1Algo::SimpleHBHEPhase1Algo(
       timeShift_(timeShift),
       runnum_(0),
       corrFPC_(correctForPhaseContainment),
+      applyLegacyHBMCorrection_(applyLegacyHBMCorrection),
       psFitOOTpuCorr_(std::move(m2)),
       hltOOTpuCorr_(std::move(detFit)),
       mahiOOTpuCorr_(std::move(mahi))
@@ -160,7 +162,7 @@ float SimpleHBHEPhase1Algo::hbminusCorrectionFactor(const HcalDetId& cell,
                                                     const bool isRealData) const
 {
     float corr = 1.f;
-    if (isRealData && runnum_ > 0)
+    if (applyLegacyHBMCorrection_ && isRealData && runnum_ > 0)
         if (cell.subdet() == HcalBarrel)
         {
             const int ieta = cell.ieta();
@@ -294,7 +296,7 @@ public:
     __device__
     HBHERecHit reconstruct(const HBHEChannelInfo& info,
                            const HcalRecoParam* params,
-                           const HcalCalibrations& calibs,
+//                           const HcalCalibrations& calibs,
                            bool isRealData,
                            float const* pshape /* this is added */);
 
@@ -332,7 +334,7 @@ protected:
     __device__
     float m0Time(const HBHEChannelInfo& info,
                  double reconstructedCharge,
-                 const HcalCalibrations& calibs,
+//                 const HcalCalibrations& calibs,
                  int nSamplesToExamine) const;
 private:
     // TODO:resolve this
@@ -343,6 +345,7 @@ private:
     float phaseNS_;
     float timeShift_;
     bool corrFPC_;
+    bool applyLegacyHBMCorrection_;
     int runnum_{999999};
 };
 
@@ -367,13 +370,14 @@ SimpleHBHEPhase1Algo::SimpleHBHEPhase1Algo()
     : firstSampleShift_{0}, samplesToAdd_{2},
       phaseNS_{6.0},
       timeShift_{0.0},
-      corrFPC_{true}
+      corrFPC_{true},
+      applyLegacyHBMCorrection_{false}
 {}
 
 __device__
 HBHERecHit SimpleHBHEPhase1Algo::reconstruct(const HBHEChannelInfo& info,
                                              const HcalRecoParam* params,
-                                             const HcalCalibrations& calibs,
+//                                             const HcalCalibrations& calibs,
                                              const bool isData,
                                              float const* pshape) {
     HBHERecHit rh;
@@ -392,7 +396,7 @@ HBHERecHit SimpleHBHEPhase1Algo::reconstruct(const HBHEChannelInfo& info,
         const float phasens = params ? params->correctionPhaseNS() : phaseNS_;
         m0E = m0Energy(info, fc_ampl, applyContainment, phasens, nSamplesToAdd);
         m0E *= hbminusCorrectionFactor(channelId, m0E, isData);
-        m0t = m0Time(info, fc_ampl, calibs, nSamplesToAdd);
+        m0t = m0Time(info, fc_ampl, /*calibs,*/ nSamplesToAdd);
     }
 
     // Run "Method 2"
@@ -509,7 +513,7 @@ float SimpleHBHEPhase1Algo::m0Energy(const HBHEChannelInfo& info,
 __device__
 float SimpleHBHEPhase1Algo::m0Time(const HBHEChannelInfo& info,
                                    const double fc_ampl,
-                                   const HcalCalibrations& calibs,
+//                                   const HcalCalibrations& calibs,
                                    const int nSamplesToExamine) const
 {
     float time = -9999.f; // historic value
@@ -521,56 +525,49 @@ float SimpleHBHEPhase1Algo::m0Time(const HBHEChannelInfo& info,
         int ibeg = soi + firstSampleShift_;
         if (ibeg < 0)
             ibeg = 0;
-        const int iend = ibeg + nSamplesToExamine;
-        unsigned maxI = info.peakEnergyTS(ibeg, iend);
+        const int iend = std::min(ibeg + nSamplesToExamine, (int)nSamples - 1);
+
+        unsigned maxI = info.peakEnergyTS((unsigned)ibeg, (unsigned)iend);
         if (maxI < HBHEChannelInfo::MAXSAMPLES)
         {
-            if (!maxI)
-                maxI = 1U;
-            else if (maxI >= nSamples - 1U)
-                maxI = nSamples - 2U;
 
-            // The remaining code in this scope emulates
-            // the historic algorithm
-            float t0 = info.tsEnergy(maxI - 1U);
-            float maxA = info.tsEnergy(maxI);
-            float t2 = info.tsEnergy(maxI + 1U);
+            if(maxI >= nSamples) maxI = nSamples - 1U;
 
-            // Handle negative excursions by moving "zero"
-            float minA = t0;
-            if (maxA < minA) minA = maxA;
-            if (t2 < minA)   minA=t2;
-            if (minA < 0.f) { maxA-=minA; t0-=minA; t2-=minA; }
-            float wpksamp = (t0 + maxA + t2);
-            if (wpksamp) wpksamp = (maxA + 2.f*t2) / wpksamp;
-            time = (maxI - soi)*25.f + timeshift_ns_hbheho(wpksamp);
+            float emax0 = info.tsEnergy(maxI);
+            float emax1 = 0.f;
+            if(maxI < (nSamples - 1U)) emax1 = info.tsEnergy(maxI + 1U);
 
+            int position = (int)maxI;
+            if(nSamplesToExamine < (int)nSamples) position  -= soi;
+
+            time = 25.f * (float)position;
+            if(emax0 > 0.f && emax1 > 0.f) time += 25.f * emax1/(emax0+emax1);  // 1st order corr.
+/*
+	    // TO DO
             // Legacy QIE8 timing correction
-            // TODO: resolve this correction
-            //time -= hcalTimeSlew_delay_->delay(std::max(1.0, fc_ampl), HcalTimeSlew::Medium);
-            // Time calibration
-            time -= calibs.timecorr();
+            time -= hcalTimeSlew_delay_->delay(std::max(1.0, fc_ampl), HcalTimeSlew::Medium);
+*/
+
         }
     }
-
     return time;
 }
 
 /// mahi/multifit kernel
 __global__ 
 void kernel_reconstruct(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
-                            HcalRecoParam *vparams, HcalCalibrations *vcalibs,
+                            HcalRecoParam *vparams, /*HcalCalibrations *vcalibs,*/
                             int* hashes, float* psdata, int size) {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
     if (idx < size) {
         auto info = vinfos[idx];
         auto params = vparams[idx];
-        auto calibs = vcalibs[idx];
+//        auto calibs = vcalibs[idx];
         auto *pshape = psdata + hashes[info.recoShape()] * 256;
 
         SimpleHBHEPhase1Algo algo{};
-        auto rh = algo.reconstruct(info, &params, calibs,  
+        auto rh = algo.reconstruct(info, &params, /*calibs,*/
             /* TODO: drag this boolean from the host */ true,
             pshape);
 
@@ -581,13 +578,14 @@ void kernel_reconstruct(HBHEChannelInfo *vinfos, HBHERecHit *vrechits,
 void reconstruct(DeviceData ddata,
           HBHEChannelInfoCollection& vinfos, HBHERecHitCollection& vrechits, 
           std::vector<HcalRecoParam> const& vparams, 
-          std::vector<HcalCalibrations> const& vcalibs, 
+//          std::vector<HcalCalibrations> const& vcalibs, 
           PulseShapeData &psdata, bool,
           cudaStream_t custream) {
     // resize the output vector
     vrechits.resize(vinfos.size());
 
-    std::cout << "size = " << vinfos.size() << std::endl;
+    std::cout << "size(info) = " << vinfos.size() << std::endl;
+    std::cout << " size(vparams) = " << vparams.size() << std::endl;
 
     // transfer to the device
     cudaMemcpyAsync(ddata.vinfos, &(*vinfos.begin()), 
@@ -596,16 +594,18 @@ void reconstruct(DeviceData ddata,
     cudaMemcpyAsync(ddata.vparams, &(*vparams.begin()), 
         vinfos.size() * sizeof(HcalRecoParam),
         cudaMemcpyHostToDevice, custream);
+/*
     cudaMemcpyAsync(ddata.vcalibs, &(*vcalibs.begin()), 
         vinfos.size() * sizeof(HcalCalibrations),
         cudaMemcpyHostToDevice, custream);
+*/
 
     // call the kernel
     int nthreadsPerBlock = 256;
     int nblocks = (vinfos.size() + nthreadsPerBlock - 1) / nthreadsPerBlock;
     kernel_reconstruct<<<nblocks, nthreadsPerBlock, 0, custream>>>(
         ddata.vinfos, ddata.vrechits,
-        ddata.vparams, ddata.vcalibs, psdata.hashes, psdata.data, vinfos.size());
+        ddata.vparams, /*ddata.vcalibs,*/ psdata.hashes, psdata.data, vinfos.size());
 //    cudaDeviceSynchronize();
 //    hcal::cuda::assert_if_error();
 

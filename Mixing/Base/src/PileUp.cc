@@ -6,6 +6,7 @@
 #include "FWCore/Framework/interface/LuminosityBlock.h"
 #include "FWCore/Framework/interface/Run.h"
 #include "FWCore/Framework/src/SignallingProductRegistry.h"
+#include "FWCore/Framework/interface/ESRecordsToProxyIndices.h"
 #include "FWCore/ServiceRegistry/interface/ActivityRegistry.h"
 #include "FWCore/ServiceRegistry/interface/ProcessContext.h"
 #include "FWCore/Sources/interface/VectorInputSourceDescription.h"
@@ -180,7 +181,8 @@ namespace edm {
     streamContext_.reset(new StreamContext(iID, processContext_.get()));
     input_->doBeginJob();
     if (provider_.get() != nullptr) {
-      provider_->beginJob(*productRegistry_);
+      //TODO for now, we do not support consumes from EventSetup
+      provider_->beginJob(*productRegistry_, eventsetup::ESRecordsToProxyIndices{ {} });
       provider_->beginStream(iID, *streamContext_);
     }
   }
@@ -197,7 +199,7 @@ namespace edm {
     if (provider_.get() != nullptr) {
       auto aux = std::make_shared<RunAuxiliary>(run.runAuxiliary());
       runPrincipal_.reset(new RunPrincipal(aux, productRegistry_, *processConfiguration_, nullptr, 0));
-      provider_->beginRun(*runPrincipal_, setup, run.moduleCallingContext(), *streamContext_);
+      provider_->beginRun(*runPrincipal_, setup.impl(), run.moduleCallingContext(), *streamContext_);
     }
   }
   void PileUp::beginLuminosityBlock(const edm::LuminosityBlock& lumi, const edm::EventSetup& setup) {
@@ -205,18 +207,18 @@ namespace edm {
       lumiPrincipal_.reset(new LuminosityBlockPrincipal(productRegistry_, *processConfiguration_, nullptr, 0));
       lumiPrincipal_->setAux(lumi.luminosityBlockAuxiliary());
       lumiPrincipal_->setRunPrincipal(runPrincipal_);
-      provider_->beginLuminosityBlock(*lumiPrincipal_, setup, lumi.moduleCallingContext(), *streamContext_);
+      provider_->beginLuminosityBlock(*lumiPrincipal_, setup.impl(), lumi.moduleCallingContext(), *streamContext_);
     }
   }
 
   void PileUp::endRun(const edm::Run& run, const edm::EventSetup& setup) {
     if (provider_.get() != nullptr) {
-      provider_->endRun(*runPrincipal_, setup, run.moduleCallingContext(), *streamContext_);
+      provider_->endRun(*runPrincipal_, setup.impl(), run.moduleCallingContext(), *streamContext_);
     }
   }
   void PileUp::endLuminosityBlock(const edm::LuminosityBlock& lumi, const edm::EventSetup& setup) {
     if (provider_.get() != nullptr) {
-      provider_->endLuminosityBlock(*lumiPrincipal_, setup, lumi.moduleCallingContext(), *streamContext_);
+      provider_->endLuminosityBlock(*lumiPrincipal_, setup.impl(), lumi.moduleCallingContext(), *streamContext_);
     }
   }
 
@@ -225,7 +227,7 @@ namespace edm {
       // note:  run and lumi numbers must be modified to match lumiPrincipal_
       eventPrincipal_->setLuminosityBlockPrincipal(lumiPrincipal_.get());
       eventPrincipal_->setRunAndLumiNumber(lumiPrincipal_->run(), lumiPrincipal_->luminosityBlock());
-      provider_->setupPileUpEvent(*eventPrincipal_, setup, *streamContext_);
+      provider_->setupPileUpEvent(*eventPrincipal_, setup.impl(), *streamContext_);
     }
   }
 

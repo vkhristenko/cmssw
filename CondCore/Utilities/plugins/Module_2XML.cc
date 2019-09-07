@@ -87,6 +87,7 @@ PAYLOAD_2XML_MODULE( pluginUtilities_payload2xml ){
   PAYLOAD_2XML_CLASS( EcalSRSettings );
   PAYLOAD_2XML_CLASS( EcalSampleMask );
   PAYLOAD_2XML_CLASS( EcalSamplesCorrelation );
+  PAYLOAD_2XML_CLASS( EcalSimPulseShape );
   PAYLOAD_2XML_CLASS( EcalTBWeights );
   PAYLOAD_2XML_CLASS( EcalTPGFineGrainEBGroup );
   PAYLOAD_2XML_CLASS( EcalTPGFineGrainEBIdMap );
@@ -259,6 +260,8 @@ PAYLOAD_2XML_MODULE( pluginUtilities_payload2xml ){
   PAYLOAD_2XML_CLASS( SiStripNoises );
   PAYLOAD_2XML_CLASS( SiStripPedestals );
   PAYLOAD_2XML_CLASS( SiStripThreshold );
+  PAYLOAD_2XML_CLASS( DTCELinkId );
+  PAYLOAD_2XML_CLASS( TrackerDetToDTCELinkCablingMap );
   //PAYLOAD_2XML_CLASS( StorableDoubleMap<AbsOOTPileupCorrection> );
   PAYLOAD_2XML_CLASS( TrackProbabilityCalibration );
   PAYLOAD_2XML_CLASS( cond::BaseKeyed );
