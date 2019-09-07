@@ -283,8 +283,8 @@ void MahiFit::updatePulseShape(double itQ, FullSampleVector &pulseShape, FullSam
     pulseShape.coeffRef(iTS+nnlsWork_.maxoffset) = pulseN[iTS+delta];
     pulseDeriv.coeffRef(iTS+nnlsWork_.maxoffset) = (pulseM[iTS+delta]-pulseP[iTS+delta])*invDt;
 
-    pulseM[iTS] -= pulseN[iTS];
-    pulseP[iTS] -= pulseN[iTS];
+    pulseM[iTS+delta] -= pulseN[iTS+delta];
+    pulseP[iTS+delta] -= pulseN[iTS+delta];
   }
 
   for (unsigned int iTS=0; iTS<nnlsWork_.tsSize; ++iTS) {
