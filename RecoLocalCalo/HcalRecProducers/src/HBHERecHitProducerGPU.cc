@@ -171,7 +171,7 @@ void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cde
         {-3.178648, -1.5610227, -1.075824});
     desc.add<std::vector<double>>("tmaxTimeSlewParameters", 
         {16.00, 10.00, 6.25});
-    desc.add<std::vector<uint32_t>>("kernelMinimizeThreads", {32, 1, 1});
+    desc.add<std::vector<uint32_t>>("kernelMinimizeThreads", {16, 1, 1});
 
     std::string label = "hbheRecHitProducerGPU";
     cdesc.add(label, desc);
