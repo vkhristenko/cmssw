@@ -989,22 +989,33 @@ void update_covariance(
             ipulse, offset);
 #endif
 
-        // in order not to build matrcies  for pulseP/M
+        // preload a column
+        float pmcol[NSAMPLES], pmpcol[NSAMPLES], pmmcol[NSAMPLES];
+        #pragma unroll
+        for (int counter=0; counter<NSAMPLES; counter++) {
+            pmcol[counter] = pulseMatrix(counter, ipulseReal);
+            pmpcol[counter] = pulseMatrixP(counter, ipulseReal);
+            pmmcol[counter] = pulseMatrixM(counter, ipulseReal);
+        }
+
         auto const ampl2 = resultAmplitude * resultAmplitude;
+        int i=0, j=0;
         #pragma unroll
         for (int counter=0; counter<NSAMPLES2; counter++) {
-            int const i = counter / NSAMPLES;
-            int const j = counter % NSAMPLES;
-            float const valueP_i = pulseMatrixP(i, ipulseReal);
-            float const valueP_j = pulseMatrixP(j, ipulseReal);
-            float const value_i = pulseMatrix(i, ipulseReal);
-            float const value_j = pulseMatrix(j, ipulseReal);
-            float const valueM_i = pulseMatrixM(i, ipulseReal);
-            float const valueM_j = pulseMatrixM(j, ipulseReal);
+            float const valueP_i = pmpcol[i]; //pulseMatrixP(i, ipulseReal);
+            float const valueP_j = pmpcol[j]; //pulseMatrixP(j, ipulseReal);
+            float const value_i = pmcol[i]; //pulseMatrix(i, ipulseReal);
+            float const value_j = pmcol[j]; //pulseMatrix(j, ipulseReal);
+            float const valueM_i = pmmcol[i]; //pulseMatrixM(i, ipulseReal);
+            float const valueM_j = pmmcol[j]; //pulseMatrixM(j, ipulseReal);
             auto const covValue = 0.5 * (
                 (valueP_i - value_i) * (valueP_j - value_j) +
                 (valueM_i - value_i) * (valueM_j - value_j));
             covarianceMatrix(i, j) += ampl2 * covValue;
+
+            // to avoid division/mod
+            i = j==9 ? i+1 : i;
+            j = j==9 ? 0 : j+1;
 
 #ifdef HCAL_MAHI_GPUDEBUG
             printf("%f ", covValue);
