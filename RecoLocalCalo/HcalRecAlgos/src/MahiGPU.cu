@@ -999,29 +999,32 @@ void update_covariance(
         }
 
         auto const ampl2 = resultAmplitude * resultAmplitude;
-        int i=0, j=0;
         #pragma unroll
-        for (int counter=0; counter<NSAMPLES2; counter++) {
-            float const valueP_i = pmpcol[i]; //pulseMatrixP(i, ipulseReal);
-            float const valueP_j = pmpcol[j]; //pulseMatrixP(j, ipulseReal);
-            float const value_i = pmcol[i]; //pulseMatrix(i, ipulseReal);
-            float const value_j = pmcol[j]; //pulseMatrix(j, ipulseReal);
-            float const valueM_i = pmmcol[i]; //pulseMatrixM(i, ipulseReal);
-            float const valueM_j = pmmcol[j]; //pulseMatrixM(j, ipulseReal);
-            auto const covValue = 0.5 * (
-                (valueP_i - value_i) * (valueP_j - value_j) +
-                (valueM_i - value_i) * (valueM_j - value_j));
-            covarianceMatrix(i, j) += ampl2 * covValue;
+        for (int col=0; col<NSAMPLES; col++) {
+            auto const valueP_col = pmpcol[col];
+            auto const valueM_col = pmmcol[col];
+            auto const value_col = pmcol[col];
+            auto const tmppcol = valueP_col - value_col;
+            auto const tmpmcol = valueM_col - value_col;
 
-            // to avoid division/mod
-            i = j==9 ? i+1 : i;
-            j = j==9 ? 0 : j+1;
+            #pragma unroll
+            for (int row=0; row<NSAMPLES; row++) {
+                float const valueP_row = pmpcol[row]; //pulseMatrixP(j, ipulseReal);
+                float const value_row = pmcol[row]; //pulseMatrix(j, ipulseReal);
+                float const valueM_row = pmmcol[row]; //pulseMatrixM(j, ipulseReal);
+                
+                float tmpprow = valueP_row - value_row;
+                float tmpmrow = valueM_row - value_row;
 
-#ifdef HCAL_MAHI_GPUDEBUG
-            printf("%f ", covValue);
-            if ((counter+1) % NSAMPLES == 0)
-                printf("\n");
-#endif
+                auto const covValue = 0.5*(tmppcol*tmpprow + tmpmcol*tmpmrow);
+
+                /*
+                auto const covValue = 0.5 * (
+                    (valueP_col - value_col) * (valueP_row - value_j) +
+                    (valueM_i - value_i) * (valueM_j - value_j));
+                */
+                covarianceMatrix(row, col) += ampl2 * covValue;
+            }
         }
     }
 }
