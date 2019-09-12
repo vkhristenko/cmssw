@@ -847,15 +847,13 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
 }
 
 // TODO: add active bxs
-template<typename MatrixType, typename VectorType, int NSAMPLES>
+template<typename MatrixType, typename VectorType>
 __device__
 void fnnls(
         MatrixType& AtA,
         VectorType& Atb,
         VectorType& solution,
         int& npassive,
-        Eigen::Map<ColMajorMatrix<NSAMPLES, MatrixType::RowsAtCompileTime>> 
-            &pulseMatrix,
         ColumnVector<MatrixType::RowsAtCompileTime, int> &pulseOffsets,
         double const eps,
         int const maxIterations) {
@@ -906,7 +904,7 @@ void fnnls(
                 solution.coeffRef(w_max_idx));
             Eigen::numext::swap(pulseOffsets.coeffRef(npassive),
                 pulseOffsets.coeffRef(w_max_idx));
-            pulseMatrix.col(npassive).swap(pulseMatrix.col(w_max_idx));
+            //pulseMatrix.col(npassive).swap(pulseMatrix.col(w_max_idx));
             ++npassive;
         }
 
@@ -952,7 +950,7 @@ void fnnls(
                 solution.coeffRef(alpha_idx));
             Eigen::numext::swap(pulseOffsets.coeffRef(npassive),
                 pulseOffsets.coeffRef(alpha_idx));
-            pulseMatrix.col(npassive).swap(pulseMatrix.col(alpha_idx));
+            //pulseMatrix.col(npassive).swap(pulseMatrix.col(alpha_idx));
         }
 
         // as in cpu 
@@ -999,8 +997,8 @@ void update_covariance(
             int const j = counter % NSAMPLES;
             float const valueP_i = pulseMatrixP(i, ipulseReal);
             float const valueP_j = pulseMatrixP(j, ipulseReal);
-            float const value_i = pulseMatrix(i, ipulse);
-            float const value_j = pulseMatrix(j, ipulse);
+            float const value_i = pulseMatrix(i, ipulseReal);
+            float const value_j = pulseMatrix(j, ipulseReal);
             float const valueM_i = pulseMatrixM(i, ipulseReal);
             float const valueM_j = pulseMatrixM(j, ipulseReal);
             auto const covValue = 0.5 * (
@@ -1331,7 +1329,6 @@ void kernel_minimize(
             Atb,
             resultAmplitudesVector,
             npassive,
-            pulseMatrixView,
             pulseOffsets,
             1e-11,
             500);
