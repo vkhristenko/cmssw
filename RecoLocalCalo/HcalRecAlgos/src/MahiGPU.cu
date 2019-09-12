@@ -1175,11 +1175,12 @@ void kernel_minimize(
         for (int icol=0; icol<NPULSES; icol++) {
             float reg_b[NSAMPLES];
             float reg_L[NSAMPLES];
+            int const real_icol = pulseOffsets(icol) + soi;
 
             // preload a column and load column 0 of cholesky
             #pragma unroll
             for (int i=0; i<NSAMPLES; i++) {
-                reg_b[i] = pulseMatrixView(i, icol);
+                reg_b[i] = pulseMatrixView(i, real_icol);
                 reg_L[i] = matrixL(i, 0);
             }
 
@@ -1339,10 +1340,46 @@ void kernel_minimize(
             printf("resultAmplitudes(%d) = %f\n", i, resultAmplitudesVector(i));
 #endif
 
+        // replace pulseMatrixView * result - inputs
+        // NOTE:
+        float accum[NSAMPLES];
+        Eigen::Map<ColumnVector<NSAMPLES>> mapAccum{accum};
+        {
+            float results[NPULSES];
+
+            // preload results and permute according to the pulse offsets
+            #pragma unroll
+            for (int counter=0; counter<NPULSES; counter++) {
+                int const real_i = pulseOffsets(counter) + soi;
+                results[real_i] = resultAmplitudesVector[counter];
+            }
+
+            // load accum
+            #pragma unroll
+            for (int counter=0; counter<NSAMPLES; counter++)
+                accum[counter] = -inputAmplitudesView(counter);
+
+            // iterate
+            for (int icol=0; icol<NPULSES; icol++) {
+                float pm_col[NSAMPLES];
+
+                // preload a column of pulse matrix
+                #pragma unroll
+                for (int counter=0; counter<NSAMPLES; counter++)
+                    pm_col[counter] = pulseMatrixView(counter, icol);
+
+                // accum
+                #pragma unroll
+                for (int counter=0; counter<NSAMPLES; counter++)
+                    accum[counter] += results[icol] * pm_col[counter];
+            }
+        }
+
         // compute chi2 and check that there is no rotation
         chi2 = matrixDecomposition
             .matrixL()
-            .solve(pulseMatrixView * resultAmplitudesVector - inputAmplitudesView)
+            . solve(mapAccum)
+//            .solve(pulseMatrixView * resultAmplitudesVector - inputAmplitudesView)
             .squaredNorm();
         auto const deltaChi2 = std::abs(chi2 - previous_chi2);
         if (chi2==chi2_2itersback && chi2 < previous_chi2)
