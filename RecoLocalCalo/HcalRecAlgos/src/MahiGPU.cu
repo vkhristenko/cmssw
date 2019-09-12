@@ -1007,8 +1007,13 @@ void update_covariance(
             auto const tmppcol = valueP_col - value_col;
             auto const tmpmcol = valueM_col - value_col;
 
+            // diagonal
+            auto tmp_value = 0.5*(tmppcol*tmppcol + tmpmcol*tmpmcol);
+            covarianceMatrix(col, col) += ampl2*tmp_value;
+
+            // FIXME: understand if this actually gets unrolled
             #pragma unroll
-            for (int row=0; row<NSAMPLES; row++) {
+            for (int row=col+1; row<NSAMPLES; row++) {
                 float const valueP_row = pmpcol[row]; //pulseMatrixP(j, ipulseReal);
                 float const value_row = pmcol[row]; //pulseMatrix(j, ipulseReal);
                 float const valueM_row = pmmcol[row]; //pulseMatrixM(j, ipulseReal);
@@ -1024,6 +1029,7 @@ void update_covariance(
                     (valueM_i - value_i) * (valueM_j - value_j));
                 */
                 covarianceMatrix(row, col) += ampl2 * covValue;
+                covarianceMatrix(col, row) += ampl2 * covValue;
             }
         }
     }
