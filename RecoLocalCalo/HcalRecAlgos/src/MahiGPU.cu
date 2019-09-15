@@ -1024,7 +1024,6 @@ void update_covariance(
                 auto const covValue = 0.5*(tmppcol*tmpprow + tmpmcol*tmpmrow);
 
                 covarianceMatrix(row, col) += ampl2 * covValue;
-                covarianceMatrix(col, row) += ampl2 * covValue;
             }
         }
     }
