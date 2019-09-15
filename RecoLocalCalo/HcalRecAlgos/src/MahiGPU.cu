@@ -914,7 +914,7 @@ void fnnls(
 
             s.head(npassive) = 
                 AtA.topLeftCorner(npassive, npassive)
-                    .ldlt()
+                    .llt()
                     .solve(Atb.head(npassive));
 
             // done if solution values are all positive
