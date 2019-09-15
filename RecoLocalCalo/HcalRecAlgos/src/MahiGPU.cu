@@ -1041,6 +1041,7 @@ struct MapSymM {
     using base_type = typename std::remove_const<type>::type;
 
     static constexpr int total = Stride * (Stride + 1) / 2;
+    static constexpr int stride = Stride;
     T* data;
 
     __forceinline__ __device__
@@ -1072,12 +1073,12 @@ void compute_decomposition(MatrixType1& L, MatrixType2 const& M) {
     using T = typename MatrixType1::base_type;
 
     #pragma unroll
-    for (int i=1; i<MatrixType1::total; i++) {
+    for (int i=1; i<MatrixType1::stride; i++) {
         T sumsq{0};
         for (int j=0; j<i; j++) {
             T sumsq2{0};
             auto const m_i_j = M(i, j);
-            for (int k=0; i<j; ++k)
+            for (int k=0; k<j; ++k)
                 sumsq2 += L(i, k) * L(j, k);
 
             auto const value_i_j = (m_i_j - sumsq2) / L(j, j);
@@ -1213,6 +1214,7 @@ void kernel_minimize(
     // TOOD: provide constants from configuration
     for (int iter=1; iter<50; iter++) {
         ColMajorMatrix<NSAMPLES, NSAMPLES> covarianceMatrix;
+        //
         //Eigen::LLT<ColMajorMatrix<NSAMPLES, NSAMPLES>> matrixDecomposition;
 
 
