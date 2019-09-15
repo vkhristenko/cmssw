@@ -1023,15 +1023,71 @@ void update_covariance(
 
                 auto const covValue = 0.5*(tmppcol*tmpprow + tmpmcol*tmpmrow);
 
-                /*
-                auto const covValue = 0.5 * (
-                    (valueP_col - value_col) * (valueP_row - value_j) +
-                    (valueM_i - value_i) * (valueM_j - value_j));
-                */
                 covarianceMatrix(row, col) += ampl2 * covValue;
                 covarianceMatrix(col, row) += ampl2 * covValue;
             }
         }
+    }
+}
+
+template
+<
+    typename T,
+    int Stride,
+    int Order = Eigen::ColMajor
+>
+struct MapSymM {
+    using type = T;
+    using base_type = typename std::remove_const<type>::type;
+
+    static constexpr int total = Stride * (Stride + 1) / 2;
+    T* data;
+
+    __forceinline__ __device__
+    MapSymM(T *data) : data{data} {}
+
+    __forceinline__ __device__
+    T const& operator()(int const row, int const col) const {
+        auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
+        auto const index = total - tmp + row - col;
+        return data[index];
+    }
+
+    template<typename U = T>
+    __forceinline__ __device__
+    typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
+    operator()(int const row, int const col) {
+        auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
+        auto const index = total - tmp + row - col;
+        return data[index];
+    }
+};
+
+// simple/trivial cholesky decomposition impl
+template<typename MatrixType1, typename MatrixType2>
+__forceinline__ __device__ 
+void compute_decomposition(MatrixType1& L, MatrixType2 const& M) {
+    auto const sqrtm_0_0 = std::sqrt(M(0, 0));
+    L(0, 0) = sqrtm_0_0;
+    using T = typename MatrixType1::base_type;
+
+    #pragma unroll
+    for (int i=1; i<MatrixType1::total; i++) {
+        T sumsq{0};
+        for (int j=0; j<i; j++) {
+            T sumsq2{0};
+            auto const m_i_j = M(i, j);
+            for (int k=0; i<j; ++k)
+                sumsq2 += L(i, k) * L(j, k);
+
+            auto const value_i_j = (m_i_j - sumsq2) / L(j, j);
+            L(i, j) = value_i_j;
+
+            sumsq += value_i_j * value_i_j;
+        }
+
+        auto const l_i_i = std::sqrt(M(i, i) - sumsq);
+        L(i, i) = l_i_i;
     }
 }
 
@@ -1157,7 +1213,8 @@ void kernel_minimize(
     // TOOD: provide constants from configuration
     for (int iter=1; iter<50; iter++) {
         ColMajorMatrix<NSAMPLES, NSAMPLES> covarianceMatrix;
-        Eigen::LLT<ColMajorMatrix<NSAMPLES, NSAMPLES>> matrixDecomposition;
+        //Eigen::LLT<ColMajorMatrix<NSAMPLES, NSAMPLES>> matrixDecomposition;
+
 
         // update covariance matrix
         update_covariance(
@@ -1180,9 +1237,12 @@ void kernel_minimize(
         }
 #endif
 
-        // obtain AtA and Atb required for fast nnls
-        matrixDecomposition.compute(covarianceMatrix);
-        auto const& matrixL = matrixDecomposition.matrixL();
+        // compute Cholesky Decomposition L matrix
+        //matrixDecomposition.compute(covarianceMatrix);
+        //auto const& matrixL = matrixDecomposition.matrixL();
+        float matrixLStorage[MapSymM<float, NSAMPLES>::total];
+        MapSymM<float, NSAMPLES> matrixL{matrixLStorage};
+        compute_decomposition(matrixL, covarianceMatrix);
 
         //
         // replace eigen
@@ -1396,11 +1456,50 @@ void kernel_minimize(
         }
 
         // compute chi2 and check that there is no rotation
-        chi2 = matrixDecomposition
-            .matrixL()
-            . solve(mapAccum)
+        //chi2 = matrixDecomposition
+        //    .matrixL()
+        //    . solve(mapAccum)
 //            .solve(pulseMatrixView * resultAmplitudesVector - inputAmplitudesView)
-            .squaredNorm();
+        //    .squaredNorm();
+        {
+            float reg_b_tmp[NSAMPLES];
+            float reg_L[NSAMPLES];
+            float accumSum=0;
+
+            // preload a column and load column 0 of cholesky
+            #pragma unroll
+            for (int i=0; i<NSAMPLES; i++) {
+                reg_b_tmp[i] = mapAccum(i);
+                reg_L[i] = matrixL(i, 0);
+            }
+
+            // compute x0 and store it
+            auto x_prev = reg_b_tmp[0] / reg_L[0];
+            accumSum += x_prev * x_prev;
+
+            // iterate
+            #pragma unroll
+            for (int iL=1; iL<NSAMPLES; iL++) {
+                // update accum
+                #pragma unroll
+                for (int counter=iL; counter<NSAMPLES; counter++)
+                    reg_b_tmp[counter] -= x_prev * reg_L[counter];
+
+                // load the next column of cholesky
+                #pragma unroll
+                for (int counter=iL; counter<NSAMPLES; counter++)
+                    reg_L[counter] = matrixL(counter, iL);
+
+                // compute the next x for M(iL, icol)
+                x_prev = reg_b_tmp[iL] / reg_L[iL];
+
+                // store the result value
+                accumSum += x_prev * x_prev;
+            }
+
+            chi2 = accumSum;
+        }
+
         auto const deltaChi2 = std::abs(chi2 - previous_chi2);
         if (chi2==chi2_2itersback && chi2 < previous_chi2)
             break;
