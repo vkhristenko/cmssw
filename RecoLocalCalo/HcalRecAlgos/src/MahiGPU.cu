@@ -846,6 +846,94 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
     pulseMatrixP[ipulse*nsamples + sample] = value_t0p;
 }
 
+template
+<
+    typename T,
+    int Stride,
+    int Order = Eigen::ColMajor
+>
+struct MapSymM {
+    using type = T;
+    using base_type = typename std::remove_const<type>::type;
+
+    static constexpr int total = Stride * (Stride + 1) / 2;
+    static constexpr int stride = Stride;
+    T* data;
+
+    __forceinline__ __device__
+    MapSymM(T *data) : data{data} {}
+
+    __forceinline__ __device__
+    T const& operator()(int const row, int const col) const {
+        auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
+        auto const index = total - tmp + row - col;
+        return data[index];
+    }
+
+    template<typename U = T>
+    __forceinline__ __device__
+    typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
+    operator()(int const row, int const col) {
+        auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
+        auto const index = total - tmp + row - col;
+        return data[index];
+    }
+};
+
+// simple/trivial cholesky decomposition impl
+template<typename MatrixType1, typename MatrixType2>
+__forceinline__ __device__ 
+void compute_decomposition_unrolled(MatrixType1& L, MatrixType2 const& M) {
+    auto const sqrtm_0_0 = std::sqrt(M(0, 0));
+    L(0, 0) = sqrtm_0_0;
+    using T = typename MatrixType1::base_type;
+
+    #pragma unroll
+    for (int i=1; i<MatrixType1::stride; i++) {
+        T sumsq{0};
+        for (int j=0; j<i; j++) {
+            T sumsq2{0};
+            auto const m_i_j = M(i, j);
+            for (int k=0; k<j; ++k)
+                sumsq2 += L(i, k) * L(j, k);
+
+            auto const value_i_j = (m_i_j - sumsq2) / L(j, j);
+            L(i, j) = value_i_j;
+
+            sumsq += value_i_j * value_i_j;
+        }
+
+        auto const l_i_i = std::sqrt(M(i, i) - sumsq);
+        L(i, i) = l_i_i;
+    }
+}
+
+template<typename MatrixType1, typename MatrixType2>
+__forceinline__ __device__ 
+void compute_decomposition(MatrixType1& L, MatrixType2 const& M, int const N) {
+    auto const sqrtm_0_0 = std::sqrt(M(0, 0));
+    L(0, 0) = sqrtm_0_0;
+    using T = typename MatrixType1::base_type;
+
+    for (int i=1; i<N; i++) {
+        T sumsq{0};
+        for (int j=0; j<i; j++) {
+            T sumsq2{0};
+            auto const m_i_j = M(i, j);
+            for (int k=0; k<j; ++k)
+                sumsq2 += L(i, k) * L(j, k);
+
+            auto const value_i_j = (m_i_j - sumsq2) / L(j, j);
+            L(i, j) = value_i_j;
+
+            sumsq += value_i_j * value_i_j;
+        }
+
+        auto const l_i_i = std::sqrt(M(i, i) - sumsq);
+        L(i, i) = l_i_i;
+    }
+}
+
 // TODO: add active bxs
 template<typename MatrixType, typename VectorType>
 __device__
@@ -913,10 +1001,13 @@ void fnnls(
             if (npassive == 0) break;
 
             //s.head(npassive)
-            auto const& matrixL = 
-                AtA.topLeftCorner(npassive, npassive)
-                    .llt().matrixL();
+            //auto const& matrixL = 
+            //    AtA.topLeftCorner(npassive, npassive)
+            //        .llt().matrixL();
             //.solve(Atb.head(npassive));
+            float matrixLStorage[MapSymM<float, NPULSES>::total];
+            MapSymM<float, NPULSES> matrixL{matrixLStorage};
+            compute_decomposition(matrixL, AtA, npassive);
        
             // run forward substitution
             float reg_b[NPULSES]; // result of forward substitution
@@ -1074,68 +1165,6 @@ void update_covariance(
     }
 }
 
-template
-<
-    typename T,
-    int Stride,
-    int Order = Eigen::ColMajor
->
-struct MapSymM {
-    using type = T;
-    using base_type = typename std::remove_const<type>::type;
-
-    static constexpr int total = Stride * (Stride + 1) / 2;
-    static constexpr int stride = Stride;
-    T* data;
-
-    __forceinline__ __device__
-    MapSymM(T *data) : data{data} {}
-
-    __forceinline__ __device__
-    T const& operator()(int const row, int const col) const {
-        auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
-        auto const index = total - tmp + row - col;
-        return data[index];
-    }
-
-    template<typename U = T>
-    __forceinline__ __device__
-    typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
-    operator()(int const row, int const col) {
-        auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
-        auto const index = total - tmp + row - col;
-        return data[index];
-    }
-};
-
-// simple/trivial cholesky decomposition impl
-template<typename MatrixType1, typename MatrixType2>
-__forceinline__ __device__ 
-void compute_decomposition(MatrixType1& L, MatrixType2 const& M) {
-    auto const sqrtm_0_0 = std::sqrt(M(0, 0));
-    L(0, 0) = sqrtm_0_0;
-    using T = typename MatrixType1::base_type;
-
-    #pragma unroll
-    for (int i=1; i<MatrixType1::stride; i++) {
-        T sumsq{0};
-        for (int j=0; j<i; j++) {
-            T sumsq2{0};
-            auto const m_i_j = M(i, j);
-            for (int k=0; k<j; ++k)
-                sumsq2 += L(i, k) * L(j, k);
-
-            auto const value_i_j = (m_i_j - sumsq2) / L(j, j);
-            L(i, j) = value_i_j;
-
-            sumsq += value_i_j * value_i_j;
-        }
-
-        auto const l_i_i = std::sqrt(M(i, i) - sumsq);
-        L(i, i) = l_i_i;
-    }
-}
-
 template<int NSAMPLES, int NPULSES>
 __global__
 void kernel_minimize(
@@ -1288,7 +1317,7 @@ void kernel_minimize(
         //auto const& matrixL = matrixDecomposition.matrixL();
         float matrixLStorage[MapSymM<float, NSAMPLES>::total];
         MapSymM<float, NSAMPLES> matrixL{matrixLStorage};
-        compute_decomposition(matrixL, covarianceMatrix);
+        compute_decomposition_unrolled(matrixL, covarianceMatrix);
 
         //
         // replace eigen
