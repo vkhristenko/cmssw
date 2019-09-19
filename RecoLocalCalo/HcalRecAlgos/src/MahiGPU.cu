@@ -912,10 +912,55 @@ void fnnls(
         while (true) {
             if (npassive == 0) break;
 
-            s.head(npassive) = 
+            //s.head(npassive)
+            auto const& matrixL = 
                 AtA.topLeftCorner(npassive, npassive)
-                    .llt()
-                    .solve(Atb.head(npassive));
+                    .llt().matrixL();
+            //.solve(Atb.head(npassive));
+       
+            // run forward substitution
+            float reg_b[NPULSES]; // result of forward substitution
+            {
+                float reg_b_tmp[NPULSES];
+                float reg_L[NPULSES];
+
+                // preload a column and load column 0 of cholesky
+                for (int i=0; i<npassive; i++) {
+                    reg_b_tmp[i] = Atb(i);
+                    reg_L[i] = matrixL(i, 0);
+                }
+
+                // compute x0 and store it
+                auto x_prev = reg_b_tmp[0] / reg_L[0];
+                reg_b[0] = x_prev;
+
+                // iterate
+                for (int iL=1; iL<npassive; iL++) {
+                    // update accum
+                    for (int counter=iL; counter<npassive; counter++)
+                        reg_b_tmp[counter] -= x_prev * reg_L[counter];
+
+                    // load the next column of cholesky
+                    for (int counter=iL; counter<npassive; counter++)
+                        reg_L[counter] = matrixL(counter, iL);
+
+                    // compute the next x for M(iL, icol)
+                    x_prev = reg_b_tmp[iL] / reg_L[iL];
+
+                    // store the result value
+                    reg_b[iL] = x_prev;
+                }
+            }
+
+            // run backward substituion
+            s(npassive-1) = reg_b[npassive-1] / matrixL(npassive-1, npassive-1);
+            for (int i=npassive-2; i>=0; --i) {
+                float total=0;
+                for (int j=i+1; j<npassive; j++)
+                    total += matrixL(j, i) * s(j);
+
+                s(i) = (reg_b[i] - total) / matrixL(i, i);
+            }
 
             // done if solution values are all positive
             if (s.head(npassive).minCoeff() > 0.f) {
