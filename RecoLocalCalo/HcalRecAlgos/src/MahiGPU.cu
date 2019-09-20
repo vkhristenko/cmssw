@@ -1156,7 +1156,7 @@ void fnnls(
 
                     // update accum
                     for (int counter=iL; counter<npassive; counter++)
-                        reg_b_tmp[counter] += x_prev * matrixL(counter, iL);
+                        reg_b_tmp[counter] += x_prev * matrixL(counter, iL-1);
 
                     // compute the next x for M(iL, icol)
                     x_prev = (atb - reg_b_tmp[iL]) / matrixL(iL, iL);
