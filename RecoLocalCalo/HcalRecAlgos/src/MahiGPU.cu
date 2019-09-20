@@ -1141,31 +1141,25 @@ void fnnls(
             float reg_b[NPULSES]; // result of forward substitution
             {
                 float reg_b_tmp[NPULSES];
-                float reg_L[NPULSES];
-
-                // preload a column and load column 0 of cholesky
-                for (int i=0; i<npassive; i++) {
-                    auto const i_real = pulseOffsets(i);
-                    reg_b_tmp[i] = Atb(i_real);
-                    reg_L[i] = matrixL(i, 0);
-                }
+                for (int i=0; i<npassive; i++)
+                    reg_b_tmp[i] = 0;
 
                 // compute x0 and store it
-                auto x_prev = reg_b_tmp[0] / reg_L[0];
+                auto const real_0 = pulseOffsets(0);
+                auto x_prev = Atb(real_0) / matrixL(0, 0);
                 reg_b[0] = x_prev;
 
                 // iterate
                 for (int iL=1; iL<npassive; iL++) {
+                    auto const iL_real = pulseOffsets(iL);
+                    auto const atb = Atb(iL_real);
+
                     // update accum
                     for (int counter=iL; counter<npassive; counter++)
-                        reg_b_tmp[counter] -= x_prev * reg_L[counter];
-
-                    // load the next column of cholesky
-                    for (int counter=iL; counter<npassive; counter++)
-                        reg_L[counter] = matrixL(counter, iL);
+                        reg_b_tmp[counter] += x_prev * matrixL(counter, iL);
 
                     // compute the next x for M(iL, icol)
-                    x_prev = reg_b_tmp[iL] / reg_L[iL];
+                    x_prev = (atb - reg_b_tmp[iL]) / matrixL(iL, iL);
 
                     // store the result value
                     reg_b[iL] = x_prev;
