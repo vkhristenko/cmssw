@@ -1100,7 +1100,7 @@ template<int NSAMPLES, int NPULSES>
 __forceinline__ __device__
 void update_covariance(
         ColumnVector<NPULSES> const& resultAmplitudesVector,
-        ColMajorMatrix<NSAMPLES, NSAMPLES> &covarianceMatrix,
+        MapSymM<float, NSAMPLES> &covarianceMatrix,
         Eigen::Map<const ColumnVector<NSAMPLES>> const& noiseTermsView,
         float const averagePedestalWidth2,
         Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrix,
@@ -1108,9 +1108,8 @@ void update_covariance(
         Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixP,
         ColumnVector<NPULSES, int> const& pulseOffsets,
         int const soi) {
-    covarianceMatrix.setConstant(averagePedestalWidth2);
-    covarianceMatrix += noiseTermsView.asDiagonal();
-    constexpr int NSAMPLES2 = NSAMPLES * NSAMPLES;
+    //covarianceMatrix.setConstant(averagePedestalWidth2);
+    //covarianceMatrix += noiseTermsView.asDiagonal();
 
     #pragma unroll
     for (int ipulse=0; ipulse<NPULSES; ipulse++) {
@@ -1286,10 +1285,17 @@ void kernel_minimize(
     float chi2=0, previous_chi2=0.f, chi2_2itersback=0.f;
     // TOOD: provide constants from configuration
     for (int iter=1; iter<50; iter++) {
-        ColMajorMatrix<NSAMPLES, NSAMPLES> covarianceMatrix;
+        //ColMajorMatrix<NSAMPLES, NSAMPLES> covarianceMatrix;
         //
         //Eigen::LLT<ColMajorMatrix<NSAMPLES, NSAMPLES>> matrixDecomposition;
-
+        float covarianceMatrixStorage[MapSymM<float, NSAMPLES>::total];
+        MapSymM<float, NSAMPLES> covarianceMatrix{covarianceMatrixStorage};
+        #pragma unroll
+        for (int counter=0; counter<MapSymM<float, NSAMPLES>::total; counter++)
+            covarianceMatrixStorage[counter] = averagePedestalWidth2;
+        #pragma unroll
+        for (int counter=0; counter<MapSymM<float, NSAMPLES>::stride; counter++)
+            covarianceMatrix(counter, counter) += noiseTermsView(counter);
 
         // update covariance matrix
         update_covariance(
