@@ -954,7 +954,7 @@ void fnnls(
     auto eps_to_use = eps;
 
     // used throughout
-    VectorType w,s;
+    VectorType s;
 
     int iter = 0;
     while (true) {
@@ -964,11 +964,26 @@ void fnnls(
             if (nactive==0) break;
 
             // compute the gradient
-            w.tail(nactive) = Atb.tail(nactive) - (AtA * solution).tail(nactive);
+            //w.tail(nactive) = Atb.tail(nactive) - (AtA * solution).tail(nactive);
+            Eigen::Index w_max_idx;
+            float w_max = std::numeric_limits<float>::min();
+            for (int icol=npassive; icol<NPULSES; icol++) {
+                auto const atb = Atb(icol);
+                float sum = 0;
+                #pragma unroll
+                for (int counter=0; counter<NPULSES; counter++)
+                    sum += AtA(counter, icol) * solution(counter);
+
+                auto const w = atb - sum;
+                if (w > w_max) {
+                    w_max = w;
+                    w_max_idx = icol - npassive;
+                }
+            }
 
             // get the index of max update
-            Eigen::Index w_max_idx;
-            auto const w_max = w.tail(nactive).maxCoeff(&w_max_idx);
+            //Eigen::Index w_max_idx;
+            //auto const w_max = w.tail(nactive).maxCoeff(&w_max_idx);
 
             // check for convergence
             if (w_max<eps_to_use || 
