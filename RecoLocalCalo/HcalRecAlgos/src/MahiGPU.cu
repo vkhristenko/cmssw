@@ -1108,9 +1108,6 @@ void update_covariance(
         Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixP,
         ColumnVector<NPULSES, int> const& pulseOffsets,
         int const soi) {
-    //covarianceMatrix.setConstant(averagePedestalWidth2);
-    //covarianceMatrix += noiseTermsView.asDiagonal();
-
     #pragma unroll
     for (int ipulse=0; ipulse<NPULSES; ipulse++) {
         auto const resultAmplitude = resultAmplitudesVector(ipulse);
