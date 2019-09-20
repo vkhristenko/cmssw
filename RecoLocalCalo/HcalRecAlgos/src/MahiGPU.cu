@@ -950,7 +950,7 @@ void compute_decomposition_with_offsets(
         for (int j=0; j<i; j++) {
             auto const j_real = pulseOffsets(j);
             T sumsq2{0};
-            auto const m_i_j = M(i_real, j_real);
+            auto const m_i_j = M(std::max(i_real, j_real), std::min(i_real, j_real));
             for (int k=0; k<j; ++k)
                 sumsq2 += L(i, k) * L(j, k);
 
