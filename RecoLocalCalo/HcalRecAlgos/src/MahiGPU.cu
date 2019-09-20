@@ -934,19 +934,50 @@ void compute_decomposition(MatrixType1& L, MatrixType2 const& M, int const N) {
     }
 }
 
+template<typename MatrixType1, typename MatrixType2>
+__forceinline__ __device__ 
+void compute_decomposition_with_offsets(
+        MatrixType1& L, MatrixType2 const& M, int const N,
+        ColumnVector<MatrixType1::stride, int> const& pulseOffsets) {
+    auto const real_0 = pulseOffsets(0);
+    auto const sqrtm_0_0 = std::sqrt(M(real_0, real_0));
+    L(0, 0) = sqrtm_0_0;
+    using T = typename MatrixType1::base_type;
+
+    for (int i=1; i<N; i++) {
+        auto const i_real = pulseOffsets(i);
+        T sumsq{0};
+        for (int j=0; j<i; j++) {
+            auto const j_real = pulseOffsets(j);
+            T sumsq2{0};
+            auto const m_i_j = M(i_real, j_real);
+            for (int k=0; k<j; ++k)
+                sumsq2 += L(i, k) * L(j, k);
+
+            auto const value_i_j = (m_i_j - sumsq2) / L(j, j);
+            L(i, j) = value_i_j;
+
+            sumsq += value_i_j * value_i_j;
+        }
+
+        auto const l_i_i = std::sqrt(M(i_real, i_real) - sumsq);
+        L(i, i) = l_i_i;
+    }
+}
+
 // TODO: add active bxs
 template<typename MatrixType, typename VectorType>
 __device__
 void fnnls(
-        MatrixType& AtA,
-        VectorType& Atb,
+        MatrixType const& AtA,
+        VectorType const& Atb,
         VectorType& solution,
         int& npassive,
-        ColumnVector<MatrixType::RowsAtCompileTime, int> &pulseOffsets,
+        ColumnVector<VectorType::RowsAtCompileTime, int> &pulseOffsets,
         double const eps,
         int const maxIterations) {
     // constants
-    constexpr auto NPULSES = MatrixType::RowsAtCompileTime;
+    constexpr auto NPULSES = VectorType::RowsAtCompileTime;
 
     // to keep track of where to terminate if converged
     Eigen::Index w_max_idx_prev = 0;
@@ -968,11 +999,14 @@ void fnnls(
             Eigen::Index w_max_idx;
             float w_max = std::numeric_limits<float>::min();
             for (int icol=npassive; icol<NPULSES; icol++) {
-                auto const atb = Atb(icol);
+                auto const icol_real = pulseOffsets(icol);
+                auto const atb = Atb(icol_real);
                 float sum = 0;
                 #pragma unroll
                 for (int counter=0; counter<NPULSES; counter++)
-                    sum += AtA(counter, icol) * solution(counter);
+                    sum += 
+                        AtA(std::max(counter, icol_real), 
+                            std::min(icol_real, counter)) * solution(counter);
 
                 auto const w = atb - sum;
                 if (w > w_max) {
@@ -980,10 +1014,6 @@ void fnnls(
                     w_max_idx = icol - npassive;
                 }
             }
-
-            // get the index of max update
-            //Eigen::Index w_max_idx;
-            //auto const w_max = w.tail(nactive).maxCoeff(&w_max_idx);
 
             // check for convergence
             if (w_max<eps_to_use || 
@@ -998,16 +1028,8 @@ void fnnls(
             // move index to the right part of the vector
             w_max_idx += npassive;
 
-            // run swaps
-            AtA.col(npassive).swap(AtA.col(w_max_idx));
-            AtA.row(npassive).swap(AtA.row(w_max_idx));
-
-            Eigen::numext::swap(Atb.coeffRef(npassive), Atb.coeffRef(w_max_idx));
-            Eigen::numext::swap(solution.coeffRef(npassive), 
-                solution.coeffRef(w_max_idx));
             Eigen::numext::swap(pulseOffsets.coeffRef(npassive),
                 pulseOffsets.coeffRef(w_max_idx));
-            //pulseMatrix.col(npassive).swap(pulseMatrix.col(w_max_idx));
             ++npassive;
         }
 
@@ -1022,7 +1044,7 @@ void fnnls(
             //.solve(Atb.head(npassive));
             float matrixLStorage[MapSymM<float, NPULSES>::total];
             MapSymM<float, NPULSES> matrixL{matrixLStorage};
-            compute_decomposition(matrixL, AtA, npassive);
+            compute_decomposition_with_offsets(matrixL, AtA, npassive, pulseOffsets);
        
             // run forward substitution
             float reg_b[NPULSES]; // result of forward substitution
@@ -1032,7 +1054,8 @@ void fnnls(
 
                 // preload a column and load column 0 of cholesky
                 for (int i=0; i<npassive; i++) {
-                    reg_b_tmp[i] = Atb(i);
+                    auto const i_real = pulseOffsets(i);
+                    reg_b_tmp[i] = Atb(i_real);
                     reg_L[i] = matrixL(i, 0);
                 }
 
@@ -1070,38 +1093,40 @@ void fnnls(
 
             // done if solution values are all positive
             if (s.head(npassive).minCoeff() > 0.f) {
-                solution.head(npassive) = s.head(npassive);
+                for (int i=0; i<npassive; i++) {
+                    auto const i_real = pulseOffsets(i);
+                    solution(i_real) = s(i);
+                }
+                //solution.head(npassive) = s.head(npassive);
                 break;
             }
 
             auto alpha = std::numeric_limits<float>::max();
-            Eigen::Index alpha_idx = 0;
+            Eigen::Index alpha_idx = 0, alpha_idx_real = 0;
             for (int i=0; i<npassive; i++) {
                 if (s[i] <= 0.) {
-                    auto const ratio = solution[i] / (solution[i] - s[i]);
+                    auto const i_real = pulseOffsets(i);
+                    auto const ratio = solution[i_real] / (solution[i_real] - s[i]);
                     if (ratio < alpha) {
                         alpha = ratio;
                         alpha_idx = i;
+                        alpha_idx_real = i_real;
                     }
                 }
             }
 
             // upadte solution
-            solution.head(npassive) += alpha * 
-                (s.head(npassive) - solution.head(npassive));
-            solution[alpha_idx] = 0;
+            for (int i=0; i<npassive; i++) {
+                auto const i_real = pulseOffsets(i);
+                solution(i_real) += alpha * (s(i) - solution(i_real));
+            }
+            //solution.head(npassive) += alpha * 
+            //    (s.head(npassive) - solution.head(npassive));
+            solution[alpha_idx_real] = 0;
             --npassive;
 
-            // run swaps
-            AtA.col(npassive).swap(AtA.col(alpha_idx));
-            AtA.row(npassive).swap(AtA.row(alpha_idx));
-
-            Eigen::numext::swap(Atb.coeffRef(npassive), Atb.coeffRef(alpha_idx));
-            Eigen::numext::swap(solution.coeffRef(npassive), 
-                solution.coeffRef(alpha_idx));
             Eigen::numext::swap(pulseOffsets.coeffRef(npassive),
                 pulseOffsets.coeffRef(alpha_idx));
-            //pulseMatrix.col(npassive).swap(pulseMatrix.col(alpha_idx));
         }
 
         // as in cpu 
@@ -1120,16 +1145,11 @@ void update_covariance(
         float const averagePedestalWidth2,
         Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrix,
         Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixM,
-        Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixP,
-        ColumnVector<NPULSES, int> const& pulseOffsets,
-        int const soi) {
+        Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixP) {
     #pragma unroll
     for (int ipulse=0; ipulse<NPULSES; ipulse++) {
         auto const resultAmplitude = resultAmplitudesVector(ipulse);
         if (resultAmplitude == 0) continue;
-
-        auto const offset = pulseOffsets(ipulse);
-        auto const ipulseReal = soi + offset;
 
 #ifdef HCAL_MAHI_GPUDEBUG
         printf("pulse cov array for ibx = %d and offset %d\n",
@@ -1140,9 +1160,9 @@ void update_covariance(
         float pmcol[NSAMPLES], pmpcol[NSAMPLES], pmmcol[NSAMPLES];
         #pragma unroll
         for (int counter=0; counter<NSAMPLES; counter++) {
-            pmcol[counter] = pulseMatrix(counter, ipulseReal);
-            pmpcol[counter] = pulseMatrixP(counter, ipulseReal);
-            pmmcol[counter] = pulseMatrixM(counter, ipulseReal);
+            pmcol[counter] = pulseMatrix(counter, ipulse);
+            pmpcol[counter] = pulseMatrixP(counter, ipulse);
+            pmmcol[counter] = pulseMatrixM(counter, ipulse);
         }
 
         auto const ampl2 = resultAmplitude * resultAmplitude;
@@ -1244,11 +1264,16 @@ void kernel_minimize(
     if (id != DETID_TO_DEBUG) return;
 #endif
 #endif
+    
+    // TODO: provide this properly
+    int const soi = soiSamples[gch];
+    constexpr float deltaChi2Threashold = 1e-3;
 
     ColumnVector<NPULSES, int> pulseOffsets;
     #pragma unroll
     for (int i=0; i<NPULSES; ++i)
-        pulseOffsets(i) = pulseOffsetValues[i];
+        pulseOffsets(i) = i;
+//        pulseOffsets(i) = pulseOffsetValues[i] - pulseOffsetValues[0];
 
     // output amplitudes/weights
     ColumnVector<NPULSES> resultAmplitudesVector = ColumnVector<NPULSES>::Zero();
@@ -1264,11 +1289,6 @@ void kernel_minimize(
         pulseMatrixPView{pulseMatricesP + gch*NSAMPLES*NPULSES};
     Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> 
         pulseMatrixView{pulseMatrices + gch*NSAMPLES*NPULSES};
-
-    // TODO: provide this properly
-    int const soi = soiSamples[gch];
-    constexpr float deltaChi2Threashold = 1e-3;
-
 
 #ifdef HCAL_MAHI_GPUDEBUG
     for (int i=0; i<NSAMPLES; i++)
@@ -1297,9 +1317,6 @@ void kernel_minimize(
     float chi2=0, previous_chi2=0.f, chi2_2itersback=0.f;
     // TOOD: provide constants from configuration
     for (int iter=1; iter<50; iter++) {
-        //ColMajorMatrix<NSAMPLES, NSAMPLES> covarianceMatrix;
-        //
-        //Eigen::LLT<ColMajorMatrix<NSAMPLES, NSAMPLES>> matrixDecomposition;
         float covarianceMatrixStorage[MapSymM<float, NSAMPLES>::total];
         MapSymM<float, NSAMPLES> covarianceMatrix{covarianceMatrixStorage};
         #pragma unroll
@@ -1317,9 +1334,7 @@ void kernel_minimize(
             averagePedestalWidth2,
             pulseMatrixView,
             pulseMatrixMView,
-            pulseMatrixPView,
-            pulseOffsets,
-            soi);
+            pulseMatrixPView);
 
 #ifdef HCAL_MAHI_GPUDEBUG
         printf("covariance matrix\n");
@@ -1348,12 +1363,11 @@ void kernel_minimize(
         for (int icol=0; icol<NPULSES; icol++) {
             float reg_b[NSAMPLES];
             float reg_L[NSAMPLES];
-            int const real_icol = pulseOffsets(icol) + soi;
 
             // preload a column and load column 0 of cholesky
             #pragma unroll
             for (int i=0; i<NSAMPLES; i++) {
-                reg_b[i] = pulseMatrixView(i, real_icol);
+                reg_b[i] = pulseMatrixView(i, icol);
                 reg_L[i] = matrixL(i, 0);
             }
 
@@ -1429,7 +1443,9 @@ void kernel_minimize(
         // will be fixed in the optimized version
         //ColMajorMatrix<NPULSES, NPULSES> AtA = A.transpose() * A;
         //ColumnVector<NPULSES> Atb = A.transpose() * b;
-        ColMajorMatrix<NPULSES, NPULSES> AtA;
+        //ColMajorMatrix<NPULSES, NPULSES> AtA;
+        float AtAStorage[MapSymM<float, NPULSES>::total];
+        MapSymM<float, NPULSES> AtA{AtAStorage};
         ColumnVector<NPULSES> Atb;
         #pragma unroll
         for (int icol=0; icol<NPULSES; icol++) {
@@ -1465,7 +1481,7 @@ void kernel_minimize(
                     sum += reg_aj[counter] * reg_ai[counter];
 
                 // store 
-                AtA(icol, j) = sum;
+                //AtA(icol, j) = sum;
                 AtA(j, icol) = sum;
             }
 
@@ -1523,8 +1539,7 @@ void kernel_minimize(
             // preload results and permute according to the pulse offsets
             #pragma unroll
             for (int counter=0; counter<NPULSES; counter++) {
-                int const real_i = pulseOffsets(counter) + soi;
-                results[real_i] = resultAmplitudesVector[counter];
+                results[counter] = resultAmplitudesVector[counter];
             }
 
             // load accum
@@ -1614,11 +1629,15 @@ void kernel_minimize(
 #endif
 
     outputChi2[gch] = chi2;
+    auto const idx_for_energy = std::abs(pulseOffsetValues[0]);
+    outputEnergy[gch] = (gain*resultAmplitudesVector(idx_for_energy))*respCorrection;
+    /*
     #pragma unroll
     for (int i=0; i<NPULSES; i++)
-        if (pulseOffsets[i] == 0)
+        if (pulseOffsets[i] == soi)
             // NOTE: gain is a number < 10^-3/4, multiply first to avoid stab issues
             outputEnergy[gch] = (gain*resultAmplitudesVector(i))*respCorrection;
+    */
 }
 
 void entryPoint(
