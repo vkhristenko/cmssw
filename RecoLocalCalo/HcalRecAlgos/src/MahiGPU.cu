@@ -1451,43 +1451,6 @@ void kernel_minimize(
         //    .solve(pulseMatrixView);
         ColMajorMatrix<NSAMPLES, NPULSES> A;
         solve_forward_subst_matrix(A, pulseMatrixView, matrixL);
-        /*
-        #pragma unroll
-        for (int icol=0; icol<NPULSES; icol++) {
-            float reg_b[NSAMPLES];
-            float reg_L[NSAMPLES];
-
-            // preload a column and load column 0 of cholesky
-            #pragma unroll
-            for (int i=0; i<NSAMPLES; i++) {
-                reg_b[i] = pulseMatrixView(i, icol);
-                reg_L[i] = matrixL(i, 0);
-            }
-
-            // compute x0 and store it
-            auto x_prev = reg_b[0] / reg_L[0];
-            A(0, icol) = x_prev;
-
-            // iterate
-            #pragma unroll
-            for (int iL=1; iL<NSAMPLES; iL++) {
-                // update accum
-                #pragma unroll
-                for (int counter=iL; counter<NSAMPLES; counter++)
-                    reg_b[counter] -= x_prev * reg_L[counter];
-
-                // load the next column of cholesky
-                #pragma unroll
-                for (int counter=iL; counter<NSAMPLES; counter++)
-                    reg_L[counter] = matrixL(counter, iL);
-
-                // compute the next x for M(iL, icol)
-                x_prev = reg_b[iL] / reg_L[iL];
-
-                // store the result value
-                A(iL, icol) = x_prev;
-            }
-        }*/
 
         // 
         // remove eigen
@@ -1497,41 +1460,6 @@ void kernel_minimize(
         //
         float reg_b[NSAMPLES];
         solve_forward_subst_vector(reg_b, inputAmplitudesView, matrixL);
-        /*{
-            float reg_b_tmp[NSAMPLES];
-            float reg_L[NSAMPLES];
-
-            // preload a column and load column 0 of cholesky
-            #pragma unroll
-            for (int i=0; i<NSAMPLES; i++) {
-                reg_b_tmp[i] = inputAmplitudesView(i);
-                reg_L[i] = matrixL(i, 0);
-            }
-
-            // compute x0 and store it
-            auto x_prev = reg_b_tmp[0] / reg_L[0];
-            reg_b[0] = x_prev;
-
-            // iterate
-            #pragma unroll
-            for (int iL=1; iL<NSAMPLES; iL++) {
-                // update accum
-                #pragma unroll
-                for (int counter=iL; counter<NSAMPLES; counter++)
-                    reg_b_tmp[counter] -= x_prev * reg_L[counter];
-
-                // load the next column of cholesky
-                #pragma unroll
-                for (int counter=iL; counter<NSAMPLES; counter++)
-                    reg_L[counter] = matrixL(counter, iL);
-
-                // compute the next x for M(iL, icol)
-                x_prev = reg_b_tmp[iL] / reg_L[iL];
-
-                // store the result value
-                reg_b[iL] = x_prev;
-            }
-        }*/
 
         // TODO: we do not really need to change these matrcies
         // will be fixed in the optimized version
