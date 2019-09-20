@@ -965,6 +965,97 @@ void compute_decomposition_with_offsets(
     }
 }
 
+template<typename MatrixType1, typename MatrixType2, typename MatrixType3>
+__device__
+void solve_forward_subst_matrix(
+        MatrixType1 &A, 
+        MatrixType2 const& pulseMatrixView, 
+        MatrixType3 const& matrixL) {
+    // FIXME: this assumes pulses are on columns and samples on rows
+    constexpr auto NPULSES = MatrixType2::ColsAtCompileTime;
+    constexpr auto NSAMPLES = MatrixType2::RowsAtCompileTime;
+
+    #pragma unroll
+    for (int icol=0; icol<NPULSES; icol++) {
+        float reg_b[NSAMPLES];
+        float reg_L[NSAMPLES];
+
+        // preload a column and load column 0 of cholesky
+        #pragma unroll
+        for (int i=0; i<NSAMPLES; i++) {
+            reg_b[i] = pulseMatrixView(i, icol);
+            reg_L[i] = matrixL(i, 0);
+        }
+
+        // compute x0 and store it
+        auto x_prev = reg_b[0] / reg_L[0];
+        A(0, icol) = x_prev;
+
+        // iterate
+        #pragma unroll
+        for (int iL=1; iL<NSAMPLES; iL++) {
+            // update accum
+            #pragma unroll
+            for (int counter=iL; counter<NSAMPLES; counter++)
+                reg_b[counter] -= x_prev * reg_L[counter];
+
+            // load the next column of cholesky
+            #pragma unroll
+            for (int counter=iL; counter<NSAMPLES; counter++)
+                reg_L[counter] = matrixL(counter, iL);
+
+            // compute the next x for M(iL, icol)
+            x_prev = reg_b[iL] / reg_L[iL];
+
+            // store the result value
+            A(iL, icol) = x_prev;
+        }
+    }
+}
+
+template<typename MatrixType1, typename MatrixType2>
+__device__
+void solve_forward_subst_vector(
+        float reg_b[MatrixType1::RowsAtCompileTime], 
+        MatrixType1 inputAmplitudesView, 
+        MatrixType2 matrixL) {
+    constexpr auto NSAMPLES = MatrixType1::RowsAtCompileTime;
+
+    float reg_b_tmp[NSAMPLES];
+    float reg_L[NSAMPLES];
+
+    // preload a column and load column 0 of cholesky
+    #pragma unroll
+    for (int i=0; i<NSAMPLES; i++) {
+        reg_b_tmp[i] = inputAmplitudesView(i);
+        reg_L[i] = matrixL(i, 0);
+    }
+
+    // compute x0 and store it
+    auto x_prev = reg_b_tmp[0] / reg_L[0];
+    reg_b[0] = x_prev;
+
+    // iterate
+    #pragma unroll
+    for (int iL=1; iL<NSAMPLES; iL++) {
+        // update accum
+        #pragma unroll
+        for (int counter=iL; counter<NSAMPLES; counter++)
+            reg_b_tmp[counter] -= x_prev * reg_L[counter];
+
+        // load the next column of cholesky
+        #pragma unroll
+        for (int counter=iL; counter<NSAMPLES; counter++)
+            reg_L[counter] = matrixL(counter, iL);
+
+        // compute the next x for M(iL, icol)
+        x_prev = reg_b_tmp[iL] / reg_L[iL];
+
+        // store the result value
+        reg_b[iL] = x_prev;
+    }
+}
+
 // TODO: add active bxs
 template<typename MatrixType, typename VectorType>
 __device__
@@ -1359,6 +1450,8 @@ void kernel_minimize(
         //    .matrixL()
         //    .solve(pulseMatrixView);
         ColMajorMatrix<NSAMPLES, NPULSES> A;
+        solve_forward_subst_matrix(A, pulseMatrixView, matrixL);
+        /*
         #pragma unroll
         for (int icol=0; icol<NPULSES; icol++) {
             float reg_b[NSAMPLES];
@@ -1394,7 +1487,7 @@ void kernel_minimize(
                 // store the result value
                 A(iL, icol) = x_prev;
             }
-        }
+        }*/
 
         // 
         // remove eigen
@@ -1403,7 +1496,8 @@ void kernel_minimize(
         //   .solve(inputAmplitudesView);
         //
         float reg_b[NSAMPLES];
-        {
+        solve_forward_subst_vector(reg_b, inputAmplitudesView, matrixL);
+        /*{
             float reg_b_tmp[NSAMPLES];
             float reg_L[NSAMPLES];
 
@@ -1437,7 +1531,7 @@ void kernel_minimize(
                 // store the result value
                 reg_b[iL] = x_prev;
             }
-        }
+        }*/
 
         // TODO: we do not really need to change these matrcies
         // will be fixed in the optimized version
