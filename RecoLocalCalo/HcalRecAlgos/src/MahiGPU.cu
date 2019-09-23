@@ -965,6 +965,30 @@ void compute_decomposition_with_offsets(
     }
 }
 
+template<typename MatrixType1, typename MatrixType2>
+__forceinline__ __device__ 
+void update_decomposition_with_offsets(
+        MatrixType1& L, MatrixType2 const& M, int const N,
+        ColumnVector<MatrixType1::stride, int> const& pulseOffsets) {
+    using T = typename MatrixType1::base_type;
+    auto const i_real = pulseOffsets(N-1);
+    T sumsq {0};
+    for (int j=0; j<N-1; j++) {
+        auto const j_real = pulseOffsets(j);
+        T sumsq2{0};
+        auto const m_i_j = M(std::max(i_real, j_real), std::min(i_real, j_real));
+        for (int k=0; k<j; ++k)
+            sumsq2 += L(N-1, k) * L(j, k);
+
+        auto const value_i_j = (m_i_j - sumsq2) / L(j, j);
+        L(N-1, j) = value_i_j;
+        sumsq += value_i_j * value_i_j;
+    }
+
+    auto const l_i_i = std::sqrt(M(i_real, i_real) - sumsq);
+    L(N-1, N-1) = l_i_i;
+}
+
 template<typename MatrixType1, typename MatrixType2, typename MatrixType3>
 __device__
 void solve_forward_subst_matrix(
@@ -1077,6 +1101,10 @@ void fnnls(
 
     // used throughout
     VectorType s;
+    
+    float matrixLStorage[MapSymM<float, NPULSES>::total];
+    MapSymM<float, NPULSES> matrixL{matrixLStorage};
+    bool recompute = false;
 
     int iter = 0;
     while (true) {
@@ -1133,9 +1161,10 @@ void fnnls(
             //    AtA.topLeftCorner(npassive, npassive)
             //        .llt().matrixL();
             //.solve(Atb.head(npassive));
-            float matrixLStorage[MapSymM<float, NPULSES>::total];
-            MapSymM<float, NPULSES> matrixL{matrixLStorage};
-            compute_decomposition_with_offsets(matrixL, AtA, npassive, pulseOffsets);
+            if (recompute)
+                compute_decomposition_with_offsets(matrixL, AtA, npassive, pulseOffsets);
+            else
+                update_decomposition_with_offsets(matrixL, AtA, npassive, pulseOffsets);
        
             // run forward substitution
             float reg_b[NPULSES]; // result of forward substitution
@@ -1183,8 +1212,12 @@ void fnnls(
                     solution(i_real) = s(i);
                 }
                 //solution.head(npassive) = s.head(npassive);
+                recompute = false;
                 break;
             }
+
+            // there were negative values -> have to recompute the whole decomp
+            recompute = true;
 
             auto alpha = std::numeric_limits<float>::max();
             Eigen::Index alpha_idx = 0, alpha_idx_real = 0;
