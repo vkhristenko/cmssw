@@ -1355,9 +1355,9 @@ void kernel_minimize(
         return;
 
     // configure shared mem
-    extern __shared__ float shrmem[];
+    extern __shared__ char shrmem[];
     float *shrMatrixLFnnlsStorage = 
-        shrmem + MapSymM<float, NPULSES>::total*threadIdx.x;
+        reinterpret_cast<float*>(shrmem) + MapSymM<float, NPULSES>::total*threadIdx.x;
 
     // conditions for pedestal widths
     auto const id = gch >= nchannelsf01HE
@@ -1854,7 +1854,7 @@ void entryPoint(
             : (totalChannels + threadsPerBlock - 1) / threadsPerBlock;
         auto const nbytesShared = threadsPerBlock * 
             MapSymM<float, 8>::total * sizeof(float);
-        kernel_minimize<8, 8><<<blocks, threadsPerBlock, 0, cudaStream.id()>>>(
+        kernel_minimize<8, 8><<<blocks, threadsPerBlock, nbytesShared, cudaStream.id()>>>(
             outputGPU.recHits.energy,
             outputGPU.recHits.chi2,
             scratch.amplitudes,
