@@ -1090,6 +1090,7 @@ void fnnls(
         VectorType& solution,
         int& npassive,
         ColumnVector<VectorType::RowsAtCompileTime, int> &pulseOffsets,
+        MapSymM<float, VectorType::RowsAtCompileTime> &matrixL,
         double const eps,
         int const maxIterations) {
     // constants
@@ -1103,8 +1104,8 @@ void fnnls(
 
     // used throughout
     VectorType s;
-    float matrixLStorage[MapSymM<float, NPULSES>::total];
-    MapSymM<float, NPULSES> matrixL{matrixLStorage};
+    //float matrixLStorage[MapSymM<float, NPULSES>::total];
+    //MapSymM<float, NPULSES> matrixL{matrixLStorage};
 
     int iter = 0;
     while (true) {
@@ -1353,6 +1354,11 @@ void kernel_minimize(
     if (outputChi2[gch] == -9999.f)
         return;
 
+    // configure shared mem
+    extern __shared__ float shrmem[];
+    float *shrMatrixLFnnlsStorage = 
+        shrmem + MapSymM<float, NPULSES>::total*threadIdx.x;
+
     // conditions for pedestal widths
     auto const id = gch >= nchannelsf01HE
         ? idsf5HB[gch - nchannelsf01HE]
@@ -1561,6 +1567,9 @@ void kernel_minimize(
         printf("\n");
 #endif
 
+        // for fnnls
+        MapSymM<float, NPULSES> matrixLForFnnls{shrMatrixLFnnlsStorage};
+
         // run fast nnls
         // FIXME: provide values from config
         fnnls(
@@ -1569,6 +1578,7 @@ void kernel_minimize(
             resultAmplitudesVector,
             npassive,
             pulseOffsets,
+            matrixLForFnnls,
             1e-11,
             500);
 
@@ -1842,6 +1852,8 @@ void entryPoint(
         uint32_t blocks = threadsPerBlock > totalChannels
             ? 1
             : (totalChannels + threadsPerBlock - 1) / threadsPerBlock;
+        auto const nbytesShared = threadsPerBlock * 
+            MapSymM<float, 8>::total * sizeof(float);
         kernel_minimize<8, 8><<<blocks, threadsPerBlock, 0, cudaStream.id()>>>(
             outputGPU.recHits.energy,
             outputGPU.recHits.chi2,
