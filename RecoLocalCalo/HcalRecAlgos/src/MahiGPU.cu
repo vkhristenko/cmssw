@@ -1358,6 +1358,8 @@ void kernel_minimize(
     extern __shared__ char shrmem[];
     float *shrMatrixLFnnlsStorage = 
         reinterpret_cast<float*>(shrmem) + MapSymM<float, NPULSES>::total*threadIdx.x;
+    float *shrAtAStorage = 
+        reinterpret_cast<float*>(shrmem) + MapSymM<float, NPULSES>::total*(threadIdx.x + blockDim.x);
 
     // conditions for pedestal widths
     auto const id = gch >= nchannelsf01HE
@@ -1499,8 +1501,8 @@ void kernel_minimize(
         //ColMajorMatrix<NPULSES, NPULSES> AtA = A.transpose() * A;
         //ColumnVector<NPULSES> Atb = A.transpose() * b;
         //ColMajorMatrix<NPULSES, NPULSES> AtA;
-        float AtAStorage[MapSymM<float, NPULSES>::total];
-        MapSymM<float, NPULSES> AtA{AtAStorage};
+        //float AtAStorage[MapSymM<float, NPULSES>::total];
+        MapSymM<float, NPULSES> AtA{shrAtAStorage};
         ColumnVector<NPULSES> Atb;
         #pragma unroll
         for (int icol=0; icol<NPULSES; icol++) {
@@ -1852,7 +1854,7 @@ void entryPoint(
         uint32_t blocks = threadsPerBlock > totalChannels
             ? 1
             : (totalChannels + threadsPerBlock - 1) / threadsPerBlock;
-        auto const nbytesShared = threadsPerBlock * 
+        auto const nbytesShared = 2 * threadsPerBlock * 
             MapSymM<float, 8>::total * sizeof(float);
         kernel_minimize<8, 8><<<blocks, threadsPerBlock, nbytesShared, cudaStream.id()>>>(
             outputGPU.recHits.energy,
