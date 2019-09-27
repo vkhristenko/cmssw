@@ -9,6 +9,9 @@
 
 #include <Eigen/Dense>
 
+#include <cooperative_groups.h>
+using namespace cooperative_groups;
+
 #ifdef HCAL_MAHI_GPUDEBUG
 #define DETID_TO_DEBUG 1125647428
 #endif
@@ -1270,11 +1273,6 @@ void update_covariance(
         auto const resultAmplitude = resultAmplitudesVector(ipulse);
         if (resultAmplitude == 0) continue;
 
-#ifdef HCAL_MAHI_GPUDEBUG
-        printf("pulse cov array for ibx = %d and offset %d\n",
-            ipulse, offset);
-#endif
-
         // preload a column
         float pmcol[NSAMPLES], pmpcol[NSAMPLES], pmmcol[NSAMPLES];
         #pragma unroll
@@ -1701,6 +1699,496 @@ void kernel_minimize(
     */
 }
 
+namespace using_coop_groups {
+
+template<typename T>
+constexpr bool is_power_of_two(T x) {
+    return (x != 0) && ((x & (x - 1)) == 0);
+}
+    
+template<int NTILESIZE>
+using channel_tile_t = thread_block_tile<NTILESIZE>;
+
+template<int NSAMPLES, int NPULSES, int NTILESIZE>
+__forceinline__ __device__
+void update_covariance(
+        thread_block_tile<NTILESIZE> const& channel_tile,
+        float resultAmplitude,
+        MapSymM<float, NSAMPLES> &covarianceMatrix,
+        Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrix,
+        Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixM,
+        Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixP) {
+    // sync threads for this tile
+    // this mainly acts as a memory barrier for shared mem
+    channel_tile.sync();
+
+    // rank of the thread per group
+    auto const t_rank = channel_tile.thread_rank();
+
+    // NOTE: use only NSAMPLES thread of the channel_tile.
+    // FIXME: if that is going to be cuasing inefficiencies -> replace to use all
+    // threads
+    #pragma unroll
+    for (int ipulse=0; ipulse<NPULSES; ipulse++) {
+        // get current amplitude value (from thread of rnak ipulse)
+        auto const currentResultAmplitude = channel_tile.shfl(
+            resultAmplitude, ipulse);
+        if (currentResultAmplitude == 0) continue;
+        auto const ampl2 = currentResultAmplitude*currentResultAmplitude;
+
+        // preload a column
+        auto const pmvalue = pulseMatrix(t_rank%NSAMPLES, ipulse);
+        auto const pmpvalue = pulseMatrixP(t_rank%NSAMPLES, ipulse);
+        auto const pmmvalue = pulseMatrixM(t_rank%NSAMPLES, ipulse);
+        auto const diffp = pmpvalue - pmvalue;
+        auto const diffm = pmmvalue - pmvalue;
+
+        // diagonal
+        auto const tmp_value = 0.5*(diffp*diffp + diffm*diffm);
+        covarianceMatrix(t_rank, t_rank) += ampl2 * tmp_value;
+
+        #pragma unroll
+        for (int col=0; col<NSAMPLES; col++) {
+            auto const pmvalue_col = channel_tile.shfl(pmvalue, col);
+            auto const pmpvalue_col = channel_tile.shfl(pmpvalue, col);
+            auto const pmmvalue_col = channel_tile.shfl(pmmvalue, col);
+            auto const diffp_col = pmpvalue_col - pmvalue_col;
+            auto const diffm_col = pmmvalue_col - pmvalue_col;
+
+            auto const cov_value = 0.5*(diffp*diffp_col + diffm*diffm_col);
+            if (t_rank>=col && t_rank<NSAMPLES)
+                covarianceMatrix(t_rank, col) += ampl2 * cov_value;
+        }
+    }
+}
+
+template<int N>
+__forceinline__ __device__
+void linear_to_symm_coords(int idx, int& row, int& col) {
+    int left = N;
+    while (idx >= left) {
+        idx -= left;
+        left--;
+    }
+
+    col = N - left;
+    row = col + idx;
+}
+
+template<int NTILESIZE, typename MatrixType>
+__device__
+void compute_decomposition_inplace_unblocking_unrolled(
+        thread_block_tile<NTILESIZE> const& channel_tile,
+        MatrixType &A) {
+    constexpr auto N = MatrixType::stride;
+    constexpr auto NVALUES = MatrixType::total;
+
+    // rank of the thread
+    auto const t_rank = channel_tile.thread_rank();
+
+    int NValuesVisited = 0;
+    #pragma unroll
+    for (int col=0; col<N; col++) {
+        // sync on each iteration
+        channel_tile.sync();
+
+        float value;
+        // load a column
+        if (t_rank<N-col)
+            value = A(t_rank+col, col);
+
+        // compute diagonal
+        if (t_rank==0)
+            value = std::sqrt(value);
+
+        // pass diagonal element
+        auto const value_diag_col = channel_tile.shfl(value, 0);
+        // elements below diagonal
+        if (t_rank>=1 && t_rank<N-col)
+            value = value / value_diag_col;
+        
+        // n values that are computed
+        NValuesVisited += N-col;
+
+        // trailing matrix update
+        // use all the threads
+        for (int idx=NValuesVisited; idx<NVALUES; idx+=NTILESIZE) {
+            // this is the linear index of the matrix element to update
+            auto const myidx = idx+t_rank;
+
+            // convert linear to symm matrix indices
+            int myrow, mycol;
+            if (myidx<NVALUES)
+                linear_to_symm_coords<N>(myidx, myrow, mycol);
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+            if (myidx < NVALUES) {
+                assert(myrow >= col && mycol >= col);
+                printf("%d %d %d %d %d\n", t_rank, myidx, myrow, mycol, col);
+            }
+#endif
+
+            // shuffle to get the right values from below diag value 
+            // myrow >= col and mycol >= col
+            auto const value_mycol_col = channel_tile.shfl(value, mycol - col);
+            auto const value_myrow_col = channel_tile.shfl(value, myrow - col);
+        
+
+            // update hte value
+            if (myidx<NVALUES)
+                A.data[myidx] -= value_mycol_col * value_myrow_col;
+        }
+    }
+}
+
+template<int NTILESIZE, typename MatrixType1, typename MatrixType2>
+__device__
+void solve_forwardsubst_matrix_inplace(
+        thread_block_tile<NTILESIZE> const& channel_tile, 
+        MatrixType1 const& shrL, 
+        MatrixType2& shrPulseMatrix) {
+    constexpr auto NPULSES = MatrixType2::ColsAtCompileTime;
+    constexpr auto NSAMPLES = MatrixType2::RowsAtCompileTime;
+
+    // sync 
+    channel_tile.sync();
+
+    // each thread of the tile works on a different column
+    int const col = channel_tile.thread_rank();
+    if (col >= NPULSES) return;
+    
+    // (0, col) element
+    shrPulseMatrix(0, col) /= shrL(0, 0);
+
+    #pragma unroll
+    for (int row=1; row<NSAMPLES; row++) {
+        float total = 0;
+        auto const tmp = shrPulseMatrix(row, col);
+        for (int j=0; j<row; j++)
+            total += shrPulseMatrix(j, col) * shrL(j, row);
+
+        shrPulseMatrix(row, col) = (tmp - total) / shrL(row, row);
+    }
+}
+
+template<int NTILESIZE, typename MatrixType1>
+__device__
+float solve_forwardsubst_vector(
+        thread_block_tile<NTILESIZE> const& channel_tile,
+        MatrixType1 const& shrL,
+        float const inputValue) {
+    constexpr auto N = MatrixType1::stride;
+
+    // no syncing, assume it's done already somewhere
+    auto const t_rank = channel_tile.thread_rank();
+
+    // this is the value each thread of the tile should return
+    float solutionValue;
+    auto input = inputValue;
+
+    #pragma unroll
+    for (int icol=0; icol<N-1; icol++) {
+        float const lvalue = shrL(t_rank % N, icol);
+        if (t_rank==icol)
+            solutionValue = input / lvalue;
+        auto const solution_icol = channel_tile.shfl(solutionValue, icol);
+        if (t_rank > icol && t_rank<N)
+            input -= solution_icol * lvalue;
+    }
+
+    if (t_rank == N-1)
+        solutionValue = input / shrL(N-1, N-1);
+
+    return solutionValue;
+}
+
+template<int NTILESIZE, typename MatrixType>
+__device__
+void fnnls(
+        thread_block_tile<NTILESIZE> const& channel_tile,
+        MatrixType const& shrAtA,
+        float const atb,
+        float &solution,
+        int& npassive,
+        int& pulseOffset,
+        MapSymM<float, MatrixType::stride> &shrL,
+        double const eps,
+        int const maxIterations) {
+}
+
+template<int NSAMPLES, int NPULSES, int NTILESIZE>
+__global__
+void kernel_minimize(
+        float* outputEnergy,
+        float* outputChi2,
+        float const* inputAmplitudes,
+        float* pulseMatrices,
+        float* pulseMatricesM, // should be const but Eigen complains
+        float* pulseMatricesP, // hsould be const but eigen complains
+        int const* pulseOffsetValues,
+        float const* noiseTerms,
+        int8_t const* soiSamples,
+        float const* pedestalWidths,
+        float const* effectivePedestalWidths,
+        bool const useEffectivePedestals,
+        uint32_t const* idsf01HE,
+        uint32_t const* idsf5HB,
+        float const* gainValues,
+        float const* respCorrectionValues,
+        uint32_t const nchannelsf01HE,
+        uint32_t const nchannelsTotal,
+        uint32_t const offsetForHashes,
+        int const maxDepthHB,
+        int const maxDepthHE,
+        int const maxPhiHE,
+        int const firstHBRing,
+        int const lastHBRing,
+        int const firstHERing,
+        int const lastHERing,
+        int const nEtaHB,
+        int const nEtaHE) {
+    // requirements
+    static_assert(NTILESIZE <= 32);
+    static_assert(is_power_of_two(NTILESIZE) == true);
+    static_assert(NTILESIZE >= NSAMPLES);
+    static_assert(NSAMPLES >= NPULSES);
+
+    constexpr int NVALUES_SYMM_NSAMPLES = MapSymM<float, NSAMPLES>::total;
+    constexpr int NVALUES_PULSE_MATRIX = NSAMPLES * NPULSES;
+
+    // divide all threads into groups of tile size
+    thread_block_tile<NTILESIZE> channel_tile = 
+        tiled_partition<NTILESIZE>(this_thread_block());
+    auto const gch = (threadIdx.x + blockIdx.x * blockDim.x) / NTILESIZE;
+    auto const lch = threadIdx.x / NTILESIZE;
+    auto const nchannels_per_block = blockDim.x / NTILESIZE;
+    auto const t_rank = channel_tile.thread_rank();
+    
+    // just in case
+    if (gch >= nchannelsTotal) return;
+
+    // if chi2 is set to -9999 do not run minimization
+    if (outputChi2[gch] == -9999.f)
+        return;
+
+    // configure shared mem
+    // TODO: provide this properly
+    extern __shared__ char shrmem[];
+    float *shrCovarianceMatrixStorageStart = reinterpret_cast<float*>(shrmem);
+    float *shrCovarianceMatrixStorage = shrCovarianceMatrixStorageStart + NVALUES_SYMM_NSAMPLES*lch;
+    float *shrPulseMatrixStorageStart = shrCovarianceMatrixStorageStart + 
+        NVALUES_SYMM_NSAMPLES * nchannels_per_block;
+    // note: we reuse pulse matrix storage for ata and l matrix for fnnls
+    float *shrPulseMatrixStorage = shrPulseMatrixStorageStart + 
+        (NVALUES_PULSE_MATRIX * NPULSES) * lch;
+    float *shrAtAStorage = shrPulseMatrixStorage;
+    float *shrLFnnlsStorage = shrPulseMatrixStorage + MapSymM<float, NPULSES>::total;
+    //char *shrPulseOffsets = shrmem + NPULSES * lch;
+    //float *shrResultAmplitudesVectorStart = reinterpret_cast<float*>(shrmem) 
+    //    + NPULSES * nchannels_per_block;
+    //float *shrResultAmplitudesVector = shrResultAmplitudesVectorStart + 
+    //float *shrMatrixLFnnlsStorage = 
+    //    reinterpret_cast<float*>(shrmem) + MapSymM<float, NPULSES>::total*threadIdx.x;
+    //float *shrAtAStorage = 
+    //    reinterpret_cast<float*>(shrmem) + MapSymM<float, NPULSES>::total*(threadIdx.x + blockDim.x);
+
+    // map shared mem
+    MapSymM<float, NSAMPLES> shrCovarianceMatrix{shrCovarianceMatrixStorage};
+    MapSymM<float, NPULSES> shrAtA{shrAtAStorage};
+    MapSymM<float, NPULSES> shrLFnnls{shrLFnnlsStorage};
+    Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> 
+        shrPulseMatrix{shrPulseMatrixStorage};
+
+    // conditions for pedestal widths
+    auto const id = gch >= nchannelsf01HE
+        ? idsf5HB[gch - nchannelsf01HE]
+        : idsf01HE[gch];
+    auto const did = DetId{id};
+    auto const hashedId = did.subdetId() == HcalBarrel
+        ? did2linearIndexHB(id, maxDepthHB, firstHBRing, lastHBRing, nEtaHB)
+        : did2linearIndexHE(id, maxDepthHE, maxPhiHE, firstHERing, lastHERing, nEtaHE)
+            + offsetForHashes;
+
+    auto const* pedestalWidthsForChannel = useEffectivePedestals && gch < nchannelsf01HE
+        ? effectivePedestalWidths + hashedId*4
+        : pedestalWidths + hashedId*4;
+    auto const averagePedestalWidth2 = 0.25 * (
+        pedestalWidthsForChannel[0]*pedestalWidthsForChannel[0] +
+        pedestalWidthsForChannel[1]*pedestalWidthsForChannel[1] +
+        pedestalWidthsForChannel[2]*pedestalWidthsForChannel[2] +
+        pedestalWidthsForChannel[3]*pedestalWidthsForChannel[3]);
+    auto const* gains = gainValues + 
+        hashedId*4;
+    // FIXME on cpu ts 0 capid was used - does it make any difference
+    auto const gain = gains[0];
+    auto const respCorrection = respCorrectionValues[hashedId];
+
+    int const soi = soiSamples[gch];
+    constexpr float deltaChi2Threashold = 1e-3;
+
+    // keep pulse offsets completely in registers
+    // only threads with rank < NPULSES will have meaningful values
+    int pulseOffset = t_rank;
+
+    // keep result amplitudes completely in registiers
+    float resultAmplitude = 0;
+
+    // map views
+    Eigen::Map<const ColumnVector<NSAMPLES>> 
+        inputAmplitudesView{inputAmplitudes + gch*NSAMPLES};
+    Eigen::Map<const ColumnVector<NSAMPLES>> 
+        noiseTermsView{noiseTerms + gch*NSAMPLES};
+    Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> 
+        pulseMatrixMView{pulseMatricesM + gch*NSAMPLES*NPULSES};
+    Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>>
+        pulseMatrixPView{pulseMatricesP + gch*NSAMPLES*NPULSES};
+    Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> 
+        pulseMatrixView{pulseMatrices + gch*NSAMPLES*NPULSES};
+    
+    // keep the input amplitude sample value
+    auto const inputAmplitudeValue = inputAmplitudesView(t_rank % NSAMPLES);
+
+    int npassive = 0;
+    float chi2=0, previous_chi2=0.f, chi2_2itersback=0.f;
+    for (int iter=1; iter<50; iter++) {
+        channel_tile.sync();
+
+        // preload pulse matrix
+        #pragma unroll
+        for (int idx=0; idx<NVALUES_PULSE_MATRIX; idx+=NTILESIZE)
+            if (idx + t_rank < NVALUES_PULSE_MATRIX)
+                shrPulseMatrixStorage[idx + t_rank] = 
+                    pulseMatrixView.data()[idx + t_rank];
+
+        // initialize covariance matrix
+        #pragma unroll
+        for (int counter=0; counter<NVALUES_SYMM_NSAMPLES; counter+=NTILESIZE) {
+            auto const idx = t_rank + counter;
+            if (idx < NVALUES_SYMM_NSAMPLES)
+                shrCovarianceMatrixStorage[idx] = averagePedestalWidth2;
+        }
+        channel_tile.sync();
+        if (t_rank < NSAMPLES)
+            shrCovarianceMatrix(t_rank, t_rank) += noiseTermsView(t_rank);
+
+        update_covariance<NSAMPLES, NPULSES, NTILESIZE>(
+            channel_tile,
+            resultAmplitude,
+            shrCovarianceMatrix,
+            shrPulseMatrix,
+            pulseMatrixMView,
+            pulseMatrixPView);
+
+        compute_decomposition_inplace_unblocking_unrolled<
+            NTILESIZE, MapSymM<float, NSAMPLES>>(
+            channel_tile, shrCovarianceMatrix);
+
+        solve_forwardsubst_matrix_inplace<
+            NTILESIZE, MapSymM<float, NSAMPLES>, 
+            Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>>>(
+                channel_tile, shrCovarianceMatrix, shrPulseMatrix);
+
+        auto const b = solve_forwardsubst_vector<
+            NTILESIZE, MapSymM<float, NSAMPLES>>(channel_tile, shrCovarianceMatrix,
+            inputAmplitudeValue);
+
+        // At * b
+        channel_tile.sync();
+        float atb;
+        {
+            float sum = 0;
+            for (int i=0; i<NSAMPLES; i++) {
+                auto const value = channel_tile.shfl(b, i);
+                if (t_rank < NSAMPLES)
+                    sum += value * shrPulseMatrix.coeffRef(i, t_rank);
+            }
+            atb = sum;
+        }
+
+        // At * A
+        {
+            #pragma unroll
+            for (int col=0; col<NPULSES; col++) {
+                float sum = 0;
+                if (t_rank < NPULSES && t_rank>=col) {
+                    #pragma unroll
+                    for (int counter=0; counter<NSAMPLES; counter++)
+                            sum += 
+                                shrPulseMatrix.coeff(sum, col) * shrPulseMatrix.coeff(sum, t_rank);
+                }
+                channel_tile.sync();
+                if (t_rank < NPULSES && t_rank>=col)
+                    shrAtA(t_rank, col) = sum;
+            }
+        }
+
+        fnnls<NTILESIZE, MapSymM<float, NPULSES>>(
+            channel_tile,
+            shrAtA,
+            atb,
+            resultAmplitude,
+            npassive,
+            pulseOffset,
+            shrLFnnls,
+            1e-11,
+            500);
+
+        // sync the tile
+        // PulseMatrix * x - inputS
+        channel_tile.sync();
+
+        // preload pulse matrix - reuse the AtA and LFnnls storage
+        #pragma unroll
+        for (int idx=0; idx<NVALUES_PULSE_MATRIX; idx+=NTILESIZE)
+            if (idx + t_rank < NVALUES_PULSE_MATRIX)
+                shrPulseMatrixStorage[idx + t_rank] = 
+                    pulseMatrixView.data()[idx + t_rank];
+
+        channel_tile.sync();
+        float tmp;
+        {
+            float sum = 0;
+            #pragma unroll
+            for (int i=0; i<NPULSES; i++) {
+                auto const value = channel_tile.shfl(resultAmplitude, i);
+                if (t_rank < NSAMPLES)
+                    sum += value * shrPulseMatrix.coeffRef(t_rank, i);
+            }
+            tmp = sum - inputAmplitudeValue;
+        }
+        // solve and reduce
+        // after the reduction all thrads of a tile have the same value for chi2
+        auto const tmp_solution = solve_forwardsubst_vector<
+            NTILESIZE, MapSymM<float, NSAMPLES>>(channel_tile, shrCovarianceMatrix,
+            tmp);
+        chi2 = t_rank<NSAMPLES ? tmp_solution*tmp_solution : 0;
+        #pragma unroll
+        for (int counter=channel_tile.size()/2; counter>=1; counter/=2)
+            chi2 += channel_tile.shfl_down(chi2, counter);
+
+
+        // evaluate if we are finished
+        auto const deltaChi2 = std::abs(chi2 - previous_chi2);
+        if (chi2==chi2_2itersback && chi2 < previous_chi2)
+            break;
+
+        // update
+        chi2_2itersback = previous_chi2;
+        previous_chi2 = chi2;
+
+        // exit condition
+        if (deltaChi2 < deltaChi2Threashold)
+            break;
+    }
+    
+    // store result to global
+    outputChi2[gch] = chi2;
+    outputEnergy[gch] = (gain* 1 /*energy*/)*respCorrection;
+
+} 
+
+}
+
 void entryPoint(
         InputDataGPU const& inputGPU,
         OutputDataGPU& outputGPU,
@@ -1849,14 +2337,16 @@ void entryPoint(
     cudaCheck( cudaGetLastError() );
 
     if (f01nsamples==8 && configParameters.pulseOffsets.size() == 8u) {
+        constexpr int tile_size = 8;
         // FIXME: provide constants from configuration
+        // this is chanenls per block
         uint32_t threadsPerBlock = configParameters.kernelMinimizeThreads[0];
         uint32_t blocks = threadsPerBlock > totalChannels
             ? 1
             : (totalChannels + threadsPerBlock - 1) / threadsPerBlock;
-        auto const nbytesShared = 2 * threadsPerBlock * 
-            MapSymM<float, 8>::total * sizeof(float);
-        kernel_minimize<8, 8><<<blocks, threadsPerBlock, nbytesShared, cudaStream.id()>>>(
+        auto const nbytesShared = threadsPerBlock * 
+            (MapSymM<float, 8>::total * sizeof(float) + sizeof(float)*8*8 + sizeof(float)*8);
+        using_coop_groups::kernel_minimize<8, 8, tile_size><<<blocks, tile_size*threadsPerBlock, nbytesShared, cudaStream.id()>>>(
             outputGPU.recHits.energy,
             outputGPU.recHits.chi2,
             scratch.amplitudes,
