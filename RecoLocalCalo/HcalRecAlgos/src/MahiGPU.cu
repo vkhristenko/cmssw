@@ -897,7 +897,7 @@ struct MapSymMDyn {
     int total;
 
     __forceinline__ __device__
-    MapSymM(T *data, int stride) : data{data}, stride{stride}, total{stride*(stride+1)/2} {}
+    MapSymMDyn(T *data, int stride) : data{data}, stride{stride}, total{stride*(stride+1)/2} {}
 
     __forceinline__ __device__
     T const& operator()(int const row, int const col) const {
@@ -1820,7 +1820,7 @@ void linear_to_symm_coords_dyn(int N, int idx, int& row, int& col) {
     row = col + idx;
 }
 
-__forceinline __device__
+__forceinline__ __device__
 int n_bit_set(unsigned int mask) {
     int i=0;
     while ((mask & 0x1) != 0x1) {
@@ -1901,8 +1901,8 @@ template<int NTILESIZE, typename MatrixType1, typename MatrixType2>
 __device__
 void compute_decomposition_unblocking_with_offsets(
         thread_block_tile<NTILESIZE> const& channel_tile,
-        MatrixType1 const& L,
-        MatrixType2& A,
+        MatrixType1& L,
+        MatrixType2 const& A,
         int const pulseOffset) {
     auto const N = L.stride;
     auto const NVALUES = L.total;
@@ -2119,6 +2119,7 @@ void fnnls(
 
     // sync threads
     channel_tile.sync();
+    auto const t_rank = channel_tile.thread_rank();
 
     // initialize
     Eigen::Index w_max_idx_prev = 0;
@@ -2127,6 +2128,9 @@ void fnnls(
 
     int iter = 0;
     while (true) {
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        printf("thread = %d iter = %d\n", threadIdx.x, iter);
+#endif
         if (iter > 0 || npassive == 0) {
             // exit if all pulses are in the passive set
             auto const nactive = NPULSES - npassive;
@@ -2166,20 +2170,22 @@ void fnnls(
             auto const w_max_idx = n_bit_set(mask);
 #ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
             // w_max should be coming from the active set threads
+            printf("w_max_idx = %d\n", w_max_idx);
             assert(w_max_idx < NPULSES && w_max_idx >= npassive);
 #endif
 
             // check for convergence
+            // FIXME: should w_max_idx and w_max_idx_prev be w/o npassive diff???
+            // below as in cpu
             if (w_max < eps_to_use ||
-                w_max_idx==w_max_idx_prev && w_max==w_max_prev)
+                (w_max_idx-npassive)==w_max_idx_prev && w_max==w_max_prev)
                 break;
             if (iter >= maxIterations) break;
-
             w_max_prev = w_max;
-            w_amx_idx_prev = w_max_idx;
+            w_max_idx_prev = w_max_idx - npassive;
 
             // move index
-            w_max_idx += npassive;
+            //w_max_idx += npassive;
 
             // perform a swap of pulse offsets thru shuffling
             auto const newPulseOffset = channel_tile.shfl(
@@ -2193,21 +2199,30 @@ void fnnls(
 
         // inner loop
         while (true) {
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+            printf("thread %d npassive = %d\n", threadIdx.x, npassive);
+#endif
             if (npassive==0) break;
 
             // 
             MapSymMDyn<float> shrMatrixL{shrL.data, npassive};
-            compute_decomposition_unblocking_with_offsets(
+            compute_decomposition_unblocking_with_offsets<
+                NTILESIZE, MapSymMDyn<float>, MatrixType>(
                 channel_tile, shrMatrixL, AtA, pulseOffset);
             // need to sync after computing matrix L
             channel_tile.sync();
             auto const atb_real = channel_tile.shfl(atb, pulseOffset);
-            auto const tmp_value = solve_forwardsubst_vector(
+            auto const tmp_value = solve_forwardsubst_vector<
+                NTILESIZE, MapSymMDyn<float>>(
                 channel_tile, shrMatrixL, atb_real);
-            auto const __svalue = solve_backwardsubst_vector(
+            auto const __svalue = solve_backwardsubst_vector<
+                NTILESIZE, MapSymMDyn<float>>(
                 channel_tile, shrMatrixL, tmp_value);
             // make sure svalue for active set threads is non-negative
             auto const svalue = t_rank < npassive ? __svalue : 1.0f;
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+            printf("rank = %d svalue = %f npassive = %d atb_real = %f tmp_value = %f\n", t_rank, svalue, npassive, atb_real, tmp_value);
+#endif
 
             // the first npassive threads have results
             // the rest are made sure to be positive
@@ -2248,7 +2263,8 @@ void fnnls(
             auto const alpha_idx_real = channel_tile.shfl(pulseOffset, alpha_idx);
 #ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
             // w_max should be coming from the active set threads
-            assert(alpha_idx < npassive && alpha_idx > 0);
+            printf("alpha_idx = %d\n", alpha_idx);
+            assert(alpha_idx < npassive && alpha_idx >= 0);
 #endif
 
             // update the solution
@@ -2334,6 +2350,12 @@ void kernel_minimize(
     
     // just in case
     if (gch >= nchannelsTotal) return;
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+#ifdef HCAL_MAHI_GPUDEBUG_SINGLE_CHANNEL
+    if (gch > 0) return;
+#endif
+#endif
 
     // if chi2 is set to -9999 do not run minimization
     if (outputChi2[gch] == -9999.f)
@@ -2503,6 +2525,10 @@ void kernel_minimize(
             shrLFnnls,
             1e-11,
             500);
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        printf("done with fnnls ch = %d\n", gch);
+#endif
 
         // sync the tile
         // PulseMatrix * x - inputS
