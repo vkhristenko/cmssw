@@ -883,6 +883,39 @@ struct MapSymM {
     }
 };
 
+template
+<
+    typename T,
+    int Order = Eigen::ColMajor
+>
+struct MapSymMDyn {
+    using type = T;
+    using base_type = typename std::remove_const<type>::type;
+
+    T* data;
+    int stride;
+    int total;
+
+    __forceinline__ __device__
+    MapSymM(T *data, int stride) : data{data}, stride{stride}, total{stride*(stride+1)/2} {}
+
+    __forceinline__ __device__
+    T const& operator()(int const row, int const col) const {
+        auto const tmp = (stride - col) * (stride - col + 1) / 2;
+        auto const index = total - tmp + row - col;
+        return data[index];
+    }
+
+    template<typename U = T>
+    __forceinline__ __device__
+    typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
+    operator()(int const row, int const col) {
+        auto const tmp = (stride - col) * (stride - col + 1) / 2;
+        auto const index = total - tmp + row - col;
+        return data[index];
+    }
+};
+
 // simple/trivial cholesky decomposition impl
 template<typename MatrixType1, typename MatrixType2>
 __forceinline__ __device__ 
@@ -1775,6 +1808,29 @@ void linear_to_symm_coords(int idx, int& row, int& col) {
     row = col + idx;
 }
 
+__forceinline__ __device__
+void linear_to_symm_coords_dyn(int N, int idx, int& row, int& col) {
+    int left = N;
+    while (idx >= left) {
+        idx -= left;
+        left--;
+    }
+
+    col = N - left;
+    row = col + idx;
+}
+
+__forceinline __device__
+int n_bit_set(unsigned int mask) {
+    int i=0;
+    while ((mask & 0x1) != 0x1) {
+        mask = mask >> 1;
+        i++;
+    }
+
+    return i;
+}
+
 template<int NTILESIZE, typename MatrixType>
 __device__
 void compute_decomposition_inplace_unblocking_unrolled(
@@ -1843,6 +1899,85 @@ void compute_decomposition_inplace_unblocking_unrolled(
 
 template<int NTILESIZE, typename MatrixType1, typename MatrixType2>
 __device__
+void compute_decomposition_unblocking_with_offsets(
+        thread_block_tile<NTILESIZE> const& channel_tile,
+        MatrixType1 const& L,
+        MatrixType2& A,
+        int const pulseOffset) {
+    auto const N = L.stride;
+    auto const NVALUES = L.total;
+
+    // rank of the thread
+    auto const t_rank = channel_tile.thread_rank();
+
+    // first copy values from A to L
+    for (int col=0; col<N; col++) {
+        auto const col_real = channel_tile.shfl(pulseOffset, col);
+        if (t_rank>=col && t_rank<N) {
+            if (pulseOffset >= col_real)
+                L(t_rank, col) = A(pulseOffset, col_real);
+            else
+                L(t_rank, col) = A(col_real, pulseOffset);
+        }
+
+    }
+
+    // perform unblocking cholesky
+    int NValuesVisited = 0;
+    for (int col=0; col<N; col++) {
+        // sync on each iteration
+        channel_tile.sync();
+
+        float value;
+        // load a column
+        if (t_rank<N-col)
+            value = L(t_rank+col, col);
+
+        // compute diagonal
+        if (t_rank==0)
+            value = std::sqrt(value);
+
+        // pass diagonal element
+        auto const value_diag_col = channel_tile.shfl(value, 0);
+        // elements below diagonal
+        if (t_rank>=1 && t_rank<N-col)
+            value = value / value_diag_col;
+        
+        // n values that are computed
+        NValuesVisited += N-col;
+
+        // trailing matrix update
+        // use all the threads
+        for (int idx=NValuesVisited; idx<NVALUES; idx+=NTILESIZE) {
+            // this is the linear index of the matrix element to update
+            auto const myidx = idx+t_rank;
+
+            // convert linear to symm matrix indices
+            int myrow, mycol;
+            if (myidx<NVALUES)
+                linear_to_symm_coords_dyn(N, myidx, myrow, mycol);
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+            if (myidx < NVALUES) {
+                assert(myrow >= col && mycol >= col);
+                printf("%d %d %d %d %d\n", t_rank, myidx, myrow, mycol, col);
+            }
+#endif
+
+            // shuffle to get the right values from below diag value 
+            // myrow >= col and mycol >= col
+            auto const value_mycol_col = channel_tile.shfl(value, mycol - col);
+            auto const value_myrow_col = channel_tile.shfl(value, myrow - col);
+
+            // update hte value
+            if (myidx<NVALUES)
+                L.data[myidx] -= value_mycol_col * value_myrow_col;
+        }
+    }
+}
+
+template<int NTILESIZE, typename MatrixType1, typename MatrixType2>
+__device__
 void solve_forwardsubst_matrix_inplace(
         thread_block_tile<NTILESIZE> const& channel_tile, 
         MatrixType1 const& shrL, 
@@ -1865,7 +2000,7 @@ void solve_forwardsubst_matrix_inplace(
         float total = 0;
         auto const tmp = shrPulseMatrix(row, col);
         for (int j=0; j<row; j++)
-            total += shrPulseMatrix(j, col) * shrL(j, row);
+            total += shrL(row, j) * shrPulseMatrix(j, col);
 
         shrPulseMatrix(row, col) = (tmp - total) / shrL(row, row);
     }
@@ -1873,7 +2008,7 @@ void solve_forwardsubst_matrix_inplace(
 
 template<int NTILESIZE, typename MatrixType1>
 __device__
-float solve_forwardsubst_vector(
+float solve_forwardsubst_vector_unrolled(
         thread_block_tile<NTILESIZE> const& channel_tile,
         MatrixType1 const& shrL,
         float const inputValue) {
@@ -1888,7 +2023,9 @@ float solve_forwardsubst_vector(
 
     #pragma unroll
     for (int icol=0; icol<N-1; icol++) {
-        float const lvalue = shrL(t_rank % N, icol);
+        float lvalue;
+        if (t_rank >= icol && t_rank<N)
+            lvalue = shrL(t_rank, icol);
         if (t_rank==icol)
             solutionValue = input / lvalue;
         auto const solution_icol = channel_tile.shfl(solutionValue, icol);
@@ -1902,11 +2039,75 @@ float solve_forwardsubst_vector(
     return solutionValue;
 }
 
+template<int NTILESIZE, typename MatrixType1>
+__device__
+float solve_forwardsubst_vector(
+        thread_block_tile<NTILESIZE> const& channel_tile,
+        MatrixType1 const& shrL,
+        float const inputValue) {
+    auto const N = shrL.stride;
+    // no syncing, assume it's done already somewhere
+    auto const t_rank = channel_tile.thread_rank();
+
+    // this is the value each thread of the tile should return
+    float solutionValue;
+    auto input = inputValue;
+
+    for (int icol=0; icol<N-1; icol++) {
+        float lvalue; 
+        if (t_rank>=icol && t_rank<N)
+            lvalue = shrL(t_rank, icol);
+        if (t_rank==icol)
+            solutionValue = input / lvalue;
+        auto const solution_icol = channel_tile.shfl(solutionValue, icol);
+        if (t_rank > icol && t_rank<N)
+            input -= solution_icol * lvalue;
+    }
+
+    if (t_rank == N-1)
+        solutionValue = input / shrL(N-1, N-1);
+
+    return solutionValue;
+}
+
+template<int NTILESIZE, typename MatrixType1>
+__device__
+float solve_backwardsubst_vector(
+        thread_block_tile<NTILESIZE> const& channel_tile,
+        MatrixType1 const& shrL,
+        float const inputValue) {
+    auto const N = shrL.stride;
+    // no syncing, assume it's done already somewhere
+    auto const t_rank = channel_tile.thread_rank();
+
+    // this is the value each thread of the tile should return
+    float solutionValue;
+    auto input = inputValue;
+
+    for (int icol=N-1; icol>0; --icol) {
+        float lvalue;
+        if (t_rank<=icol)
+            lvalue = shrL(icol, t_rank);
+        if (t_rank == icol)
+            solutionValue = input / lvalue;
+        auto const solution_icol = channel_tile.shfl(solutionValue, icol);
+        if (t_rank<icol)
+            input -= solution_icol * lvalue;
+    }
+
+    if (t_rank == 0)
+        solutionValue = input / shrL(0, 0);
+
+    return solutionValue;
+}
+
+
+
 template<int NTILESIZE, typename MatrixType>
 __device__
 void fnnls(
         thread_block_tile<NTILESIZE> const& channel_tile,
-        MatrixType const& shrAtA,
+        MatrixType const& AtA,
         float const atb,
         float &solution,
         int& npassive,
@@ -1914,6 +2115,173 @@ void fnnls(
         MapSymM<float, MatrixType::stride> &shrL,
         double const eps,
         int const maxIterations) {
+    constexpr auto NPULSES = MatrixType::stride;
+
+    // sync threads
+    channel_tile.sync();
+
+    // initialize
+    Eigen::Index w_max_idx_prev = 0;
+    float w_max_prev = 0;
+    auto eps_to_use = eps;
+
+    int iter = 0;
+    while (true) {
+        if (iter > 0 || npassive == 0) {
+            // exit if all pulses are in the passive set
+            auto const nactive = NPULSES - npassive;
+            if (nactive == 0) break;
+
+            // compute the largest change in gradient for elements of active set
+            // w = Atb - AtA * x;
+            float sum = 0;
+            auto const icol_real = pulseOffset;
+            #pragma unroll
+            for (int counter=0; counter<NPULSES; counter++) {
+                auto const solution_i = channel_tile.shfl(solution, counter);
+                if (icol_real > counter)
+                    sum += AtA(icol_real, counter) * solution_i;
+                else 
+                    sum += AtA(counter, icol_real) * solution_i;
+            }
+
+            // these are our gradient values
+            auto const atb_real = channel_tile.shfl(atb, icol_real);
+            auto const w = t_rank>=npassive && t_rank<NPULSES
+                ? atb_real - sum
+                : std::numeric_limits<float>::min();
+
+            // find max in the thread tile. thread rank 0 will have the max
+            float w_max = w;
+            #pragma unroll
+            for (int counter=channel_tile.size()/2; counter>=1; counter/=2) {
+                auto const other_w = channel_tile.shfl_down(w_max, counter);
+                w_max = w_max>other_w ? w_max : other_w;
+            }
+
+            // propogate the max gradient to all threads
+            w_max = channel_tile.shfl(w_max, 0);
+            // propogate the rank of the thread that has the largest w
+            auto const mask = channel_tile.ballot(w_max == w);
+            auto const w_max_idx = n_bit_set(mask);
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+            // w_max should be coming from the active set threads
+            assert(w_max_idx < NPULSES && w_max_idx >= npassive);
+#endif
+
+            // check for convergence
+            if (w_max < eps_to_use ||
+                w_max_idx==w_max_idx_prev && w_max==w_max_prev)
+                break;
+            if (iter >= maxIterations) break;
+
+            w_max_prev = w_max;
+            w_amx_idx_prev = w_max_idx;
+
+            // move index
+            w_max_idx += npassive;
+
+            // perform a swap of pulse offsets thru shuffling
+            auto const newPulseOffset = channel_tile.shfl(
+                pulseOffset, 
+                t_rank==npassive ? w_max_idx
+                                 : npassive);
+            if (t_rank==npassive || t_rank==w_max_idx)
+                pulseOffset = newPulseOffset;
+            npassive++;
+        }
+
+        // inner loop
+        while (true) {
+            if (npassive==0) break;
+
+            // 
+            MapSymMDyn<float> shrMatrixL{shrL.data, npassive};
+            compute_decomposition_unblocking_with_offsets(
+                channel_tile, shrMatrixL, AtA, pulseOffset);
+            // need to sync after computing matrix L
+            channel_tile.sync();
+            auto const atb_real = channel_tile.shfl(atb, pulseOffset);
+            auto const tmp_value = solve_forwardsubst_vector(
+                channel_tile, shrMatrixL, atb_real);
+            auto const __svalue = solve_backwardsubst_vector(
+                channel_tile, shrMatrixL, tmp_value);
+            // make sure svalue for active set threads is non-negative
+            auto const svalue = t_rank < npassive ? __svalue : 1.0f;
+
+            // the first npassive threads have results
+            // the rest are made sure to be positive
+            bool const thereIsNegative = channel_tile.any(svalue < 0.f ? 1 : 0) != 0;
+            if (!thereIsNegative) {
+                // copy the solution if all positives
+                int srcRank = t_rank;
+                for (int i=0; i<npassive; i++) {
+                    auto const offset = channel_tile.shfl(pulseOffset, i);
+                    if (offset == t_rank)
+                        srcRank = i;
+                }
+                auto const new_value = channel_tile.shfl(svalue, srcRank);
+                solution = new_value;
+
+                // done for this iteration
+                break;
+            }
+
+            // there is at least 1 negative value -> have to recompute
+            float ratio = std::numeric_limits<float>::max();
+            auto const solution_i = channel_tile.shfl(solution, pulseOffset);
+            if (t_rank < npassive && svalue <= 0.)
+                ratio = solution_i / (solution_i - svalue);
+
+            // find the min ratio
+            float min_ratio = ratio;
+            for (int counter=channel_tile.size(); counter>=1; counter/=2) {
+                auto const other = channel_tile.shfl_down(min_ratio, counter);
+                min_ratio = min_ratio < other ? min_ratio : other;
+            }
+
+            // propogate the min ratio
+            min_ratio = channel_tile.shfl(min_ratio, 0);
+            // propogate who had this min ratio (which thread)
+            auto const mask = channel_tile.ballot(ratio == min_ratio);
+            auto const alpha_idx = n_bit_set(mask);
+            auto const alpha_idx_real = channel_tile.shfl(pulseOffset, alpha_idx);
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+            // w_max should be coming from the active set threads
+            assert(alpha_idx < npassive && alpha_idx > 0);
+#endif
+
+            // update the solution
+            int srcRank = t_rank;
+            for (int i=0; i<npassive; i++) {
+                auto const offset = channel_tile.shfl(pulseOffset, i);
+                if (offset == t_rank)
+                    srcRank = i;
+            }
+            // this allows thread i to point to the right solution 
+            auto const svalue_for_i = channel_tile.shfl(svalue, srcRank);
+            if (srcRank < npassive)
+                solution += min_ratio * (svalue_for_i - solution);
+
+            // FIXME: set solution for alpha_idx_real to 0
+            if (alpha_idx_real == t_rank)
+                solution = 0;
+            --npassive;
+
+            // swap pulse offsets
+            auto const newPulseOffset = channel_tile.shfl(
+                pulseOffset, 
+                t_rank==npassive ? alpha_idx
+                                 : npassive);
+            if (t_rank==npassive || t_rank==alpha_idx)
+                pulseOffset = newPulseOffset;
+        }
+
+        // as in cpu
+        ++iter;
+        if (iter % 10 == 0)
+            eps_to_use *= 10;
+    }
 }
 
 template<int NSAMPLES, int NPULSES, int NTILESIZE>
@@ -1980,7 +2348,7 @@ void kernel_minimize(
         NVALUES_SYMM_NSAMPLES * nchannels_per_block;
     // note: we reuse pulse matrix storage for ata and l matrix for fnnls
     float *shrPulseMatrixStorage = shrPulseMatrixStorageStart + 
-        (NVALUES_PULSE_MATRIX * NPULSES) * lch;
+        (NVALUES_PULSE_MATRIX + NPULSES) * lch;
     float *shrAtAStorage = shrPulseMatrixStorage;
     float *shrLFnnlsStorage = shrPulseMatrixStorage + MapSymM<float, NPULSES>::total;
     //char *shrPulseOffsets = shrmem + NPULSES * lch;
@@ -2054,11 +2422,14 @@ void kernel_minimize(
         channel_tile.sync();
 
         // preload pulse matrix
-        #pragma unroll
-        for (int idx=0; idx<NVALUES_PULSE_MATRIX; idx+=NTILESIZE)
-            if (idx + t_rank < NVALUES_PULSE_MATRIX)
-                shrPulseMatrixStorage[idx + t_rank] = 
-                    pulseMatrixView.data()[idx + t_rank];
+        // only for the first iteration, cause pulse matrix is also loaded
+        // for chi2 calculation
+        if (iter==1)
+            #pragma unroll
+            for (int idx=0; idx<NVALUES_PULSE_MATRIX; idx+=NTILESIZE)
+                if (idx + t_rank < NVALUES_PULSE_MATRIX)
+                    shrPulseMatrixStorage[idx + t_rank] = 
+                        pulseMatrixView.data()[idx + t_rank];
 
         // initialize covariance matrix
         #pragma unroll
@@ -2088,7 +2459,7 @@ void kernel_minimize(
             Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>>>(
                 channel_tile, shrCovarianceMatrix, shrPulseMatrix);
 
-        auto const b = solve_forwardsubst_vector<
+        auto const b = solve_forwardsubst_vector_unrolled<
             NTILESIZE, MapSymM<float, NSAMPLES>>(channel_tile, shrCovarianceMatrix,
             inputAmplitudeValue);
 
@@ -2158,13 +2529,15 @@ void kernel_minimize(
         }
         // solve and reduce
         // after the reduction all thrads of a tile have the same value for chi2
-        auto const tmp_solution = solve_forwardsubst_vector<
+        auto const tmp_solution = solve_forwardsubst_vector_unrolled<
             NTILESIZE, MapSymM<float, NSAMPLES>>(channel_tile, shrCovarianceMatrix,
             tmp);
         chi2 = t_rank<NSAMPLES ? tmp_solution*tmp_solution : 0;
         #pragma unroll
         for (int counter=channel_tile.size()/2; counter>=1; counter/=2)
             chi2 += channel_tile.shfl_down(chi2, counter);
+        // propogate from thread with rank 0
+        chi2 = channel_tile.shfl(chi2, 0);
 
 
         // evaluate if we are finished
