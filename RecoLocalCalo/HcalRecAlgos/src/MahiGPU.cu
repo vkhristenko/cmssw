@@ -1260,11 +1260,10 @@ __forceinline__ __device__
 void update_covariance(
         ColumnVector<NPULSES> const& resultAmplitudesVector,
         MapSymM<float, NSAMPLES> &covarianceMatrix,
-        Eigen::Map<const ColumnVector<NSAMPLES>> const& noiseTermsView,
-        float const averagePedestalWidth2,
         Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrix,
         Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixM,
-        Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixP) {
+        Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixP,
+        float * const shrTmpHalf1) {
     #pragma unroll
     for (int ipulse=0; ipulse<NPULSES; ipulse++) {
         auto const resultAmplitude = resultAmplitudesVector(ipulse);
@@ -1276,7 +1275,9 @@ void update_covariance(
 #endif
 
         // preload a column
-        float pmcol[NSAMPLES], pmpcol[NSAMPLES], pmmcol[NSAMPLES];
+        float *pmcol = shrTmpHalf1;
+        float *pmpcol = pmcol + NSAMPLES;
+        float *pmmcol = pmpcol + NSAMPLES;
         #pragma unroll
         for (int counter=0; counter<NSAMPLES; counter++) {
             pmcol[counter] = pulseMatrix(counter, ipulse);
@@ -1346,6 +1347,9 @@ void kernel_minimize(
         int const lastHERing,
         int const nEtaHB,
         int const nEtaHE) {
+    // FIXME: provide a full specialization... (no partioal... for funcs)
+    static_assert(NPULSES == NSAMPLES);
+
     // indices
     auto const gch = threadIdx.x + blockIdx.x * blockDim.x;
     if (gch >= nchannelsTotal) return;
@@ -1360,6 +1364,8 @@ void kernel_minimize(
         reinterpret_cast<float*>(shrmem) + (2*MapSymM<float, NPULSES>::total) * threadIdx.x;
     float *shrMatrixLFnnlsStorage = shrChannelStorage;
     float *shrAtAStorage = shrChannelStorage + MapSymM<float, NPULSES>::total;
+    float *shrTmpHalf1 = shrMatrixLFnnlsStorage;
+    float *shrTmpHalf2 = shrAtAStorage;
 
     // conditions for pedestal widths
     auto const id = gch >= nchannelsf01HE
@@ -1443,11 +1449,13 @@ void kernel_minimize(
     float chi2=0, previous_chi2=0.f, chi2_2itersback=0.f;
     // TOOD: provide constants from configuration
     for (int iter=1; iter<50; iter++) {
-        float covarianceMatrixStorage[MapSymM<float, NSAMPLES>::total];
-        MapSymM<float, NSAMPLES> covarianceMatrix{covarianceMatrixStorage};
+        //float covarianceMatrixStorage[MapSymM<float, NSAMPLES>::total];
+        //MapSymM<float, NSAMPLES> covarianceMatrix{covarianceMatrixStorage};
+        MapSymM<float, NSAMPLES> covarianceMatrix{shrTmpHalf2};
         #pragma unroll
         for (int counter=0; counter<MapSymM<float, NSAMPLES>::total; counter++)
-            covarianceMatrixStorage[counter] = averagePedestalWidth2;
+            shrTmpHalf2[counter] = averagePedestalWidth2;
+            //covarianceMatrixStorage[counter] = averagePedestalWidth2;
         #pragma unroll
         for (int counter=0; counter<MapSymM<float, NSAMPLES>::stride; counter++)
             covarianceMatrix(counter, counter) += noiseTermsView(counter);
@@ -1456,11 +1464,10 @@ void kernel_minimize(
         update_covariance(
             resultAmplitudesVector,
             covarianceMatrix,
-            noiseTermsView,
-            averagePedestalWidth2,
             pulseMatrixView,
             pulseMatrixMView,
-            pulseMatrixPView);
+            pulseMatrixPView,
+            shrTmpHalf1);
 
 #ifdef HCAL_MAHI_GPUDEBUG
         printf("covariance matrix\n");
