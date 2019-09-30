@@ -1356,10 +1356,10 @@ void kernel_minimize(
 
     // configure shared mem
     extern __shared__ char shrmem[];
-    float *shrMatrixLFnnlsStorage = 
-        reinterpret_cast<float*>(shrmem) + MapSymM<float, NPULSES>::total*threadIdx.x;
-    float *shrAtAStorage = 
-        reinterpret_cast<float*>(shrmem) + MapSymM<float, NPULSES>::total*(threadIdx.x + blockDim.x);
+    float *shrChannelStorage = 
+        reinterpret_cast<float*>(shrmem) + (2*MapSymM<float, NPULSES>::total) * threadIdx.x;
+    float *shrMatrixLFnnlsStorage = shrChannelStorage;
+    float *shrAtAStorage = shrChannelStorage + MapSymM<float, NPULSES>::total;
 
     // conditions for pedestal widths
     auto const id = gch >= nchannelsf01HE
