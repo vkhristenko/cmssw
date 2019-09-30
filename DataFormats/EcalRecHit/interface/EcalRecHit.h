@@ -213,6 +213,12 @@ public:
     return kGood;
   }
 
+  
+  uint32_t flagBits() const { return flagBits_; }
+  
+  uint32_t extra() const { return extra_; }
+  
+  
 private:
   // from calorechit
   DetId id_;

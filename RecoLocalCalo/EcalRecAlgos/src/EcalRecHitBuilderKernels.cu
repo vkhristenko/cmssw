@@ -390,6 +390,70 @@ namespace ecal {
         extra[ch] = value;
           
         
+        
+        
+        
+        
+        
+        // additional flags setting
+        
+        // Now fill flags
+        
+//         bool good = true;
+//         
+//         if (uncalibRH.checkFlag(EcalUncalibratedRecHit::kLeadingEdgeRecovered)) {
+//           rh.setFlag(EcalRecHit::kLeadingEdgeRecovered);
+//           good = false;
+//         }
+//         if (uncalibRH.checkFlag(EcalUncalibratedRecHit::kSaturated)) {
+//           // leading edge recovery failed - still keep the information
+//           // about the saturation and do not flag as dead
+//           rh.setFlag(EcalRecHit::kSaturated);
+//           good = false;
+//         }
+//         if (uncalibRH.isSaturated()) {
+//           rh.setFlag(EcalRecHit::kSaturated);
+//           good = false;
+//         }
+//         if (uncalibRH.checkFlag(EcalUncalibratedRecHit::kOutOfTime)) {
+//           rh.setFlag(EcalRecHit::kOutOfTime);
+//           good = false;
+//         }
+//         if (uncalibRH.checkFlag(EcalUncalibratedRecHit::kPoorReco)) {
+//           rh.setFlag(EcalRecHit::kPoorReco);
+//           good = false;
+//         }
+//         if (uncalibRH.checkFlag(EcalUncalibratedRecHit::kHasSwitchToGain6)) {
+//           rh.setFlag(EcalRecHit::kHasSwitchToGain6);
+//         }
+//         if (uncalibRH.checkFlag(EcalUncalibratedRecHit::kHasSwitchToGain1)) {
+//           rh.setFlag(EcalRecHit::kHasSwitchToGain1);
+//         }
+//         
+//         if (good)
+//           rh.setFlag(EcalRecHit::kGood);
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
       }
       
     }
