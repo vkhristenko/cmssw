@@ -1831,6 +1831,31 @@ template<typename T>
 constexpr bool is_power_of_two(T x) {
     return (x != 0) && ((x & (x - 1)) == 0);
 }
+
+template<int N>
+__forceinline__ __device__
+void linear_to_symm_coords(int idx, int& row, int& col) {
+    int left = N;
+    while (idx >= left) {
+        idx -= left;
+        left--;
+    }
+
+    col = N - left;
+    row = col + idx;
+}
+
+__forceinline__ __device__
+void linear_to_symm_coords_dyn(int N, int idx, int& row, int& col) {
+    int left = N;
+    while (idx >= left) {
+        idx -= left;
+        left--;
+    }
+
+    col = N - left;
+    row = col + idx;
+}
     
 template<int NTILESIZE>
 using channel_tile_t = thread_block_tile<NTILESIZE>;
@@ -1871,8 +1896,37 @@ void update_covariance(
 
         // diagonal
         auto const tmp_value = 0.5*(diffp*diffp + diffm*diffm);
-        covarianceMatrix(t_rank, t_rank) += ampl2 * tmp_value;
+        //covarianceMatrix(t_rank, t_rank) += ampl2 * tmp_value;
 
+        constexpr auto NVALUES = MapSymM<float, NSAMPLES>::total;
+        #pragma unroll
+        for (int idx=0; idx<NVALUES; idx+= NTILESIZE) {
+            auto const myidx = idx + t_rank;
+            int myrow, mycol;
+            if (myidx < NVALUES)
+                linear_to_symm_coords<NSAMPLES>(myidx, myrow, mycol);
+
+                        
+            auto const pmvalue_col = channel_tile.shfl(pmvalue, mycol);
+            auto const pmpvalue_col = channel_tile.shfl(pmpvalue, mycol);
+            auto const diffp_col = pmpvalue_col - pmvalue_col;
+            auto const pmmvalue_col = channel_tile.shfl(pmmvalue, mycol);
+            auto const diffm_col = pmmvalue_col - pmvalue_col;
+            
+            auto const pmvalue_row = channel_tile.shfl(pmvalue, myrow);
+            auto const pmpvalue_row = channel_tile.shfl(pmpvalue, myrow);
+            auto const diffp_row = pmpvalue_row - pmvalue_row;
+            auto const pmmvalue_row = channel_tile.shfl(pmmvalue, myrow);
+            auto const diffm_row = pmmvalue_row - pmvalue_row;
+
+            auto const cov_value = 0.5 * 
+                (diffp_col*diffp_row + diffm_col*diffm_row);
+
+            if (myidx < NVALUES)
+                covarianceMatrix(myrow, mycol) += ampl2 * cov_value;
+        }
+
+        /*
         #pragma unroll
         for (int col=0; col<NSAMPLES; col++) {
             auto const pmvalue_col = channel_tile.shfl(pmvalue, col);
@@ -1886,32 +1940,8 @@ void update_covariance(
             if (t_rank>col && t_rank<NSAMPLES)
                 covarianceMatrix(t_rank, col) += ampl2 * cov_value;
         }
+        */
     }
-}
-
-template<int N>
-__forceinline__ __device__
-void linear_to_symm_coords(int idx, int& row, int& col) {
-    int left = N;
-    while (idx >= left) {
-        idx -= left;
-        left--;
-    }
-
-    col = N - left;
-    row = col + idx;
-}
-
-__forceinline__ __device__
-void linear_to_symm_coords_dyn(int N, int idx, int& row, int& col) {
-    int left = N;
-    while (idx >= left) {
-        idx -= left;
-        left--;
-    }
-
-    col = N - left;
-    row = col + idx;
 }
 
 __forceinline__ __device__
