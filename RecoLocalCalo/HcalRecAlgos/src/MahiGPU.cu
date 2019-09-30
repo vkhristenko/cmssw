@@ -2582,7 +2582,7 @@ void kernel_minimize(
     int npassive = 0;
     float chi2=0, previous_chi2=0.f, chi2_2itersback=0.f;
     for (int iter=1; iter<50; iter++) {
-        //channel_tile.sync();
+        channel_tile.sync();
 
         // preload pulse matrix
         // only for the first iteration, cause pulse matrix is also loaded
