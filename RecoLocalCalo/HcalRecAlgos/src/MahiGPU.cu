@@ -16,6 +16,10 @@ using namespace cooperative_groups;
 #define DETID_TO_DEBUG 1125647428
 #endif
 
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+#define DETID_TO_DEBUG 1159744566
+#endif
+
 namespace hcal { namespace mahi {
 
 template<int NROWS, int NCOLS>
@@ -1145,6 +1149,11 @@ void fnnls(
 
     int iter = 0;
     while (true) {
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        for (int i=0; i<NPULSES; i++)
+            printf("in result( %d ) = %f pulseOffset( %d ) = %d\n",
+                i, solution(i), i, pulseOffsets(i));
+#endif
         if (iter > 0 || npassive==0) {
             auto const nactive = NPULSES - npassive;
             // exit if there are no more pulses to constrain
@@ -1202,6 +1211,14 @@ void fnnls(
                 compute_decomposition_with_offsets(matrixL, AtA, npassive, pulseOffsets);
             else
                 update_decomposition_with_offsets(matrixL, AtA, npassive, pulseOffsets);
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+            for (int i=0; i<npassive; i++) {
+                for (int j=i; j<npassive; j++)
+                    printf("shrMatrixL( %d, %d ) = %f\n",
+                        j, i, matrixL(j, i));
+            }
+#endif
        
             // run forward substitution
             float reg_b[NPULSES]; // result of forward substitution
@@ -1288,6 +1305,12 @@ void fnnls(
         ++iter;
         if (iter % 10 == 0)
             eps_to_use *= 10;
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        for (int i=0; i<NPULSES; i++)
+            printf("out result( %d ) = %f pulseOffset( %d ) = %d\n",
+                i, solution(i), i, pulseOffsets(i));
+#endif
     }
 }
 
@@ -1385,6 +1408,12 @@ void kernel_minimize(
     if (outputChi2[gch] == -9999.f)
         return;
 
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+#ifdef HCAL_MAHI_GPUDEBUG_SINGLE_CHANNEL
+    if (gch > 0) return;
+#endif
+#endif
+
     // configure shared mem
     extern __shared__ char shrmem[];
     float *shrMatrixLFnnlsStorage = 
@@ -1416,8 +1445,8 @@ void kernel_minimize(
     auto const gain = gains[0];
     auto const respCorrection = respCorrectionValues[hashedId];
 
-#ifdef HCAL_MAHI_GPUDEBUG
-#ifdef HCAL_MAHI_GPUDEBUG_FILTERDETID
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+#ifdef HCAL_MAHI_GPUDEBUG_FILTER_DETID
     if (id != DETID_TO_DEBUG) return;
 #endif
 #endif
@@ -1470,6 +1499,12 @@ void kernel_minimize(
     }
 #endif
 
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+    for (int i=0; i<NSAMPLES; i++)
+        printf("inputAmplitudesView( %d ) = %f pulseOffset = %d\n",
+            i, inputAmplitudesView(i), pulseOffsets(i));
+#endif
+
     int npassive = 0;
     float chi2=0, previous_chi2=0.f, chi2_2itersback=0.f;
     // TOOD: provide constants from configuration
@@ -1483,6 +1518,23 @@ void kernel_minimize(
         for (int counter=0; counter<MapSymM<float, NSAMPLES>::stride; counter++)
             covarianceMatrix(counter, counter) += noiseTermsView(counter);
 
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        printf("iteration = %d npassive = %d chi2 = %f\n", 
+            iter, npassive, chi2);
+
+        for (int col=0; col<NPULSES; col++)
+            for (int row=0; row<NSAMPLES; row++)
+                printf("pulseMatrix( %d, %d ) = %f\n",
+                    row, col, pulseMatrixView(row, col));
+#endif
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        for (int col=0; col<NSAMPLES; col++)
+            for (int row=col; row<NSAMPLES; row++)
+                printf("input CovarianceMatrix( %d, %d ) = %f\n",
+                    row, col, covarianceMatrix(row, col));
+#endif
+
         // update covariance matrix
         update_covariance(
             resultAmplitudesVector,
@@ -1492,6 +1544,13 @@ void kernel_minimize(
             pulseMatrixView,
             pulseMatrixMView,
             pulseMatrixPView);
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        for (int col=0; col<NSAMPLES; col++)
+            for (int row=col; row<NSAMPLES; row++)
+                printf("output CovarianceMatrix( %d, %d ) = %f\n",
+                    row, col, covarianceMatrix(row, col));
+#endif
 
 #ifdef HCAL_MAHI_GPUDEBUG
         printf("covariance matrix\n");
@@ -1509,6 +1568,13 @@ void kernel_minimize(
         MapSymM<float, NSAMPLES> matrixL{matrixLStorage};
         compute_decomposition_unrolled(matrixL, covarianceMatrix);
 
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        for (int col=0; col<NSAMPLES; col++)
+            for (int row=col; row<NSAMPLES; row++)
+                printf("after cholesky matrixL( %d, %d ) = %f\n",
+                    row, col, matrixL(row, col));
+#endif
+
         //
         // replace eigen
         //
@@ -1518,6 +1584,12 @@ void kernel_minimize(
         ColMajorMatrix<NSAMPLES, NPULSES> A;
         solve_forward_subst_matrix(A, pulseMatrixView, matrixL);
 
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        for (int col=0; col<NPULSES; col++)
+            for (int row=0; row<NSAMPLES; row++)
+                printf("A( %d, %d ) = %f\n", row, col, A(row, col));
+#endif
+
         // 
         // remove eigen
         //
@@ -1526,6 +1598,11 @@ void kernel_minimize(
         //
         float reg_b[NSAMPLES];
         solve_forward_subst_vector(reg_b, inputAmplitudesView, matrixL);
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        for (int i=0; i<NSAMPLES; i++)
+            printf("b( %d ) = %f\n", i, reg_b[i]);
+#endif
 
         // TODO: we do not really need to change these matrcies
         // will be fixed in the optimized version
@@ -1583,6 +1660,17 @@ void kernel_minimize(
             Atb(icol) = sum_atb;
         }
 
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+       for (int col=0; col<NPULSES; col++)
+           for (int row=col; row<NPULSES; row++)
+               printf("AtA( %d, %d ) = %f\n", row, col, AtA(row, col));
+#endif
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+       for (int i=0; i<NPULSES; i++)
+           printf("Atb( %d ) = %f\n", i, Atb(i));
+#endif
+
 #ifdef HCAL_MAHI_GPUDEBUG
         printf("AtA\n");
         for (int i=0; i<8; i++) {
@@ -1614,6 +1702,11 @@ void kernel_minimize(
             matrixLForFnnls,
             1e-11,
             500);
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        for (int i=0; i<NPULSES; i++)
+            printf("after fnnls result( %d ) = %f\n", i, resultAmplitudesVector(i));
+#endif
 
 #ifdef HCAL_MAHI_GPUDEBUG
         printf("result Amplitudes\n");
@@ -1746,7 +1839,7 @@ template<int NSAMPLES, int NPULSES, int NTILESIZE>
 __forceinline__ __device__
 void update_covariance(
         thread_block_tile<NTILESIZE> const& channel_tile,
-        float resultAmplitude,
+        float const resultAmplitude,
         MapSymM<float, NSAMPLES> &covarianceMatrix,
         Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrix,
         Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixM,
@@ -1788,8 +1881,9 @@ void update_covariance(
             auto const diffp_col = pmpvalue_col - pmvalue_col;
             auto const diffm_col = pmmvalue_col - pmvalue_col;
 
+            // off-diagonal values
             auto const cov_value = 0.5*(diffp*diffp_col + diffm*diffm_col);
-            if (t_rank>=col && t_rank<NSAMPLES)
+            if (t_rank>col && t_rank<NSAMPLES)
                 covarianceMatrix(t_rank, col) += ampl2 * cov_value;
         }
     }
@@ -1844,27 +1938,31 @@ void compute_decomposition_inplace_unblocking_unrolled(
 
     int NValuesVisited = 0;
     #pragma unroll
-    for (int col=0; col<N; col++) {
+    for (int col=0; col<N-1; col++) {
         // sync on each iteration
         channel_tile.sync();
 
         float value;
         // load a column
-        if (t_rank<N-col)
-            value = A(t_rank+col, col);
+        if (t_rank>=col && t_rank < N)
+            value = A(t_rank, col);
 
         // compute diagonal
-        if (t_rank==0)
+        if (t_rank==col)
             value = std::sqrt(value);
 
         // pass diagonal element
-        auto const value_diag_col = channel_tile.shfl(value, 0);
+        auto const value_diag_col = channel_tile.shfl(value, col);
         // elements below diagonal
-        if (t_rank>=1 && t_rank<N-col)
+        if (t_rank>=col+1 && t_rank<N)
             value = value / value_diag_col;
         
         // n values that are computed
         NValuesVisited += N-col;
+
+        // store the result
+        if (t_rank>=col && t_rank < N)
+            A(t_rank, col) = value;
 
         // trailing matrix update
         // use all the threads
@@ -1878,16 +1976,14 @@ void compute_decomposition_inplace_unblocking_unrolled(
                 linear_to_symm_coords<N>(myidx, myrow, mycol);
 
 #ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
-            if (myidx < NVALUES) {
+            if (myidx < NVALUES)
                 assert(myrow >= col && mycol >= col);
-                printf("%d %d %d %d %d\n", t_rank, myidx, myrow, mycol, col);
-            }
 #endif
 
             // shuffle to get the right values from below diag value 
             // myrow >= col and mycol >= col
-            auto const value_mycol_col = channel_tile.shfl(value, mycol - col);
-            auto const value_myrow_col = channel_tile.shfl(value, myrow - col);
+            auto const value_mycol_col = channel_tile.shfl(value, mycol);
+            auto const value_myrow_col = channel_tile.shfl(value, myrow);
         
 
             // update hte value
@@ -1895,6 +1991,11 @@ void compute_decomposition_inplace_unblocking_unrolled(
                 A.data[myidx] -= value_mycol_col * value_myrow_col;
         }
     }
+
+    // last iteration
+    channel_tile.sync();
+    if (t_rank==N-1)
+        A(N-1, N-1) = std::sqrt(A(N-1, N-1));
 }
 
 template<int NTILESIZE, typename MatrixType1, typename MatrixType2>
@@ -1910,6 +2011,9 @@ void compute_decomposition_unblocking_with_offsets(
     // rank of the thread
     auto const t_rank = channel_tile.thread_rank();
 
+    // 
+    channel_tile.sync();
+
     // first copy values from A to L
     for (int col=0; col<N; col++) {
         auto const col_real = channel_tile.shfl(pulseOffset, col);
@@ -1919,32 +2023,36 @@ void compute_decomposition_unblocking_with_offsets(
             else
                 L(t_rank, col) = A(col_real, pulseOffset);
         }
-
     }
 
     // perform unblocking cholesky
     int NValuesVisited = 0;
-    for (int col=0; col<N; col++) {
-        // sync on each iteration
+    for (int col=0; col<N-1; col++) {
+        // sync on e
         channel_tile.sync();
 
         float value;
         // load a column
-        if (t_rank<N-col)
-            value = L(t_rank+col, col);
+        if (t_rank>=col && t_rank < N)
+            value = L(t_rank, col);
 
         // compute diagonal
-        if (t_rank==0)
+        if (t_rank==col)
             value = std::sqrt(value);
 
         // pass diagonal element
-        auto const value_diag_col = channel_tile.shfl(value, 0);
+        auto const value_diag_col = channel_tile.shfl(value, col);
         // elements below diagonal
-        if (t_rank>=1 && t_rank<N-col)
+        if (t_rank>=col+1 && t_rank<N)
             value = value / value_diag_col;
         
         // n values that are computed
         NValuesVisited += N-col;
+
+        // store the result
+        if (t_rank>=col && t_rank < N)
+            L(t_rank, col) = value;
+
 
         // trailing matrix update
         // use all the threads
@@ -1958,22 +2066,25 @@ void compute_decomposition_unblocking_with_offsets(
                 linear_to_symm_coords_dyn(N, myidx, myrow, mycol);
 
 #ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
-            if (myidx < NVALUES) {
+            if (myidx < NVALUES)
                 assert(myrow >= col && mycol >= col);
-                printf("%d %d %d %d %d\n", t_rank, myidx, myrow, mycol, col);
-            }
 #endif
 
             // shuffle to get the right values from below diag value 
             // myrow >= col and mycol >= col
-            auto const value_mycol_col = channel_tile.shfl(value, mycol - col);
-            auto const value_myrow_col = channel_tile.shfl(value, myrow - col);
+            auto const value_mycol_col = channel_tile.shfl(value, mycol);
+            auto const value_myrow_col = channel_tile.shfl(value, myrow);
 
             // update hte value
             if (myidx<NVALUES)
                 L.data[myidx] -= value_mycol_col * value_myrow_col;
         }
     }
+    
+    // last iteration
+    channel_tile.sync();
+    if (t_rank==N-1)
+        L(N-1, N-1) = std::sqrt(L(N-1, N-1));
 }
 
 template<int NTILESIZE, typename MatrixType1, typename MatrixType2>
@@ -2129,7 +2240,9 @@ void fnnls(
     int iter = 0;
     while (true) {
 #ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
-        printf("thread = %d iter = %d\n", threadIdx.x, iter);
+        if (t_rank < NPULSES)
+            printf("in result( %d ) = %f pulseOffset( %d ) = %d\n",
+                t_rank, solution, t_rank, pulseOffset);
 #endif
         if (iter > 0 || npassive == 0) {
             // exit if all pulses are in the passive set
@@ -2150,10 +2263,10 @@ void fnnls(
             }
 
             // these are our gradient values
-            auto const atb_real = channel_tile.shfl(atb, icol_real);
-            auto const w = t_rank>=npassive && t_rank<NPULSES
+            float const atb_real = channel_tile.shfl(atb, icol_real);
+            float const w = t_rank>=npassive && t_rank<NPULSES
                 ? atb_real - sum
-                : std::numeric_limits<float>::min();
+                : -std::numeric_limits<float>::max();
 
             // find max in the thread tile. thread rank 0 will have the max
             float w_max = w;
@@ -2168,9 +2281,12 @@ void fnnls(
             // propogate the rank of the thread that has the largest w
             auto const mask = channel_tile.ballot(w_max == w);
             auto const w_max_idx = n_bit_set(mask);
+
 #ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
             // w_max should be coming from the active set threads
-            printf("w_max_idx = %d\n", w_max_idx);
+            // unless w_max 
+            printf("w_max_idx = %d w_max = %f w = %f\n", 
+                w_max_idx, w_max, w);
             assert(w_max_idx < NPULSES && w_max_idx >= npassive);
 #endif
 
@@ -2183,6 +2299,7 @@ void fnnls(
             if (iter >= maxIterations) break;
             w_max_prev = w_max;
             w_max_idx_prev = w_max_idx - npassive;
+
 
             // move index
             //w_max_idx += npassive;
@@ -2199,9 +2316,6 @@ void fnnls(
 
         // inner loop
         while (true) {
-#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
-            printf("thread %d npassive = %d\n", threadIdx.x, npassive);
-#endif
             if (npassive==0) break;
 
             // 
@@ -2209,6 +2323,16 @@ void fnnls(
             compute_decomposition_unblocking_with_offsets<
                 NTILESIZE, MapSymMDyn<float>, MatrixType>(
                 channel_tile, shrMatrixL, AtA, pulseOffset);
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+            channel_tile.sync();
+            for (int i=0; i<npassive; i++) {
+                if (t_rank>=i && t_rank<npassive)
+                    printf("shrMatrixL( %d, %d ) = %f\n",
+                        t_rank, i, shrMatrixL(t_rank, i));
+            }
+#endif
+
             // need to sync after computing matrix L
             channel_tile.sync();
             auto const atb_real = channel_tile.shfl(atb, pulseOffset);
@@ -2219,24 +2343,25 @@ void fnnls(
                 NTILESIZE, MapSymMDyn<float>>(
                 channel_tile, shrMatrixL, tmp_value);
             // make sure svalue for active set threads is non-negative
-            auto const svalue = t_rank < npassive ? __svalue : 1.0f;
-#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
-            printf("rank = %d svalue = %f npassive = %d atb_real = %f tmp_value = %f\n", t_rank, svalue, npassive, atb_real, tmp_value);
-#endif
+            auto const svalue = t_rank < npassive ? __svalue : 0;
 
             // the first npassive threads have results
             // the rest are made sure to be positive
-            bool const thereIsNegative = channel_tile.any(svalue < 0.f ? 1 : 0) != 0;
+            bool const thereIsNegative = channel_tile.any(svalue < 0 ? 1 : 0) != 0;
             if (!thereIsNegative) {
                 // copy the solution if all positives
-                int srcRank = t_rank;
+                int srcRank = npassive;
                 for (int i=0; i<npassive; i++) {
                     auto const offset = channel_tile.shfl(pulseOffset, i);
                     if (offset == t_rank)
                         srcRank = i;
                 }
+
+                // srcRank will not be set for threads that 
+                // should not update the value
                 auto const new_value = channel_tile.shfl(svalue, srcRank);
-                solution = new_value;
+                if (srcRank < npassive)
+                    solution = new_value;
 
                 // done for this iteration
                 break;
@@ -2263,12 +2388,11 @@ void fnnls(
             auto const alpha_idx_real = channel_tile.shfl(pulseOffset, alpha_idx);
 #ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
             // w_max should be coming from the active set threads
-            printf("alpha_idx = %d\n", alpha_idx);
             assert(alpha_idx < npassive && alpha_idx >= 0);
 #endif
 
             // update the solution
-            int srcRank = t_rank;
+            int srcRank = npassive;
             for (int i=0; i<npassive; i++) {
                 auto const offset = channel_tile.shfl(pulseOffset, i);
                 if (offset == t_rank)
@@ -2297,6 +2421,12 @@ void fnnls(
         ++iter;
         if (iter % 10 == 0)
             eps_to_use *= 10;
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        if (t_rank < NPULSES)
+            printf("out result( %d ) = %f pulseOffset( %d ) = %d\n",
+                t_rank, solution, t_rank, pulseOffset);
+#endif
     }
 }
 
@@ -2399,6 +2529,12 @@ void kernel_minimize(
         : did2linearIndexHE(id, maxDepthHE, maxPhiHE, firstHERing, lastHERing, nEtaHE)
             + offsetForHashes;
 
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+#ifdef HCAL_MAHI_GPUDEBUG_FILTER_DETID
+    if (id != DETID_TO_DEBUG) return;
+#endif
+#endif
+
     auto const* pedestalWidthsForChannel = useEffectivePedestals && gch < nchannelsf01HE
         ? effectivePedestalWidths + hashedId*4
         : pedestalWidths + hashedId*4;
@@ -2438,10 +2574,15 @@ void kernel_minimize(
     // keep the input amplitude sample value
     auto const inputAmplitudeValue = inputAmplitudesView(t_rank % NSAMPLES);
 
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+    printf("rank = %d inputAmplitudeValue = %f pulseOffset = %d\n", 
+        t_rank, inputAmplitudeValue, pulseOffset);
+#endif
+
     int npassive = 0;
     float chi2=0, previous_chi2=0.f, chi2_2itersback=0.f;
     for (int iter=1; iter<50; iter++) {
-        channel_tile.sync();
+        //channel_tile.sync();
 
         // preload pulse matrix
         // only for the first iteration, cause pulse matrix is also loaded
@@ -2452,6 +2593,20 @@ void kernel_minimize(
                 if (idx + t_rank < NVALUES_PULSE_MATRIX)
                     shrPulseMatrixStorage[idx + t_rank] = 
                         pulseMatrixView.data()[idx + t_rank];
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        printf("rank = %d iteration = %d npassive = %d chi2 = %f\n", 
+            t_rank, iter, npassive, chi2);
+
+        #pragma unroll
+        for (int idx=0; idx<NVALUES_PULSE_MATRIX; idx+=NTILESIZE)
+            if (idx + t_rank < NVALUES_PULSE_MATRIX) {
+                int col = (idx + t_rank) / NSAMPLES;
+                int row = (idx + t_rank) % NSAMPLES;
+                printf("shrPulseMatrix( %d, %d ) = %f\n",
+                    row, col, shrPulseMatrix(row, col));
+            }
+#endif
 
         // initialize covariance matrix
         #pragma unroll
@@ -2464,6 +2619,13 @@ void kernel_minimize(
         if (t_rank < NSAMPLES)
             shrCovarianceMatrix(t_rank, t_rank) += noiseTermsView(t_rank);
 
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        for (int col=0; col<NSAMPLES; col++)
+            if (t_rank>=col && t_rank < NSAMPLES)
+                printf("input shrCovarianceMatrix( %d, %d ) = %f\n",
+                    t_rank, col, shrCovarianceMatrix(t_rank, col));
+#endif
+
         update_covariance<NSAMPLES, NPULSES, NTILESIZE>(
             channel_tile,
             resultAmplitude,
@@ -2472,18 +2634,51 @@ void kernel_minimize(
             pulseMatrixMView,
             pulseMatrixPView);
 
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        channel_tile.sync();
+        for (int col=0; col<NSAMPLES; col++)
+            if (t_rank>=col && t_rank < NSAMPLES)
+                printf("output shrCovarianceMatrix( %d, %d ) = %f\n",
+                    t_rank, col, shrCovarianceMatrix(t_rank, col));
+#endif
+
         compute_decomposition_inplace_unblocking_unrolled<
             NTILESIZE, MapSymM<float, NSAMPLES>>(
             channel_tile, shrCovarianceMatrix);
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        channel_tile.sync();
+        for (int col=0; col<NSAMPLES; col++)
+            if (t_rank>=col && t_rank < NSAMPLES)
+                printf("after cholesky matrixL( %d, %d ) = %f\n",
+                    t_rank, col, shrCovarianceMatrix(t_rank, col));
+#endif
 
         solve_forwardsubst_matrix_inplace<
             NTILESIZE, MapSymM<float, NSAMPLES>, 
             Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>>>(
                 channel_tile, shrCovarianceMatrix, shrPulseMatrix);
 
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        channel_tile.sync();
+        #pragma unroll
+        for (int idx=0; idx<NVALUES_PULSE_MATRIX; idx+=NTILESIZE)
+            if (idx + t_rank < NVALUES_PULSE_MATRIX) {
+                int col = (idx + t_rank) / NSAMPLES;
+                int row = (idx + t_rank) % NSAMPLES;
+                printf("A( %d, %d ) = %f\n",
+                    row, col, shrPulseMatrix(row, col));
+            }
+#endif
+
         auto const b = solve_forwardsubst_vector_unrolled<
             NTILESIZE, MapSymM<float, NSAMPLES>>(channel_tile, shrCovarianceMatrix,
             inputAmplitudeValue);
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        if (t_rank < NSAMPLES)
+            printf("rank = %d b = %f\n", t_rank, b);
+#endif
 
         // At * b
         channel_tile.sync();
@@ -2507,13 +2702,26 @@ void kernel_minimize(
                     #pragma unroll
                     for (int counter=0; counter<NSAMPLES; counter++)
                             sum += 
-                                shrPulseMatrix.coeff(sum, col) * shrPulseMatrix.coeff(sum, t_rank);
+                                shrPulseMatrix.coeff(counter, col) * 
+                                shrPulseMatrix.coeff(counter, t_rank);
                 }
                 channel_tile.sync();
                 if (t_rank < NPULSES && t_rank>=col)
                     shrAtA(t_rank, col) = sum;
             }
         }
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        channel_tile.sync();
+        for (int col=0; col<NPULSES; col++)
+            if (t_rank >= col && t_rank<NPULSES)
+                printf("AtA( %d, %d ) = %f\n", t_rank, col, shrAtA(t_rank, col));
+#endif
+
+#ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
+        if (t_rank < NPULSES)
+            printf("Atb( %d ) = %f\n", t_rank, atb);
+#endif
 
         fnnls<NTILESIZE, MapSymM<float, NPULSES>>(
             channel_tile,
@@ -2527,7 +2735,8 @@ void kernel_minimize(
             500);
 
 #ifdef HCAL_MAHI_GPUDEBUG_KERNEL_MINIMIZE
-        printf("done with fnnls ch = %d\n", gch);
+        if (t_rank < NPULSES)
+            printf("after fnnls result( %d ) = %f\n", t_rank, resultAmplitude);
 #endif
 
         // sync the tile
@@ -2581,12 +2790,14 @@ void kernel_minimize(
     }
     
     // store result to global
-    outputChi2[gch] = chi2;
-    outputEnergy[gch] = (gain* 1 /*energy*/)*respCorrection;
-
+    if (t_rank == std::abs(pulseOffsetValues[0])) {
+        outputChi2[gch] = chi2;
+        outputEnergy[gch] = (gain*resultAmplitude)*respCorrection;
+    }
 } 
 
 }
+
 
 void entryPoint(
         InputDataGPU const& inputGPU,
@@ -2743,9 +2954,21 @@ void entryPoint(
         uint32_t blocks = threadsPerBlock > totalChannels
             ? 1
             : (totalChannels + threadsPerBlock - 1) / threadsPerBlock;
+#ifdef HCAL_MAHIGPU_SINGLE_THREAD_PER_CHANNEL
+        auto const nbytesShared = 2 * threadsPerBlock * 
+            (MapSymM<float, 8>::total * sizeof(float));
+#else
         auto const nbytesShared = threadsPerBlock * 
             (MapSymM<float, 8>::total * sizeof(float) + sizeof(float)*8*8 + sizeof(float)*8);
-        using_coop_groups::kernel_minimize<8, 8, tile_size><<<blocks, tile_size*threadsPerBlock, nbytesShared, cudaStream.id()>>>(
+#endif
+#ifdef HCAL_MAHIGPU_SINGLE_THREAD_PER_CHANNEL
+        kernel_minimize<8, 8><<<blocks, 
+            threadsPerBlock, 
+#else
+        using_coop_groups::kernel_minimize<8, 8, tile_size><<<blocks, 
+            tile_size*threadsPerBlock, 
+#endif
+            nbytesShared, cudaStream.id()>>>(
             outputGPU.recHits.energy,
             outputGPU.recHits.chi2,
             scratch.amplitudes,
