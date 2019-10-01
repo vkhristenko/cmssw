@@ -1008,7 +1008,7 @@ void solve_forward_subst_matrix(
         // preload a column and load column 0 of cholesky
         #pragma unroll
         for (int i=0; i<NSAMPLES; i++) {
-            reg_b[i] = pulseMatrixView(i, icol);
+            reg_b[i] = __ldg(&pulseMatrixView.coeffRef(i, icol));
             reg_L[i] = matrixL(i, 0);
         }
 
@@ -1277,9 +1277,9 @@ void update_covariance(
         float pmcol[NSAMPLES], pmpcol[NSAMPLES], pmmcol[NSAMPLES];
         #pragma unroll
         for (int counter=0; counter<NSAMPLES; counter++) {
-            pmcol[counter] = pulseMatrix.coeff(counter, ipulse);
-            pmpcol[counter] = pulseMatrixP.coeff(counter, ipulse);
-            pmmcol[counter] = pulseMatrixM.coeff(counter, ipulse);
+            pmcol[counter] = __ldg(&pulseMatrix.coeffRef(counter, ipulse));
+            pmpcol[counter] = __ldg(&pulseMatrixP.coeffRef(counter, ipulse));
+            pmmcol[counter] = __ldg(&pulseMatrixM.coeffRef(counter, ipulse));
         }
 
         auto const ampl2 = resultAmplitude * resultAmplitude;
@@ -1325,13 +1325,13 @@ void kernel_minimize(
         int const* __restrict__ pulseOffsetValues,
         float const* __restrict__ noiseTerms,
         int8_t const* __restrict__ soiSamples,
-        float const* pedestalWidths,
-        float const* effectivePedestalWidths,
+        float const* __restrict__ pedestalWidths,
+        float const* __restrict__ effectivePedestalWidths,
         bool const useEffectivePedestals,
-        uint32_t const* idsf01HE,
-        uint32_t const* idsf5HB,
-        float const* gainValues,
-        float const* respCorrectionValues,
+        uint32_t const* __restrict__ idsf01HE,
+        uint32_t const* __restrict__ idsf5HB,
+        float const* __restrict__ gainValues,
+        float const* __restrict__ respCorrectionValues,
         uint32_t const nchannelsf01HE,
         uint32_t const nchannelsTotal,
         uint32_t const offsetForHashes,
@@ -1408,11 +1408,11 @@ void kernel_minimize(
     Eigen::Map<const ColumnVector<NSAMPLES>> 
         noiseTermsView{noiseTerms + gch*NSAMPLES};
     Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> 
-        pulseMatrixMView{pulseMatricesM + gch*NSAMPLES*NPULSES};
+        glbPulseMatrixMView{pulseMatricesM + gch*NSAMPLES*NPULSES};
     Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>>
-        pulseMatrixPView{pulseMatricesP + gch*NSAMPLES*NPULSES};
+        glbPulseMatrixPView{pulseMatricesP + gch*NSAMPLES*NPULSES};
     Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> 
-        pulseMatrixView{pulseMatrices + gch*NSAMPLES*NPULSES};
+        glbPulseMatrixView{pulseMatrices + gch*NSAMPLES*NPULSES};
 
 #ifdef HCAL_MAHI_GPUDEBUG
     for (int i=0; i<NSAMPLES; i++)
@@ -1420,19 +1420,19 @@ void kernel_minimize(
             i, inputAmplitudesView(i), i, noiseTermsView(i));
     for (int i=0; i<NSAMPLES; i++) {
         for (int j=0; j<NPULSES; j++)
-            printf("%f ", pulseMatrixView(i, j));
+            printf("%f ", glbPulseMatrixView(i, j));
         printf("\n");
     }
     printf("\n");
     for (int i=0; i<NSAMPLES; i++) {
         for (int j=0; j<NPULSES; j++)
-            printf("%f ", pulseMatrixMView(i, j));
+            printf("%f ", glbPulseMatrixMView(i, j));
         printf("\n");
     }
     printf("\n");
     for (int i=0; i<NSAMPLES; i++) {
         for (int j=0; j<NPULSES; j++)
-            printf("%f ", pulseMatrixPView(i, j));
+            printf("%f ", glbPulseMatrixPView(i, j));
         printf("\n");
     }
 #endif
@@ -1448,15 +1448,16 @@ void kernel_minimize(
             covarianceMatrixStorage[counter] = averagePedestalWidth2;
         #pragma unroll
         for (int counter=0; counter<MapSymM<float, NSAMPLES>::stride; counter++)
-            covarianceMatrix(counter, counter) += noiseTermsView(counter);
+            covarianceMatrix(counter, counter) += 
+                __ldg(&noiseTermsView.coeffRef(counter));
 
         // update covariance matrix
         update_covariance(
             resultAmplitudesVector,
             covarianceMatrix,
-            pulseMatrixView,
-            pulseMatrixMView,
-            pulseMatrixPView);
+            glbPulseMatrixView,
+            glbPulseMatrixMView,
+            glbPulseMatrixPView);
 
 #ifdef HCAL_MAHI_GPUDEBUG
         printf("covariance matrix\n");
@@ -1481,7 +1482,7 @@ void kernel_minimize(
         //    .matrixL()
         //    .solve(pulseMatrixView);
         ColMajorMatrix<NSAMPLES, NPULSES> A;
-        solve_forward_subst_matrix(A, pulseMatrixView, matrixL);
+        solve_forward_subst_matrix(A, glbPulseMatrixView, matrixL);
 
         // 
         // remove eigen
@@ -1611,7 +1612,8 @@ void kernel_minimize(
                 // preload a column of pulse matrix
                 #pragma unroll
                 for (int counter=0; counter<NSAMPLES; counter++)
-                    pm_col[counter] = pulseMatrixView(counter, icol);
+                    pm_col[counter] = __ldg(
+                        &glbPulseMatrixView.coeffRef(counter, icol));
 
                 // accum
                 #pragma unroll
