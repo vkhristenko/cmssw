@@ -1052,7 +1052,7 @@ void solve_forward_subst_vector(
     // preload a column and load column 0 of cholesky
     #pragma unroll
     for (int i=0; i<NSAMPLES; i++) {
-        reg_b_tmp[i] = inputAmplitudesView(i);
+        reg_b_tmp[i] = __ldg(&inputAmplitudesView.coeffRef(i));
         reg_L[i] = matrixL(i, 0);
     }
 
@@ -1404,7 +1404,7 @@ void kernel_minimize(
 
     // map views
     Eigen::Map<const ColumnVector<NSAMPLES>> 
-        inputAmplitudesView{inputAmplitudes + gch*NSAMPLES};
+        glbInputAmplitudesView{inputAmplitudes + gch*NSAMPLES};
     Eigen::Map<const ColumnVector<NSAMPLES>> 
         noiseTermsView{noiseTerms + gch*NSAMPLES};
     Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> 
@@ -1417,7 +1417,7 @@ void kernel_minimize(
 #ifdef HCAL_MAHI_GPUDEBUG
     for (int i=0; i<NSAMPLES; i++)
         printf("inputValues(%d) = %f noiseTerms(%d) = %f\n", 
-            i, inputAmplitudesView(i), i, noiseTermsView(i));
+            i, glbInputAmplitudesView(i), i, noiseTermsView(i));
     for (int i=0; i<NSAMPLES; i++) {
         for (int j=0; j<NPULSES; j++)
             printf("%f ", glbPulseMatrixView(i, j));
@@ -1491,7 +1491,7 @@ void kernel_minimize(
         //   .solve(inputAmplitudesView);
         //
         float reg_b[NSAMPLES];
-        solve_forward_subst_vector(reg_b, inputAmplitudesView, matrixL);
+        solve_forward_subst_vector(reg_b, glbInputAmplitudesView, matrixL);
 
         // TODO: we do not really need to change these matrcies
         // will be fixed in the optimized version
@@ -1603,7 +1603,7 @@ void kernel_minimize(
             // load accum
             #pragma unroll
             for (int counter=0; counter<NSAMPLES; counter++)
-                accum[counter] = -inputAmplitudesView(counter);
+                accum[counter] = -glbInputAmplitudesView.coeff(counter);
 
             // iterate
             for (int icol=0; icol<NPULSES; icol++) {
