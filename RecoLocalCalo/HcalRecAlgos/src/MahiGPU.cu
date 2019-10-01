@@ -1260,11 +1260,9 @@ __forceinline__ __device__
 void update_covariance(
         ColumnVector<NPULSES> const& resultAmplitudesVector,
         MapSymM<float, NSAMPLES> &covarianceMatrix,
-        Eigen::Map<const ColumnVector<NSAMPLES>> const& noiseTermsView,
-        float const averagePedestalWidth2,
-        Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrix,
-        Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixM,
-        Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixP) {
+        Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrix,
+        Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixM,
+        Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> const& pulseMatrixP) {
     #pragma unroll
     for (int ipulse=0; ipulse<NPULSES; ipulse++) {
         auto const resultAmplitude = resultAmplitudesVector(ipulse);
@@ -1279,9 +1277,9 @@ void update_covariance(
         float pmcol[NSAMPLES], pmpcol[NSAMPLES], pmmcol[NSAMPLES];
         #pragma unroll
         for (int counter=0; counter<NSAMPLES; counter++) {
-            pmcol[counter] = pulseMatrix(counter, ipulse);
-            pmpcol[counter] = pulseMatrixP(counter, ipulse);
-            pmmcol[counter] = pulseMatrixM(counter, ipulse);
+            pmcol[counter] = pulseMatrix.coeff(counter, ipulse);
+            pmpcol[counter] = pulseMatrixP.coeff(counter, ipulse);
+            pmmcol[counter] = pulseMatrixM.coeff(counter, ipulse);
         }
 
         auto const ampl2 = resultAmplitude * resultAmplitude;
@@ -1320,13 +1318,13 @@ __global__
 void kernel_minimize(
         float* outputEnergy,
         float* outputChi2,
-        float const* inputAmplitudes,
-        float* pulseMatrices,
-        float* pulseMatricesM, // should be const but Eigen complains
-        float* pulseMatricesP, // hsould be const but eigen complains
-        int const* pulseOffsetValues,
-        float const* noiseTerms,
-        int8_t const* soiSamples,
+        float const* __restrict__ inputAmplitudes,
+        float const* __restrict__ pulseMatrices,
+        float const* __restrict__ pulseMatricesM,
+        float const* __restrict__ pulseMatricesP,
+        int const* __restrict__ pulseOffsetValues,
+        float const* __restrict__ noiseTerms,
+        int8_t const* __restrict__ soiSamples,
         float const* pedestalWidths,
         float const* effectivePedestalWidths,
         bool const useEffectivePedestals,
@@ -1409,11 +1407,11 @@ void kernel_minimize(
         inputAmplitudesView{inputAmplitudes + gch*NSAMPLES};
     Eigen::Map<const ColumnVector<NSAMPLES>> 
         noiseTermsView{noiseTerms + gch*NSAMPLES};
-    Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> 
+    Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> 
         pulseMatrixMView{pulseMatricesM + gch*NSAMPLES*NPULSES};
-    Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>>
+    Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>>
         pulseMatrixPView{pulseMatricesP + gch*NSAMPLES*NPULSES};
-    Eigen::Map<ColMajorMatrix<NSAMPLES, NPULSES>> 
+    Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> 
         pulseMatrixView{pulseMatrices + gch*NSAMPLES*NPULSES};
 
 #ifdef HCAL_MAHI_GPUDEBUG
@@ -1456,8 +1454,6 @@ void kernel_minimize(
         update_covariance(
             resultAmplitudesVector,
             covarianceMatrix,
-            noiseTermsView,
-            averagePedestalWidth2,
             pulseMatrixView,
             pulseMatrixMView,
             pulseMatrixPView);
