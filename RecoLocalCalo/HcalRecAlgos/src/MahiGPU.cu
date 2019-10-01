@@ -985,6 +985,7 @@ void update_decomposition_forwardsubst_with_offsets(
     auto const i = N-1;
     auto const i_real = pulseOffsets(i);
     T sumsq {0};
+    T total = 0;
     for (int j=0; j<i; j++) {
         auto const j_real = pulseOffsets(j);
         T sumsq2{0};
@@ -995,11 +996,13 @@ void update_decomposition_forwardsubst_with_offsets(
         auto const value_i_j = (m_i_j - sumsq2) / L(j, j);
         L(i, j) = value_i_j;
         sumsq += value_i_j * value_i_j;
+
+        total += value_i_j * b[j];
     }
 
     auto const l_i_i = std::sqrt(M(i_real, i_real) - sumsq);
     L(i, i) = l_i_i;
-    b[i] = Atb(i_real) / l_i_i;
+    b[i] = (Atb(i_real) - total) / l_i_i;
 }
 
 template<typename MatrixType1, typename MatrixType2, typename MatrixType3>
