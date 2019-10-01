@@ -27,6 +27,40 @@ using ColumnVector = Eigen::Matrix<T, SIZE, 1>;
 template<int SIZE, typename T = float>
 using RowVector = Eigen::Matrix<T, 1, SIZE>;
 
+template
+<
+    typename T,
+    int Stride,
+    int Order = Eigen::ColMajor
+>
+struct MapSymM {
+    using type = T;
+    using base_type = typename std::remove_const<type>::type;
+
+    static constexpr int total = Stride * (Stride + 1) / 2;
+    static constexpr int stride = Stride;
+    T* data;
+
+    __forceinline__ __device__
+    MapSymM(T *data) : data{data} {}
+
+    __forceinline__ __device__
+    T const& operator()(int const row, int const col) const {
+        auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
+        auto const index = total - tmp + row - col;
+        return data[index];
+    }
+
+    template<typename U = T>
+    __forceinline__ __device__
+    typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
+    operator()(int const row, int const col) {
+        auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
+        auto const index = total - tmp + row - col;
+        return data[index];
+    }
+};
+
 // FIXME remove duplication...
 // this is from PulesFunctor. nvcc was complaining... if included that header...
 constexpr int maxSamples = 10;
@@ -660,11 +694,11 @@ float compute_pulse_shape_value(
 
 // TODO: need to add an array of offsets for pulses (a la activeBXs...)
 // Assume for now 8 pulses
+template<int NPULSES, int NSAMPLES>
 __global__
 void kernel_prep_pulseMatrices_sameNumberOfSamples(
         float *pulseMatrices,
-        float *pulseMatricesM,
-        float *pulseMatricesP,
+        float *covValues,
         int const* pulseOffsets,
         float const* amplitudes,
         uint32_t const* idsf01HE,
@@ -696,15 +730,32 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
         float const tzeroTimeSlew,
         float const slopeTimeSlew,
         float const tmaxTimeSlew) {
+    // for now
+    static_assert(NPULSES == NSAMPLES);
+
     // indices
     auto const ipulse = threadIdx.y;
-    auto const npulses = blockDim.y;
+    constexpr auto npulses = NPULSES;
     auto const sample = threadIdx.x;
-    auto const nsamples = blockDim.x;
+    constexpr auto nsamples = NSAMPLES;
     auto const lch = threadIdx.z;
     auto const gch = lch + blockIdx.x*blockDim.z;
 
     if (gch >= nchannelsTotal) return;
+
+    extern __shared__ char shr_mem[];
+    float *shrPulseMatrixStorageStart = reinterpret_cast<float*>(shr_mem);
+    float *shrPulseMatrixPStorageStart = shrPulseMatrixStorageStart +
+        blockDim.z * npulses * nsamples;
+    float *shrPulseMatrixMStorageStart = shrPulseMatrixPStorageStart +
+        blockDim.z * npulses * nsamples;
+
+    float *shrPulseMatrix = shrPulseMatrixStorageStart + 
+        lch * nsamples * npulses;
+    float *shrPulseMatrixP = shrPulseMatrixPStorageStart + 
+        lch * nsamples * npulses;
+    float *shrPulseMatrixM = shrPulseMatrixMStorageStart + 
+        lch * nsamples * npulses;
 
     // conditions
     auto const id = gch >= nchannelsf01HE
@@ -734,8 +785,6 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
 
     // offset output arrays
     auto* pulseMatrix = pulseMatrices + nsamples*npulses*gch;
-    auto* pulseMatrixM = pulseMatricesM + nsamples*npulses*gch;
-    auto* pulseMatrixP = pulseMatricesP + nsamples*npulses*gch;
     
     // amplitude per ipulse
     int const soi = soiSamples[gch];
@@ -839,46 +888,52 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
             accVarLenIdxMinusOneVec, diffVarItvlIdxMinusOneVec,
             accVarLenIdxZeroVec, diffVarItvlIdxZeroVec)
         : 0;
+    
+    // store to shared
+    shrPulseMatrix[ipulse*nsamples + sample] = value;
+    shrPulseMatrixM[ipulse*nsamples + sample] = value_t0m;
+    shrPulseMatrixP[ipulse*nsamples + sample] = value_t0p;
 
     // store to global
     pulseMatrix[ipulse*nsamples + sample] = value;
-    pulseMatrixM[ipulse*nsamples + sample] = value_t0m;
-    pulseMatrixP[ipulse*nsamples + sample] = value_t0p;
+
+    // this should be a sync per channel... but FIXME: check if OK perf wise
+    __syncthreads();
+    
+    // offset the output ptr
+    auto *covValuesPerChannel = covValues + gch * NPULSES * 
+        MapSymM<float, NSAMPLES>::total;
+    auto *covValuesPerPulseStorage = 
+        covValuesPerChannel + ipulse * MapSymM<float, NSAMPLES>::total;
+    MapSymM<float, NSAMPLES> covValuesPerPulse{covValuesPerPulseStorage};
+
+    // compute covariance stuff
+    auto const row = sample;
+    auto const* shrPulseMatrixColumn  = &shrPulseMatrix[ipulse*nsamples];
+    auto const* shrPulseMatrixPColumn  = &shrPulseMatrixP[ipulse*nsamples];
+    auto const* shrPulseMatrixMColumn  = &shrPulseMatrixM[ipulse*nsamples];
+
+    #pragma unroll
+    for (int col=0; col<NSAMPLES; col++) {
+        if (row>=col) {
+            auto const value_col = shrPulseMatrixColumn[col];
+            auto const value_row = shrPulseMatrixColumn[row];
+            auto const valuep_col = shrPulseMatrixPColumn[col];
+            auto const valuep_row = shrPulseMatrixPColumn[row];
+            auto const valuem_col = shrPulseMatrixMColumn[col];
+            auto const valuem_row = shrPulseMatrixMColumn[row];
+
+            auto const tmpp_row = valuep_row - value_row;
+            auto const tmpm_row = valuem_row - value_row;
+
+            auto const tmpp_col = valuep_col - value_col;
+            auto const tmpm_col = valuem_col - value_col;
+
+            auto const cov_value = 0.5 * (tmpp_col * tmpp_row + tmpm_col * tmpm_row);
+            covValuesPerPulse(row, col) = cov_value;
+        }
+    }
 }
-
-template
-<
-    typename T,
-    int Stride,
-    int Order = Eigen::ColMajor
->
-struct MapSymM {
-    using type = T;
-    using base_type = typename std::remove_const<type>::type;
-
-    static constexpr int total = Stride * (Stride + 1) / 2;
-    static constexpr int stride = Stride;
-    T* data;
-
-    __forceinline__ __device__
-    MapSymM(T *data) : data{data} {}
-
-    __forceinline__ __device__
-    T const& operator()(int const row, int const col) const {
-        auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
-        auto const index = total - tmp + row - col;
-        return data[index];
-    }
-
-    template<typename U = T>
-    __forceinline__ __device__
-    typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
-    operator()(int const row, int const col) {
-        auto const tmp = (Stride - col) * (Stride - col + 1) / 2;
-        auto const index = total - tmp + row - col;
-        return data[index];
-    }
-};
 
 // simple/trivial cholesky decomposition impl
 template<typename MatrixType1, typename MatrixType2>
@@ -1311,8 +1366,7 @@ void kernel_minimize(
         float* outputChi2,
         float const* __restrict__ inputAmplitudes,
         float const* __restrict__ pulseMatrices,
-        float const* __restrict__ pulseMatricesM,
-        float const* __restrict__ pulseMatricesP,
+        float const* __restrict__ covValues,
         int const* __restrict__ pulseOffsetValues,
         float const* __restrict__ noiseTerms,
         int8_t const* __restrict__ soiSamples,
@@ -1399,11 +1453,9 @@ void kernel_minimize(
     Eigen::Map<const ColumnVector<NSAMPLES>> 
         noiseTermsView{noiseTerms + gch*NSAMPLES};
     Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> 
-        glbPulseMatrixMView{pulseMatricesM + gch*NSAMPLES*NPULSES};
-    Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>>
-        glbPulseMatrixPView{pulseMatricesP + gch*NSAMPLES*NPULSES};
-    Eigen::Map<const ColMajorMatrix<NSAMPLES, NPULSES>> 
         glbPulseMatrixView{pulseMatrices + gch*NSAMPLES*NPULSES};
+    auto const* glbCovValues = 
+        covValues + gch * NPULSES * MapSymM<float, NSAMPLES>::total;
 
 #ifdef HCAL_MAHI_GPUDEBUG
     for (int i=0; i<NSAMPLES; i++)
@@ -1443,13 +1495,23 @@ void kernel_minimize(
                 __ldg(&noiseTermsView.coeffRef(counter));
 
         // update covariance matrix
-        if (iter>1)
-            update_covariance(
-                resultAmplitudesVector,
-                covarianceMatrix,
-                glbPulseMatrixView,
-                glbPulseMatrixMView,
-                glbPulseMatrixPView);
+        if (iter>1) {
+            #pragma unroll
+            for (int ipulse=0; ipulse<NPULSES; ipulse++) {
+                auto const result = resultAmplitudesVector(ipulse);
+                if (result == 0) continue;
+
+                auto const ampl2 = result*result;
+                auto const* next = glbCovValues + 
+                    ipulse * MapSymM<float, NSAMPLES>::total;
+                #pragma unroll
+                for (int counter=0; counter<MapSymM<float, NSAMPLES>::total; 
+                     counter++) {
+                    auto const cov_value = __ldg(next + counter);
+                    covarianceMatrixStorage[counter] += cov_value * ampl2;
+                }
+            }
+        }
 
 #ifdef HCAL_MAHI_GPUDEBUG
         printf("covariance matrix\n");
@@ -1795,50 +1857,59 @@ void entryPoint(
     std::cout << "blocks: " << blocks2 << std::endl;
 #endif
 
-    kernel_prep_pulseMatrices_sameNumberOfSamples<<<blocks2, threadsPerBlock2, 0, cudaStream.id()>>>(
-        scratch.pulseMatrices,
-        scratch.pulseMatricesM,
-        scratch.pulseMatricesP,
-        configParameters.pulseOffsetsDevice,
-        scratch.amplitudes,
-        inputGPU.f01HEDigis.ids,
-        inputGPU.f5HBDigis.ids,
-        inputGPU.f01HEDigis.size,
-        totalChannels,
-        scratch.soiSamples,
-        conditions.recoParams.ids,
-        conditions.recoParams.acc25nsVec,
-        conditions.recoParams.diff25nsItvlVec,
-        conditions.recoParams.accVarLenIdxMinusOneVec,
-        conditions.recoParams.diffVarItvlIdxMinusOneVec,
-        conditions.recoParams.accVarLenIdxZEROVec,
-        conditions.recoParams.diffVarItvlIdxZEROVec,
-        configParameters.meanTime,
-        configParameters.timeSigmaSiPM,
-        configParameters.timeSigmaHPD,
-        conditions.topology->maxDepthHB(),
-        conditions.topology->maxDepthHE(),
-        conditions.recConstants->getNPhi(1) > IPHI_MAX
-            ? conditions.recConstants->getNPhi(1)
-            : IPHI_MAX,
-        conditions.topology->firstHBRing(),
-        conditions.topology->lastHBRing(),
-        conditions.topology->firstHERing(),
-        conditions.topology->lastHERing(),
-        conditions.recConstants->getEtaRange(0).second - 
-            conditions.recConstants->getEtaRange(0).first + 1,
-        conditions.topology->firstHERing() > conditions.topology->lastHERing() 
-            ? 0
-            : (conditions.topology->lastHERing() - 
-                conditions.topology->firstHERing() + 1),
-        conditions.offsetForHashes,
-        configParameters.applyTimeSlew,
-        configParameters.tzeroTimeSlew,
-        configParameters.slopeTimeSlew,
-        configParameters.tmaxTimeSlew);
-    cudaCheck( cudaGetLastError() );
-
     if (f01nsamples==8 && configParameters.pulseOffsets.size() == 8u) {
+        // FIXME: configure this guy
+        uint32_t const channelsPerBlock = 10;
+        dim3 threadsPerBlock2{f01nsamples, 
+            static_cast<uint32_t>(configParameters.pulseOffsets.size()),
+            channelsPerBlock};
+        int blocks2 = threadsPerBlock2.z > totalChannels
+            ? 1
+            : (totalChannels + threadsPerBlock2.z - 1) / threadsPerBlock2.z;
+        int sharedMemBytes = channelsPerBlock * 3 * 8 * 8 * sizeof(float);
+        kernel_prep_pulseMatrices_sameNumberOfSamples<8, 8><<<blocks2, 
+                threadsPerBlock2, 0, cudaStream.id()>>>(
+            scratch.pulseMatrices,
+            scratch.covValues,
+            configParameters.pulseOffsetsDevice,
+            scratch.amplitudes,
+            inputGPU.f01HEDigis.ids,
+            inputGPU.f5HBDigis.ids,
+            inputGPU.f01HEDigis.size,
+            totalChannels,
+            scratch.soiSamples,
+            conditions.recoParams.ids,
+            conditions.recoParams.acc25nsVec,
+            conditions.recoParams.diff25nsItvlVec,
+            conditions.recoParams.accVarLenIdxMinusOneVec,
+            conditions.recoParams.diffVarItvlIdxMinusOneVec,
+            conditions.recoParams.accVarLenIdxZEROVec,
+            conditions.recoParams.diffVarItvlIdxZEROVec,
+            configParameters.meanTime,
+            configParameters.timeSigmaSiPM,
+            configParameters.timeSigmaHPD,
+            conditions.topology->maxDepthHB(),
+            conditions.topology->maxDepthHE(),
+            conditions.recConstants->getNPhi(1) > IPHI_MAX
+                ? conditions.recConstants->getNPhi(1)
+                : IPHI_MAX,
+            conditions.topology->firstHBRing(),
+            conditions.topology->lastHBRing(),
+            conditions.topology->firstHERing(),
+            conditions.topology->lastHERing(),
+            conditions.recConstants->getEtaRange(0).second - 
+                conditions.recConstants->getEtaRange(0).first + 1,
+            conditions.topology->firstHERing() > conditions.topology->lastHERing() 
+                ? 0
+                : (conditions.topology->lastHERing() - 
+                    conditions.topology->firstHERing() + 1),
+            conditions.offsetForHashes,
+            configParameters.applyTimeSlew,
+            configParameters.tzeroTimeSlew,
+            configParameters.slopeTimeSlew,
+            configParameters.tmaxTimeSlew);
+        cudaCheck( cudaGetLastError() );
+
         // FIXME: provide constants from configuration
         uint32_t threadsPerBlock = configParameters.kernelMinimizeThreads[0];
         uint32_t blocks = threadsPerBlock > totalChannels
@@ -1851,8 +1922,7 @@ void entryPoint(
             outputGPU.recHits.chi2,
             scratch.amplitudes,
             scratch.pulseMatrices,
-            scratch.pulseMatricesM,
-            scratch.pulseMatricesP,
+            scratch.covValues,
             configParameters.pulseOffsetsDevice,
             scratch.noiseTerms,
             scratch.soiSamples,
