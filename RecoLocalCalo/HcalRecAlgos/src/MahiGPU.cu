@@ -1868,7 +1868,7 @@ void entryPoint(
             : (totalChannels + threadsPerBlock2.z - 1) / threadsPerBlock2.z;
         int sharedMemBytes = channelsPerBlock * 3 * 8 * 8 * sizeof(float);
         kernel_prep_pulseMatrices_sameNumberOfSamples<8, 8><<<blocks2, 
-                threadsPerBlock2, 0, cudaStream.id()>>>(
+                threadsPerBlock2, sharedMemBytes, cudaStream.id()>>>(
             scratch.pulseMatrices,
             scratch.covValues,
             configParameters.pulseOffsetsDevice,
