@@ -841,7 +841,7 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
         : 0;
 
     // store to global
-    pulseMatrix[ipulse*nsamples + sample] = value;;
+    pulseMatrix[ipulse*nsamples + sample] = value;
     pulseMatrixM[ipulse*nsamples + sample] = value_t0m;
     pulseMatrixP[ipulse*nsamples + sample] = value_t0p;
 }
@@ -1443,12 +1443,13 @@ void kernel_minimize(
                 __ldg(&noiseTermsView.coeffRef(counter));
 
         // update covariance matrix
-        update_covariance(
-            resultAmplitudesVector,
-            covarianceMatrix,
-            glbPulseMatrixView,
-            glbPulseMatrixMView,
-            glbPulseMatrixPView);
+        if (iter>1)
+            update_covariance(
+                resultAmplitudesVector,
+                covarianceMatrix,
+                glbPulseMatrixView,
+                glbPulseMatrixMView,
+                glbPulseMatrixPView);
 
 #ifdef HCAL_MAHI_GPUDEBUG
         printf("covariance matrix\n");
