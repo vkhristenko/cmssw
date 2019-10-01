@@ -934,19 +934,25 @@ void compute_decomposition(MatrixType1& L, MatrixType2 const& M, int const N) {
     }
 }
 
-template<typename MatrixType1, typename MatrixType2>
+template<typename MatrixType1, typename MatrixType2, typename VectorType>
 __forceinline__ __device__ 
-void compute_decomposition_with_offsets(
-        MatrixType1& L, MatrixType2 const& M, int const N,
+void compute_decomposition_forwardsubst_with_offsets(
+        MatrixType1& L, MatrixType2 const& M,
+        float b[MatrixType1::stride],
+        VectorType const& Atb,
+        int const N,
         ColumnVector<MatrixType1::stride, int> const& pulseOffsets) {
     auto const real_0 = pulseOffsets(0);
     auto const sqrtm_0_0 = std::sqrt(M(real_0, real_0));
     L(0, 0) = sqrtm_0_0;
     using T = typename MatrixType1::base_type;
+    b[0] = Atb(real_0) / sqrtm_0_0; 
 
     for (int i=1; i<N; i++) {
         auto const i_real = pulseOffsets(i);
         T sumsq{0};
+        T total = 0;
+        auto const atb = Atb(i_real);
         for (int j=0; j<i; j++) {
             auto const j_real = pulseOffsets(j);
             T sumsq2{0};
@@ -958,17 +964,22 @@ void compute_decomposition_with_offsets(
             L(i, j) = value_i_j;
 
             sumsq += value_i_j * value_i_j;
+            total += value_i_j * b[j];
         }
 
         auto const l_i_i = std::sqrt(M(i_real, i_real) - sumsq);
         L(i, i) = l_i_i;
+        b[i] = (atb - total) / l_i_i;
     }
 }
 
-template<typename MatrixType1, typename MatrixType2>
+template<typename MatrixType1, typename MatrixType2, typename VectorType>
 __forceinline__ __device__ 
-void update_decomposition_with_offsets(
-        MatrixType1& L, MatrixType2 const& M, int const N,
+void update_decomposition_forwardsubst_with_offsets(
+        MatrixType1& L, MatrixType2 const& M,
+        float b[MatrixType1::stride],
+        VectorType const& Atb,
+        int const N,
         ColumnVector<MatrixType1::stride, int> const& pulseOffsets) {
     using T = typename MatrixType1::base_type;
     auto const i = N-1;
@@ -988,6 +999,7 @@ void update_decomposition_with_offsets(
 
     auto const l_i_i = std::sqrt(M(i_real, i_real) - sumsq);
     L(i, i) = l_i_i;
+    b[i] = Atb(i_real) / l_i_i;
 }
 
 template<typename MatrixType1, typename MatrixType2, typename MatrixType3>
@@ -1104,6 +1116,7 @@ void fnnls(
 
     // used throughout
     VectorType s;
+    float reg_b[NPULSES];
     //float matrixLStorage[MapSymM<float, NPULSES>::total];
     //MapSymM<float, NPULSES> matrixL{matrixLStorage};
 
@@ -1124,9 +1137,9 @@ void fnnls(
                 float sum = 0;
                 #pragma unroll
                 for (int counter=0; counter<NPULSES; counter++)
-                    sum += 
-                        AtA(std::max(counter, icol_real), 
-                            std::min(icol_real, counter)) * solution(counter);
+                    sum += counter > icol_real
+                        ? AtA(counter, icol_real) * solution(counter)
+                        : AtA(icol_real, counter) * solution(counter);
 
                 auto const w = atb - sum;
                 if (w > w_max) {
@@ -1163,39 +1176,14 @@ void fnnls(
             //        .llt().matrixL();
             //.solve(Atb.head(npassive));
             if (recompute || iter==0)
-                compute_decomposition_with_offsets(matrixL, AtA, npassive, pulseOffsets);
+                compute_decomposition_forwardsubst_with_offsets(
+                    matrixL, AtA, reg_b, Atb, 
+                    npassive, pulseOffsets);
             else
-                update_decomposition_with_offsets(matrixL, AtA, npassive, pulseOffsets);
+                update_decomposition_forwardsubst_with_offsets(
+                    matrixL, AtA, reg_b, Atb,
+                    npassive, pulseOffsets);
        
-            // run forward substitution
-            float reg_b[NPULSES]; // result of forward substitution
-            {
-                float reg_b_tmp[NPULSES];
-                for (int i=0; i<npassive; i++)
-                    reg_b_tmp[i] = 0;
-
-                // compute x0 and store it
-                auto const real_0 = pulseOffsets(0);
-                auto x_prev = Atb(real_0) / matrixL(0, 0);
-                reg_b[0] = x_prev;
-
-                // iterate
-                for (int iL=1; iL<npassive; iL++) {
-                    auto const iL_real = pulseOffsets(iL);
-                    auto const atb = Atb(iL_real);
-
-                    // update accum
-                    for (int counter=iL; counter<npassive; counter++)
-                        reg_b_tmp[counter] += x_prev * matrixL(counter, iL-1);
-
-                    // compute the next x for M(iL, icol)
-                    x_prev = (atb - reg_b_tmp[iL]) / matrixL(iL, iL);
-
-                    // store the result value
-                    reg_b[iL] = x_prev;
-                }
-            }
-
             // run backward substituion
             s(npassive-1) = reg_b[npassive-1] / matrixL(npassive-1, npassive-1);
             for (int i=npassive-2; i>=0; --i) {
