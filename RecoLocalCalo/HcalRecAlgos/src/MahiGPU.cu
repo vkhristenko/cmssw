@@ -1273,21 +1273,12 @@ void update_covariance(
             ipulse, offset);
 #endif
 
-        // preload a column
-        float pmcol[NSAMPLES], pmpcol[NSAMPLES], pmmcol[NSAMPLES];
-        #pragma unroll
-        for (int counter=0; counter<NSAMPLES; counter++) {
-            pmcol[counter] = __ldg(&pulseMatrix.coeffRef(counter, ipulse));
-            pmpcol[counter] = __ldg(&pulseMatrixP.coeffRef(counter, ipulse));
-            pmmcol[counter] = __ldg(&pulseMatrixM.coeffRef(counter, ipulse));
-        }
-
         auto const ampl2 = resultAmplitude * resultAmplitude;
         #pragma unroll
         for (int col=0; col<NSAMPLES; col++) {
-            auto const valueP_col = pmpcol[col];
-            auto const valueM_col = pmmcol[col];
-            auto const value_col = pmcol[col];
+            auto const valueP_col = __ldg(&pulseMatrixP.coeffRef(col, ipulse));
+            auto const valueM_col = __ldg(&pulseMatrixM.coeffRef(col, ipulse));
+            auto const value_col = __ldg(&pulseMatrix.coeffRef(col, ipulse));
             auto const tmppcol = valueP_col - value_col;
             auto const tmpmcol = valueM_col - value_col;
 
@@ -1298,9 +1289,9 @@ void update_covariance(
             // FIXME: understand if this actually gets unrolled
             #pragma unroll
             for (int row=col+1; row<NSAMPLES; row++) {
-                float const valueP_row = pmpcol[row]; //pulseMatrixP(j, ipulseReal);
-                float const value_row = pmcol[row]; //pulseMatrix(j, ipulseReal);
-                float const valueM_row = pmmcol[row]; //pulseMatrixM(j, ipulseReal);
+                auto const valueP_row = __ldg(&pulseMatrixP.coeffRef(row, ipulse));
+                auto const valueM_row = __ldg(&pulseMatrixM.coeffRef(row, ipulse));
+                auto const value_row = __ldg(&pulseMatrix.coeffRef(row, ipulse));
                 
                 float tmpprow = valueP_row - value_row;
                 float tmpmrow = valueM_row - value_row;
