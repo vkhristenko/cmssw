@@ -59,6 +59,36 @@ struct MapSymM {
     }
 };
 
+// FIXME: either use/modify/improve eigen or make this more generic
+// this is a map for a pulse matrix to building a 2d matrix for each channel
+// and hide indexing
+template
+<
+    typename T
+>
+struct MapMForPM {
+    using type = T;
+    using base_type = typename std::remove_cv<type>::type;
+
+    type* data;
+    __forceinline__ __device__
+    MapMForPM(type* data) : data{data} {}
+
+    __forceinline__ __device__
+    base_type const& operator()(int const row, int const col) const {
+        auto const index = 2 - col + row;
+        return index>=0 ? data[index] : 0;
+    }   
+    
+    template<typename U = T>
+    __forceinline__ __device__
+    typename std::enable_if<std::is_same<base_type, U>::value, base_type>::type&
+    operator()(int const row, int const col) const {
+        auto const index = 2 - col + row;
+        return index>=0 ? data[index] : 0;
+    }   
+};
+
 // simple/trivial cholesky decomposition impl
 template<typename MatrixType1, typename MatrixType2>
 __forceinline__ __device__ 

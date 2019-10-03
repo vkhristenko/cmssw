@@ -12,6 +12,7 @@
 #include "DataFormats/EcalDigi/interface/EcalDigiCollections.h"
 
 #include "inplace_fnnls.h"
+#include "KernelHelpers.h"
 #include "AmplitudeComputationKernels.h"
 #include "AmplitudeComputationCommonKernels.h"
 
@@ -104,7 +105,7 @@ void eigen_solve_submatrix(SampleMatrix& mat,
 __device__
 __forceinline__
 bool update_covariance(SampleMatrix const& noisecov,
-                       FullSampleMatrix const& full_pulse_cov,
+                       EcalPulseCovariance const& pulse_covariance,
                        SampleMatrix& inverse_cov,
                        BXVectorType const& bxs,
                        SampleDecompLLT& covariance_decomposition,
@@ -115,23 +116,32 @@ bool update_covariance(SampleMatrix const& noisecov,
     inverse_cov = noisecov;
 
     for (unsigned int ipulse=0; ipulse<npulses; ipulse++) {
-        if (amplitudes.coeff(ipulse) == 0) 
+        auto const amplitude = amplitudes.coeff(ipulse);
+        if (amplitude == 0) 
             continue;
 
         int bx = bxs.coeff(ipulse);
         int first_sample_t = std::max(0, bx+3);
-        int offset = 7 - 3 - bx;
+        int offset = -3 - bx;
 
-        auto const value = amplitudes.coeff(ipulse);
-        auto const value_sq = value*value;
+        auto const value_sq = amplitude * amplitude;
 
         unsigned int nsample_pulse = nsamples - first_sample_t;
+
+        for (int row=first_sample_t; row<nsamples; row++) {
+            for (int col=first_sample_t; col<nsamples; col++) {
+                inverse_cov.coeffRef(row, col) += value_sq * 
+                    pulse_covariance.covval[row + offset][col + offset];
+            }
+        }
+        /*
         inverse_cov.block(first_sample_t, first_sample_t, 
                           nsample_pulse, nsample_pulse)
             += value_sq * full_pulse_cov.block(first_sample_t + offset,
                                                first_sample_t + offset,
                                                nsample_pulse,
                                                nsample_pulse);
+                                               */
     }
 
     return true;
@@ -159,31 +169,52 @@ SampleVector::Scalar compute_chi2(SampleDecompLLT& covariance_decomposition,
 ///   - active constraint - unsatisfied (yet) constraint
 ///
 __global__
-void kernel_minimize(SampleMatrix const* noisecov,
-                     FullSampleMatrix const* full_pulse_cov,
-                     BXVectorType *bxs,
-                     SampleVector const* samples,
-                     SampleVector* amplitudes,
-                     PulseMatrixType* pulse_matrix, 
-                     ::ecal::reco::StorageScalarType* chi2s,
-                     char *acState,
-                     int nchannels,
-                     int max_iterations) {
+void kernel_minimize(
+        uint32_t const* dids_eb,
+        uint32_t const* dids_ee,
+        SampleMatrix const* noisecov,
+        EcalPulseCovariance const* pulse_covariance,
+        BXVectorType *bxs,
+        SampleVector const* samples,
+        SampleVector* amplitudes,
+        PulseMatrixType* pulse_matrix, 
+        ::ecal::reco::StorageScalarType* chi2s,
+        char *acState,
+        int nchannels,
+        int max_iterations,
+        uint32_t const offsetForHashes,
+        uint32_t const offsetForInputs) {
+    // FIXME: ecal has 10 samples and 10 pulses....
+    // but this needs to be properly treated and renamed everywhere
+    constexpr auto NSAMPLES = SampleMatrix::RowsAtCompileTime;
+    constexpr auto NPULSES = SampleMatrix::RowsAtCompileTime;
+    static_assert(NSAMPLES == NPULSES);
+
+    // FIXME: remove eitehr idx or ch -> they are teh same thing
     int idx = threadIdx.x + blockDim.x*blockIdx.x;
+    auto const ch = idx;
     if (idx < nchannels) {
         if (static_cast<MinimizationState>(acState[idx]) == 
             MinimizationState::Precomputed)
             return;
 
+        // get the hash
+        int const inputCh = ch >= offsetForInputs
+            ? ch - offsetForInputs
+            : ch;
+        auto const* dids = ch >= offsetForInputs
+            ? dids_ee
+            : dids_eb;
+        auto const did = DetId{dids[inputCh]};
+        auto const isBarrel = did.subdetId() == EcalBarrel;
+        auto const hashedId = isBarrel
+            ? hashedIndexEB(did.rawId())
+            : offsetForHashes + hashedIndexEE(did.rawId());
+
         // inits
         int iter = 0;
         int npassive = 0;
 
-        // FIXME: ecal has 10 samples and 10 pulses....
-        // but this needs to be properly treated and renamed everywhere
-        constexpr auto NSAMPLES = SampleMatrix::RowsAtCompileTime;
-        constexpr auto NPULSES = SampleMatrix::RowsAtCompileTime;
-        
         // inits
         SampleDecompLLT covariance_decomposition;
         SampleMatrix inverse_cov;
@@ -196,7 +227,7 @@ void kernel_minimize(SampleMatrix const* noisecov,
 
             update_covariance(
                 noisecov[idx], 
-                full_pulse_cov[idx],
+                pulse_covariance[hashedId],
                 inverse_cov,
                 bxs[idx],
                 covariance_decomposition,
@@ -412,9 +443,13 @@ void minimization_procedure(
     unsigned int blocks_min = threads_min > totalChannels
         ? 1
         : (totalChannels + threads_min - 1) / threads_min;
+    uint32_t const offsetForHashes = conditions.offsetForHashes;
+    uint32_t const offsetForInputs = eventInputGPU.ebDigis.ndigis;
     kernel_minimize<<<blocks_min, threads_min, 0, cudaStream.id()>>>(
+        eventInputGPU.ebDigis.ids,
+        eventInputGPU.eeDigis.ids,
         scratch.noisecov,
-        scratch.pulse_covariances,
+        conditions.pulseCovariances.values,
         scratch.activeBXs,
         scratch.samples,
         (SampleVector*)eventOutputGPU.amplitudesAll,
@@ -422,7 +457,9 @@ void minimization_procedure(
         eventOutputGPU.chi2,
         scratch.acState,
         totalChannels,
-        50);
+        50,
+        offsetForHashes,
+        offsetForInputs);
     cudaCheck(cudaGetLastError());
 
     //

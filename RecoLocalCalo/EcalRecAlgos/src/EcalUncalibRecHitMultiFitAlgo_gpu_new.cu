@@ -95,8 +95,6 @@ void entryPoint(
     int blocks_2d = totalChannels;
     dim3 threads_2d{10, 10};
     kernel_prep_2d<<<blocks_2d, threads_2d, 0, cudaStream.id()>>>(
-        conditions.pulseCovariances.values, 
-        scratch.pulse_covariances,
         scratch.gainsNoise,
         eventInputGPU.ebDigis.ids,
         eventInputGPU.eeDigis.ids,

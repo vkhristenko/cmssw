@@ -32,16 +32,21 @@ void minimization_procedure(
 ///   - active constraint - unsatisfied (yet) constraint
 ///
 __global__
-void kernel_minimize(SampleMatrix const* noisecov,
-                     FullSampleMatrix const* full_pulse_cov,
-                     BXVectorType *bxs,
-                     SampleVector const* samples,
-                     SampleVector* amplitudes,
-                     PulseMatrixType* pulse_matrix, 
-                     ::ecal::reco::StorageScalarType* chi2s,
-                     char *acState,
-                     int nchannels,
-                     int max_iterations);
+void kernel_minimize(
+        uint32_t const* dids_eb,
+        uint32_t const* dids_ee,
+        SampleMatrix const* noisecov,
+        EcalPulseCovariance const* full_pulse_cov,
+        BXVectorType *bxs,
+        SampleVector const* samples,
+        SampleVector* amplitudes,
+        PulseMatrixType* pulse_matrix, 
+        ::ecal::reco::StorageScalarType* chi2s,
+        char *acState,
+        int nchannels,
+        int max_iterations,
+        uint32_t const offsetForHashes,
+        uint32_t const offsetForInputs);
 
 }}
 
