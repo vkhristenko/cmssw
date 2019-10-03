@@ -846,6 +846,7 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
     pulseMatrixP[ipulse*nsamples + sample] = value_t0p;
 }
 
+// FIXME: provide specialization for Row Major layout
 template
 <
     typename T,
