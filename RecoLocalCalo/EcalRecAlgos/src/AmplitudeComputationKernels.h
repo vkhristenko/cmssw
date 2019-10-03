@@ -1,5 +1,5 @@
-#ifndef RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernelsV1
-#define RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernelsV1
+#ifndef RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernels
+#define RecoLocalCalo_EcalRecAlgos_src_AmplitudeComputationKernels
 
 #include "RecoLocalCalo/EcalRecAlgos/interface/EigenMatrixTypes_gpu.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/DeclsForKernels.h"

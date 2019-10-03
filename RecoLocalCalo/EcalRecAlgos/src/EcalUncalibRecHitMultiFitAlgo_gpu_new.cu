@@ -18,7 +18,7 @@
 #include "cuda.h"
 
 #include "AmplitudeComputationCommonKernels.h"
-#include "AmplitudeComputationKernelsV1.h"
+#include "AmplitudeComputationKernels.h"
 #include "TimeComputationKernels.h"
 
 //#define DEBUG
@@ -45,48 +45,6 @@ void entryPoint(
     unsigned int totalChannels = eventInputGPU.ebDigis.ndigis +
         eventInputGPU.eeDigis.ndigis;
     
-    // temporary for recording
-    /*cudaEvent_t start_event;
-    cudaEvent_t end_event;
-    cudaCheck( cudaEventCreate(&start_event) );
-    cudaCheck( cudaEventCreate(&end_event) );
-
-    cudaCheck (cudaEventRecord(start_event, 0) );
-    */
-
-    //
-    // in what follows we copy eb then ee.
-    // offset by size 
-    //
-
-    // 
-    // copy event data: digis + ids, not really async as vectors have default
-    // allocators
-    //
-    /*
-    cudaCheck( cudaMemcpyAsync(eventInputGPU.digis, 
-               eventInputCPU.ebDigis.data().data(),
-               eventInputCPU.ebDigis.data().size() * sizeof(digis_type::value_type),
-               cudaMemcpyHostToDevice,
-               cudaStream.id()) );
-    cudaCheck( cudaMemcpyAsync(eventInputGPU.digis + eventInputCPU.ebDigis.data().size(), 
-               eventInputCPU.eeDigis.data().data(),
-               eventInputCPU.eeDigis.data().size() * sizeof(digis_type::value_type),
-               cudaMemcpyHostToDevice,
-               cudaStream.id()));
-
-    cudaCheck( cudaMemcpyAsync(eventInputGPU.ids, 
-               eventInputCPU.ebDigis.ids().data(),
-               eventInputCPU.ebDigis.ids().size() * sizeof(dids_type::value_type),
-               cudaMemcpyHostToDevice,
-               cudaStream.id()) );
-    cudaCheck (cudaMemcpyAsync(eventInputGPU.ids + eventInputCPU.ebDigis.ids().size(), 
-               eventInputCPU.eeDigis.ids().data(),
-               eventInputCPU.eeDigis.ids().size() * sizeof(dids_type::value_type),
-               cudaMemcpyHostToDevice,
-               cudaStream.id()) );
-               */
-
     // 
     // 1d preparation kernel
     //

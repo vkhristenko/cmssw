@@ -12,7 +12,7 @@
 #include "DataFormats/EcalDigi/interface/EcalDigiCollections.h"
 
 #include "inplace_fnnls.h"
-#include "AmplitudeComputationKernelsV1.h"
+#include "AmplitudeComputationKernels.h"
 #include "AmplitudeComputationCommonKernels.h"
 
 namespace ecal { namespace multifit {
@@ -188,10 +188,6 @@ void kernel_minimize(SampleMatrix const* noisecov,
         SampleDecompLLT covariance_decomposition;
         SampleMatrix inverse_cov;
         SampleVector::Scalar chi2 = 0, chi2_now = 0;
-
-#ifdef ECAL_MULTIFIT_KERNEL_MINIMIZE_V1
-//    PRINT_MATRIX_10x10(noisecov[idx]);
-#endif
 
         // loop until ocnverge
         while (true) {
