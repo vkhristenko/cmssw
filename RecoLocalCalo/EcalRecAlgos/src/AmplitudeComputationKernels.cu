@@ -102,19 +102,15 @@ void eigen_solve_submatrix(SampleMatrix& mat,
                 M(5, 9), M(6, 9), M(7, 9), M(8, 9), M(9, 9) \
             )
 
-__device__
-__forceinline__
-bool update_covariance(SampleMatrix const& noisecov,
-                       EcalPulseCovariance const& pulse_covariance,
+__device__ __forceinline__
+void update_covariance(EcalPulseCovariance const& pulse_covariance,
                        SampleMatrix& inverse_cov,
                        BXVectorType const& bxs,
-                       SampleDecompLLT& covariance_decomposition,
                        SampleVector const& amplitudes) {
     constexpr int nsamples = SampleVector::RowsAtCompileTime;
     constexpr int npulses = BXVectorType::RowsAtCompileTime;
 
-    inverse_cov = noisecov;
-
+    #pragma unroll
     for (unsigned int ipulse=0; ipulse<npulses; ipulse++) {
         auto const amplitude = amplitudes.coeff(ipulse);
         if (amplitude == 0) 
@@ -125,30 +121,16 @@ bool update_covariance(SampleMatrix const& noisecov,
         int offset = -3 - bx;
 
         auto const value_sq = amplitude * amplitude;
-
-        unsigned int nsample_pulse = nsamples - first_sample_t;
-
         for (int row=first_sample_t; row<nsamples; row++) {
             for (int col=first_sample_t; col<nsamples; col++) {
                 inverse_cov.coeffRef(row, col) += value_sq * 
-                    pulse_covariance.covval[row + offset][col + offset];
+                    __ldg(&pulse_covariance.covval[row + offset][col + offset]);
             }
         }
-        /*
-        inverse_cov.block(first_sample_t, first_sample_t, 
-                          nsample_pulse, nsample_pulse)
-            += value_sq * full_pulse_cov.block(first_sample_t + offset,
-                                               first_sample_t + offset,
-                                               nsample_pulse,
-                                               nsample_pulse);
-                                               */
     }
-
-    return true;
 }
 
-__device__
-__forceinline__
+__device__ __forceinline__
 SampleVector::Scalar compute_chi2(SampleDecompLLT& covariance_decomposition,
                    PulseMatrixType const& pulse_matrix,
                    SampleVector const& amplitudes,
@@ -173,7 +155,7 @@ void kernel_minimize(
         uint32_t const* dids_eb,
         uint32_t const* dids_ee,
         SampleMatrix const* noisecov,
-        EcalPulseCovariance const* pulse_covariance,
+        EcalPulseCovariance const* __restrict__ pulse_covariance,
         BXVectorType *bxs,
         SampleVector const* samples,
         SampleVector* amplitudes,
@@ -217,7 +199,6 @@ void kernel_minimize(
 
         // inits
         SampleDecompLLT covariance_decomposition;
-        SampleMatrix inverse_cov;
         SampleVector::Scalar chi2 = 0, chi2_now = 0;
 
         // loop until ocnverge
@@ -225,13 +206,20 @@ void kernel_minimize(
             if (iter >= max_iterations)
                 break;
 
-            update_covariance(
-                noisecov[idx], 
-                pulse_covariance[hashedId],
-                inverse_cov,
-                bxs[idx],
-                covariance_decomposition,
-                amplitudes[idx]);
+            // initialize the cov matrix
+            //inverse_cov = noisecov;
+            SampleMatrix inverse_cov;
+            #pragma unroll
+            for (int counter=0; counter<NSAMPLES*NSAMPLES; counter++)
+                inverse_cov.data()[counter] = __ldg(&noisecov[idx].data()[counter]);
+
+            // update based on the computed amplitudes
+            if (iter>0)
+                update_covariance(
+                    pulse_covariance[hashedId],
+                    inverse_cov,
+                    bxs[idx],
+                    amplitudes[idx]);
 
             // compute actual covariance decomposition
             covariance_decomposition.compute(inverse_cov);
