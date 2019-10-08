@@ -4,6 +4,9 @@
 
 #include "EventFilter/HcalRawToDigi/plugins/DecodeGPU.h"
 
+#include <cooperative_groups.h>
+using namespace cooperative_groups;
+
 namespace hcal { namespace raw {
 
 __forceinline__ __device__
@@ -44,6 +47,12 @@ bool is_channel_header_word(uint16_t const* ptr) {
     return bit == 1;
 }
 
+template<typename T>
+constexpr bool is_power_of_two(T x) {
+    return (x != 0) && ((x & (x - 1)) == 0);
+}
+
+template<int NTHREADS>
 __global__
 void kernel_rawdecode_test(
         unsigned char const* data,
@@ -60,7 +69,10 @@ void kernel_rawdecode_test(
         uint32_t const nsamplesF01HE,
         uint32_t const nsamplesF5HB,
         uint32_t const nBytesTotal) {
-    auto const iamc = threadIdx.x;
+    // in order to properly use cooperative groups
+    static_assert(is_power_of_two(NTHREADS) == true && NTHREADS<=32);
+
+    auto const iamc = threadIdx.x / NTHREADS;
     auto const ifed = blockIdx.x;
     auto const fed = feds[ifed];
     auto const offset = offsets[ifed];
@@ -68,9 +80,8 @@ void kernel_rawdecode_test(
         ? nBytesTotal - offset 
         : offsets[ifed+1] - offset;
 
-    // FIXME: for debugging
-    //if (ifed > 0) return;
-
+    thread_block_tile<NTHREADS> thread_group = 
+        tiled_partition<NTHREADS>(this_thread_block());
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
     printf("ifed = %d fed = %d offset = %u size = %u\n", ifed, fed, offset, size);
@@ -189,239 +200,271 @@ void kernel_rawdecode_test(
 
     // iterate thru the channel data
     while (ptr != end) {
+        // this is the starting point for this thread group for this iteration
+        // with respect to this pointer every thread will move forward afterwards
+        auto const* const start_ptr = ptr;
+
+        // skip to the header word of the right channel for this thread
+        for (int counter=0; counter<thread_group.thread_rank(); counter++) {
+            // just a check for threads that land beyond the end
+            if (ptr == end) break;
+
+            // move ptr one forward past header
+            ++ptr;
+
+            // skip
+            while (!is_channel_header_word(ptr) && ptr!=end) ++ptr;
+        }
+
         // assume that if all is valid, ptr points 
         // to the header word of the channel to be decoded
         // skip to the next channel header word if above assumption
         // does not hold
-        uint8_t const fw_lastbit = (*ptr >> 15) & 0x1;
-        if (fw_lastbit != 1) {
-            ptr++;
-            continue;
-        }
+        //uint8_t const fw_lastbit = (*ptr >> 15) & 0x1;
+        //if (fw_lastbit != 1) {
+        //    ptr++;
+        //    continue;
+        //}
 
-        // for all of the flavors, these 2 guys have the same bit layout
-        uint8_t const flavor = (ptr[0] >> 12) & 0x7;
-        uint8_t const channelid = ptr[0] & 0xff;
-        auto const* const new_channel_start = ptr;
+        // when the end is near, channels will land outside of the [ptr, end)
+        // region
+        if (ptr != end) {
+            // for all of the flavors, these 2 guys have the same bit layout
+            uint8_t const flavor = (ptr[0] >> 12) & 0x7;
+            uint8_t const channelid = ptr[0] & 0xff;
+            auto const* const new_channel_start = ptr;
 
-        // flavor dependent stuff
-        switch (flavor) {
-        case 0:
-        case 1:
-        {
-            // treat eid and did
-            uint8_t fiber = (channelid >> 3) & 0x1f;
-            uint8_t fchannel = channelid & 0x7;
-            HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
-            auto const did = HcalDetId{eid2did[eid.linearIndex()]};
-
-#ifdef HCAL_RAWDECODE_GPUDEBUG
-            printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
-                eid.rawId(), eid.linearIndex(), did.rawId(),
-                get_subdet_str(did));
-            printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
-                flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
-#endif
-
-            // remove digis not for HE
-            if (did.subdetId() != HcalEndcap) 
-                break;
-
-            // count words
-            auto const* channel_header_word = ptr++;
-            while (!is_channel_header_word(ptr) && ptr!=end) ++ptr;
-            auto const* channel_end = ptr; // set ptr 
-            uint32_t const nwords = channel_end - channel_header_word;
-
-            // filter out this digi if nwords does not equal expected
-            auto const expected_words = compute_stride<Flavor01>(nsamplesF01HE);
-            if (nwords != expected_words)
-                break;
-
-            // inc the number of digis of this type
-            auto const pos = atomicAdd(&pChannelsCounters[OutputF01HE], 1);
-
-            // store to global mem words for this digi
-            idsF01HE[pos] = did.rawId();
-            for (uint32_t iword=0; iword<expected_words; iword++)
-                digisF01HE[pos*expected_words + iword] = 
-                    channel_header_word[iword];
+            // flavor dependent stuff
+            switch (flavor) {
+            case 0:
+            case 1:
+            {
+                // treat eid and did
+                uint8_t fiber = (channelid >> 3) & 0x1f;
+                uint8_t fchannel = channelid & 0x7;
+                HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
+                auto const did = HcalDetId{eid2did[eid.linearIndex()]};
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
-            printf("nwords = %u\n", nwords);
+                printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
+                    eid.rawId(), eid.linearIndex(), did.rawId(),
+                    get_subdet_str(did));
+                printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
+                    flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
 #endif
 
-            break;
-        }
-        case 3: 
-        {
-            /*
-            // treat eid and did
-            uint8_t fiber = (channelid >> 3) & 0x1f;
-            uint8_t fchannel = channelid & 0x7;
-            HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
-            auto const did = HcalDetId{eid2did[eid.linearIndex()]};
- 
-#ifdef HCAL_RAWDECODE_GPUDEBUG
-            printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
-                eid.rawId(), eid.linearIndex(), did.rawId(),
-                get_subdet_str(did));
-            printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
-                flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
-#endif
+                // remove digis not for HE
+                if (did.subdetId() != HcalEndcap) 
+                    break;
 
-            // remove digis not for HE
-            if (did.subdetId() != HcalEndcap) 
-                break;
+                // count words
+                auto const* channel_header_word = ptr++;
+                while (!is_channel_header_word(ptr) && ptr!=end) ++ptr;
+                auto const* channel_end = ptr; // set ptr 
+                uint32_t const nwords = channel_end - channel_header_word;
 
-            // count words
-            auto const* channel_header_word = ptr++;
-            while (!is_channel_header_word(ptr) && ptr!=end) ++ptr;
-            auto const* channel_end = ptr; // set ptr 
-            uint32_t const nwords = channel_end - channel_header_word;
+                // filter out this digi if nwords does not equal expected
+                auto const expected_words = compute_stride<Flavor01>(nsamplesF01HE);
+                if (nwords != expected_words)
+                    break;
 
-            // filter out this digi if nwords does not equal expected
-            auto const expected_words = compute_stride<Flavor3>(nsamplesF3HE);
-            if (nwords != expected_words)
-                break;
+                // inc the number of digis of this type
+                auto const pos = atomicAdd(&pChannelsCounters[OutputF01HE], 1);
 
-            // inc the number of digis of this type
-            auto const pos = atomicAdd(&pChannelsCounters[OutputF3HE], 1);
-
-            // store to global mem words for this digi
-            idsF3HE[pos] = did.rawId();
-            for (uint32_t iword=0; iword<expected_words; iword++)
-                digisF3HE[pos*expected_words + iword] = 
-                    channel_header_word[iword];
+                // store to global mem words for this digi
+                idsF01HE[pos] = did.rawId();
+                for (uint32_t iword=0; iword<expected_words; iword++)
+                    digisF01HE[pos*expected_words + iword] = 
+                        channel_header_word[iword];
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
-            printf("nwords = %u\n", nwords);
-#endif
-            */
-
-            break;
-        }
-        case 2:
-        {
-            uint8_t fiber = (channelid >> 3) & 0x1f;
-            uint8_t fchannel = channelid & 0x7;
-            HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
-            auto const did = DetId{eid2did[eid.linearIndex()]};
-
-#ifdef HCAL_RAWDECODE_GPUDEBUG
-            printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
-                eid.rawId(), eid.linearIndex(), did.rawId(),
-                get_subdet_str(did));
-            printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
-                flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
+                printf("nwords = %u\n", nwords);
 #endif
 
-            break;
-        }
-        case 4:
-        {
-            uint8_t link = (channelid >> 4) & 0xf;
-            uint8_t tower = channelid & 0xf;
-            HcalElectronicsId eid{uhtrcrate, uhtrslot, link, tower, true};
-            auto const did = DetId{eid2tid[eid.linearIndex()]};
-
-#ifdef HCAL_RAWDECODE_GPUDEBUG
-            printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
-                eid.rawId(), eid.linearIndex(), did.rawId(),
-                get_subdet_str(did));
-            printf("flavor = %u crate = %u slot = %u channelid = %u link = %u tower = %u\n",
-                flavor, uhtrcrate, uhtrslot, channelid, link, tower);
-#endif
-
-            break;
-        }
-        case 5:
-        {
-            uint8_t fiber = (channelid >> 2) & 0x3f;
-            uint8_t fchannel = channelid & 0x3;
-            HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
-            auto const did = HcalDetId{eid2did[eid.linearIndex()]};
-
-#ifdef HCAL_RAWDECODE_GPUDEBUG
-            printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
-                eid.rawId(), eid.linearIndex(), did.rawId(),
-                get_subdet_str(did));
-            printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
-                flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
-#endif
-
-            // remove digis not for HB
-            if (did.subdetId() != HcalBarrel) 
-                break;
-
-            // count words
-            auto const* channel_header_word = ptr++;
-            while (!is_channel_header_word(ptr) && ptr!=end) ++ptr;
-            auto const* channel_end = ptr; // set ptr 
-            uint32_t const nwords = channel_end - channel_header_word;
-
-            // filter out this digi if nwords does not equal expected
-            //uint32_t const expected_words = 
-            //    nsamplesF5HB * Flavor5::WORDS_PER_SAMPLE + 
-            //    Flavor5::HEADER_WORDS;
-            auto const expected_words = compute_stride<Flavor5>(nsamplesF5HB);
-            if (nwords != expected_words)
-                break;
-
-            // inc the number of digis of this type
-            auto const pos = atomicAdd(&pChannelsCounters[OutputF5HB], 1);
-
-            // store to global mem words for this digi
-            idsF5HB[pos] = did.rawId();
-            npresamplesF5HB[pos] = presamples;
-            for (uint32_t iword=0; iword<expected_words; iword++)
-                digisF5HB[pos*expected_words + iword] = 
-                    channel_header_word[iword];
-
-            break;
-        }
-        case 7:
-        {
-            uint8_t const fiber = (channelid >> 2) & 0x3f;
-            uint8_t const fchannel = channelid & 0x3;
-            HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
-            auto const did = DetId{eid2did[eid.linearIndex()]};
-
-            /*
-            if (eid.rawId() >= HcalElectronicsId::maxLinearIndex) {
-#ifdef HCAL_RAWDECODE_GPUDEBUG
-                printf("*** rawid = %u has no known det id***\n",
-                    eid.rawId());
-#endif
                 break;
             }
-            */
-            //auto const did = DetId{eid2did[eid.rawId()]};
-
+            case 3: 
+            {
+                /*
+                // treat eid and did
+                uint8_t fiber = (channelid >> 3) & 0x1f;
+                uint8_t fchannel = channelid & 0x7;
+                HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
+                auto const did = HcalDetId{eid2did[eid.linearIndex()]};
+     
 #ifdef HCAL_RAWDECODE_GPUDEBUG
-            printf("erawId = %u linearIndex = %u drawid = %u\n", 
-                eid.rawId(), eid.linearIndex(), did.rawId());
-            printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
-                flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
+                printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
+                    eid.rawId(), eid.linearIndex(), did.rawId(),
+                    get_subdet_str(did));
+                printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
+                    flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
 #endif
 
-            break;
-        }
-        default:
+                // remove digis not for HE
+                if (did.subdetId() != HcalEndcap) 
+                    break;
+
+                // count words
+                auto const* channel_header_word = ptr++;
+                while (!is_channel_header_word(ptr) && ptr!=end) ++ptr;
+                auto const* channel_end = ptr; // set ptr 
+                uint32_t const nwords = channel_end - channel_header_word;
+
+                // filter out this digi if nwords does not equal expected
+                auto const expected_words = compute_stride<Flavor3>(nsamplesF3HE);
+                if (nwords != expected_words)
+                    break;
+
+                // inc the number of digis of this type
+                auto const pos = atomicAdd(&pChannelsCounters[OutputF3HE], 1);
+
+                // store to global mem words for this digi
+                idsF3HE[pos] = did.rawId();
+                for (uint32_t iword=0; iword<expected_words; iword++)
+                    digisF3HE[pos*expected_words + iword] = 
+                        channel_header_word[iword];
+
 #ifdef HCAL_RAWDECODE_GPUDEBUG
-            printf("flavor = %u crate = %u slot = %u channelid = %u\n",
-                flavor, uhtrcrate, uhtrslot, channelid);
+                printf("nwords = %u\n", nwords);
 #endif
-            ;
+                */
+
+                break;
+            }
+            case 2:
+            {
+                uint8_t fiber = (channelid >> 3) & 0x1f;
+                uint8_t fchannel = channelid & 0x7;
+                HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
+                auto const did = DetId{eid2did[eid.linearIndex()]};
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
+                    eid.rawId(), eid.linearIndex(), did.rawId(),
+                    get_subdet_str(did));
+                printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
+                    flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
+#endif
+
+                break;
+            }
+            case 4:
+            {
+                uint8_t link = (channelid >> 4) & 0xf;
+                uint8_t tower = channelid & 0xf;
+                HcalElectronicsId eid{uhtrcrate, uhtrslot, link, tower, true};
+                auto const did = DetId{eid2tid[eid.linearIndex()]};
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
+                    eid.rawId(), eid.linearIndex(), did.rawId(),
+                    get_subdet_str(did));
+                printf("flavor = %u crate = %u slot = %u channelid = %u link = %u tower = %u\n",
+                    flavor, uhtrcrate, uhtrslot, channelid, link, tower);
+#endif
+
+                break;
+            }
+            case 5:
+            {
+                uint8_t fiber = (channelid >> 2) & 0x3f;
+                uint8_t fchannel = channelid & 0x3;
+                HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
+                auto const did = HcalDetId{eid2did[eid.linearIndex()]};
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("erawId = %u linearIndex = %u drawid = %u subdet = %s\n", 
+                    eid.rawId(), eid.linearIndex(), did.rawId(),
+                    get_subdet_str(did));
+                printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
+                    flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
+#endif
+
+                // remove digis not for HB
+                if (did.subdetId() != HcalBarrel) 
+                    break;
+
+                // count words
+                auto const* channel_header_word = ptr++;
+                while (!is_channel_header_word(ptr) && ptr!=end) ++ptr;
+                auto const* channel_end = ptr; // set ptr 
+                uint32_t const nwords = channel_end - channel_header_word;
+
+                // filter out this digi if nwords does not equal expected
+                //uint32_t const expected_words = 
+                //    nsamplesF5HB * Flavor5::WORDS_PER_SAMPLE + 
+                //    Flavor5::HEADER_WORDS;
+                auto const expected_words = compute_stride<Flavor5>(nsamplesF5HB);
+                if (nwords != expected_words)
+                    break;
+
+                // inc the number of digis of this type
+                auto const pos = atomicAdd(&pChannelsCounters[OutputF5HB], 1);
+
+                // store to global mem words for this digi
+                idsF5HB[pos] = did.rawId();
+                npresamplesF5HB[pos] = presamples;
+                for (uint32_t iword=0; iword<expected_words; iword++)
+                    digisF5HB[pos*expected_words + iword] = 
+                        channel_header_word[iword];
+
+                break;
+            }
+            case 7:
+            {
+                uint8_t const fiber = (channelid >> 2) & 0x3f;
+                uint8_t const fchannel = channelid & 0x3;
+                HcalElectronicsId eid{uhtrcrate, uhtrslot, fiber, fchannel, false};
+                auto const did = DetId{eid2did[eid.linearIndex()]};
+
+                /*
+                if (eid.rawId() >= HcalElectronicsId::maxLinearIndex) {
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                    printf("*** rawid = %u has no known det id***\n",
+                        eid.rawId());
+#endif
+                    break;
+                }
+                */
+                //auto const did = DetId{eid2did[eid.rawId()]};
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("erawId = %u linearIndex = %u drawid = %u\n", 
+                    eid.rawId(), eid.linearIndex(), did.rawId());
+                printf("flavor = %u crate = %u slot = %u channelid = %u fiber = %u fchannel = %u\n",
+                    flavor, uhtrcrate, uhtrslot, channelid, fiber, fchannel);
+#endif
+
+                break;
+            }
+            default:
+#ifdef HCAL_RAWDECODE_GPUDEBUG
+                printf("flavor = %u crate = %u slot = %u channelid = %u\n",
+                    flavor, uhtrcrate, uhtrslot, channelid);
+#endif
+                ;
+            }
+
+            // skip to the next word in case 
+            // 1) current channel was not treated
+            // 2) we are in the middle of the digi words and not at the end
+            while (new_channel_start==ptr || 
+                   !is_channel_header_word(ptr) && ptr!=end) ++ptr;
+
         }
 
-        // skip to the next word in case 
-        // 1) current channel was not treated
-        // 2) we are in the middle of the digi words and not at the end
-        while (new_channel_start==ptr || 
-               !is_channel_header_word(ptr) && ptr!=end) ++ptr;
+        // thread with rank 31 of the group will have the ptr pointing to the 
+        // header word of the next channel or the end
+        int const offset_to_shuffle = ptr - start_ptr;
+
+        // always receive from the last guy in the group
+        auto const offset_for_rank31 = thread_group.shfl(31, offset_to_shuffle);
+
+        // update the ptr for all threads of this group
+        // NOTE: relative to the start_ptr that is the same for all threads of 
+        // this group
+        ptr = start_ptr +  offset_for_rank31;
     }
-//    }
 }
 
 void entryPoint(
@@ -454,7 +497,7 @@ void entryPoint(
         cudaStream.id()) );
 
     // 12 is the max number of modules per crate
-    kernel_rawdecode_test<<<nfedsWithData, 12, 0, cudaStream.id()>>>(
+    kernel_rawdecode_test<32><<<nfedsWithData, 12*32, 0, cudaStream.id()>>>(
         inputGPU.data,
         inputGPU.offsets,
         inputGPU.feds,
