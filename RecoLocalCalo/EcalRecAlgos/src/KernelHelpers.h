@@ -224,7 +224,8 @@ void solve_forward_subst_matrix(
         // preload a column and load column 0 of cholesky
         #pragma unroll
         for (int i=0; i<NSAMPLES; i++) {
-            reg_b[i] = __ldg(&pulseMatrixView.coeffRef(i, icol));
+            // FIXME; replace with __ldg
+            reg_b[i] = pulseMatrixView.coeffRef(i, icol);
             reg_L[i] = matrixL(i, 0);
         }
 

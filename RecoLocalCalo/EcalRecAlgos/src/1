@@ -240,14 +240,6 @@ void kernel_minimize(
             MapSymM<DataType, NSAMPLES> matrixL{matrixLStorage};
             compute_decomposition_unrolled(matrixL, covMatrix);
 
-            // L * A = P
-            ColMajorMatrix<NSAMPLES, NPULSES> A;
-            solve_forward_subst_matrix(A, pulse_matrix[idx], matrixL);
-
-            // L b = s
-            float reg_b[NSAMPLES];
-            solve_forward_subst_vector(reg_b, samples[idx], matrixL);
-
             //
             // replace eigen
             // prepare input matrices for fnnls
@@ -329,7 +321,7 @@ void kernel_minimize(
                     reg_b[iL] = x_prev;
                 }
             }
-            */
+        */
 
             SampleMatrix AtA;
             SampleVector Atb;
