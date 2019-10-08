@@ -1336,6 +1336,9 @@ void kernel_minimize(
         int const lastHERing,
         int const nEtaHB,
         int const nEtaHE) {
+    // can be relaxed if needed - minor updates are needed in that case!
+    static_assert(NPULSES == NSAMPLES);
+
     // indices
     auto const gch = threadIdx.x + blockIdx.x * blockDim.x;
     if (gch >= nchannelsTotal) return;
@@ -1433,7 +1436,11 @@ void kernel_minimize(
     float chi2=0, previous_chi2=0.f, chi2_2itersback=0.f;
     // TOOD: provide constants from configuration
     for (int iter=1; iter<50; iter++) {
-        float covarianceMatrixStorage[MapSymM<float, NSAMPLES>::total];
+        //float covarianceMatrixStorage[MapSymM<float, NSAMPLES>::total];
+        // NOTE: only works when NSAMPLES == NPULSES
+        // if does not hold -> slightly rearrange shared mem to still reuse 
+        // shared memory
+        float *covarianceMatrixStorage = shrMatrixLFnnlsStorage;
         MapSymM<float, NSAMPLES> covarianceMatrix{covarianceMatrixStorage};
         #pragma unroll
         for (int counter=0; counter<MapSymM<float, NSAMPLES>::total; counter++)
