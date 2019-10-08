@@ -78,30 +78,6 @@ void eigen_solve_submatrix(SampleMatrix& mat,
     }
 }
 
-#define PRINT_MATRIX_10x10(M)\
-            printf("%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n%f %f %f %f %f %f %f %f %f %f\n", \
-                M(0, 0), M(1, 0), M(2, 0), M(3, 0), M(4, 0), \
-                M(5, 0), M(6, 0), M(7, 0), M(8, 0), M(9, 0), \
-                M(0, 1), M(1, 1), M(2, 1), M(3, 1), M(4, 1), \
-                M(5, 1), M(6, 1), M(7, 1), M(8, 1), M(9, 1), \
-                M(0, 2), M(1, 2), M(2, 2), M(3, 2), M(4, 2), \
-                M(5, 2), M(6, 2), M(7, 2), M(8, 2), M(9, 2), \
-                M(0, 3), M(1, 3), M(2, 3), M(3, 3), M(4, 3), \
-                M(5, 3), M(6, 3), M(7, 3), M(8, 3), M(9, 3), \
-                M(0, 4), M(1, 4), M(2, 4), M(3, 4), M(4, 4), \
-                M(5, 4), M(6, 4), M(7, 4), M(8, 4), M(9, 4), \
-                M(0, 5), M(1, 5), M(2, 5), M(3, 5), M(4, 5), \
-                M(5, 5), M(6, 5), M(7, 5), M(8, 5), M(9, 5), \
-                M(0, 6), M(1, 6), M(2, 6), M(3, 6), M(4, 6), \
-                M(5, 6), M(6, 6), M(7, 6), M(8, 6), M(9, 6), \
-                M(0, 7), M(1, 7), M(2, 7), M(3, 7), M(4, 7), \
-                M(5, 7), M(6, 7), M(7, 7), M(8, 7), M(9, 7), \
-                M(0, 8), M(1, 8), M(2, 8), M(3, 8), M(4, 8), \
-                M(5, 8), M(6, 8), M(7, 8), M(8, 8), M(9, 8), \
-                M(0, 9), M(1, 9), M(2, 9), M(3, 9), M(4, 9), \
-                M(5, 9), M(6, 9), M(7, 9), M(8, 9), M(9, 9) \
-            )
-
 template<typename MatrixType>
 __device__ __forceinline__
 bool update_covariance(
@@ -151,12 +127,12 @@ __global__
 void kernel_minimize(
         uint32_t const* dids_eb,
         uint32_t const* dids_ee,
-        SampleMatrix const* noisecov,
-        EcalPulseCovariance const* pulse_covariance,
+        SampleMatrix const* __restrict__ noisecov,
+        EcalPulseCovariance const* __restrict__ pulse_covariance,
         BXVectorType *bxs,
-        SampleVector const* samples,
+        SampleVector const* __restrict__ samples,
         SampleVector* amplitudes,
-        PulseMatrixType* pulse_matrix, 
+        PulseMatrixType const* __restrict__ pulse_matrix, 
         ::ecal::reco::StorageScalarType* chi2s,
         ::ecal::reco::StorageScalarType* energies,
         char *acState,
@@ -209,6 +185,11 @@ void kernel_minimize(
         for (int i=0; i<NPULSES; ++i)
             pulseOffsets(i) = i;
 
+        ColumnVector<NPULSES, DataType> resultAmplitudes;
+        #pragma unroll
+        for (int counter=0; counter<NPULSES; counter++)
+            resultAmplitudes(counter) = 0;
+
         // inits
         //SampleDecompLLT covariance_decomposition;
         //SampleMatrix inverse_cov;
@@ -220,7 +201,8 @@ void kernel_minimize(
                 break;
 
             //inverse_cov = noisecov[idx];
-            DataType covMatrixStorage[MapSymM<DataType, NSAMPLES>::total];
+            //DataType covMatrixStorage[MapSymM<DataType, NSAMPLES>::total];
+            DataType* covMatrixStorage = shrMatrixLForFnnlsStorage;
             MapSymM<DataType, NSAMPLES> covMatrix{covMatrixStorage};
             int counter = 0;
             #pragma unroll
@@ -233,7 +215,7 @@ void kernel_minimize(
             update_covariance(
                 pulse_covariance[hashedId],
                 covMatrix,
-                amplitudes[idx]);
+                resultAmplitudes);
 
             // compute actual covariance decomposition
             //covariance_decomposition.compute(inverse_cov);
@@ -310,7 +292,8 @@ void kernel_minimize(
             fnnls(
                 AtA,
                 Atb,
-                amplitudes[idx],
+                //amplitudes[idx],
+                resultAmplitudes,
                 npassive,
                 pulseOffsets,
                 matrixLForFnnls,
@@ -320,12 +303,6 @@ void kernel_minimize(
                 
             {    
                 DataType accum[NSAMPLES];
-                DataType results[NPULSES];
-
-                #pragma unroll
-                for (int counter=0; counter<NPULSES; counter++)
-                        results[counter] = amplitudes[idx](counter);
-
                 // load accum
                 #pragma unroll
                 for (int counter=0; counter<NSAMPLES; counter++)
@@ -338,12 +315,13 @@ void kernel_minimize(
                     // preload a column of pulse matrix
                     #pragma unroll
                     for (int counter=0; counter<NSAMPLES; counter++)
-                        pm_col[counter] = pulse_matrix[idx].coeffRef(counter, icol);
+                        pm_col[counter] = __ldg(
+                            &pulse_matrix[idx].coeffRef(counter, icol));
 
                     // accum
                     #pragma unroll
                     for (int counter=0; counter<NSAMPLES; counter++)
-                        accum[counter] += results[icol] * pm_col[counter];
+                        accum[counter] += resultAmplitudes[icol] * pm_col[counter];
                 }
 
                 DataType reg_L[NSAMPLES];
@@ -382,39 +360,6 @@ void kernel_minimize(
             }
 
             auto deltachi2 = chi2_now - chi2;
-
-
-#ifdef ECAL_MULTIFIT_KERNEL_MINIMIZE_V1
-            if (iter > 10) {
-                printf("idx = %d iter = %d chi2 = %f chi2old = %f\n",
-                    idx, iter, chi2_now, chi2);
-                
-                printf("noisecov(0, i): %f %f %f %f %f %f %f %f %f %f\n",
-                    noisecov[idx](0, 0),
-                    noisecov[idx](0, 1),
-                    noisecov[idx](0, 2),
-                    noisecov[idx](0, 3),
-                    noisecov[idx](0, 4),
-                    noisecov[idx](0, 5),
-                    noisecov[idx](0, 6),
-                    noisecov[idx](0, 7),
-                    noisecov[idx](0, 8),
-                    noisecov[idx](0, 9));
-
-                printf("ampls: %f %f %f %f %f %f %f %f %f %f\n",
-                    amplitudes[idx](0),
-                    amplitudes[idx](1),
-                    amplitudes[idx](2),
-                    amplitudes[idx](3),
-                    amplitudes[idx](4),
-                    amplitudes[idx](5),
-                    amplitudes[idx](6),
-                    amplitudes[idx](7),
-                    amplitudes[idx](8),
-                    amplitudes[idx](9));
-            }
-#endif
-
             chi2 = chi2_now;
 
             if (ecal::abs(deltachi2) < 1e-3)
@@ -428,7 +373,10 @@ void kernel_minimize(
         // store to global output values
         // FIXME: amplitudes are used in global directly
         chi2s[idx] = chi2;
-        energies[idx] = amplitudes[idx](5);
+        energies[idx] = resultAmplitudes(5);
+        #pragma unroll
+        for (int counter=0; counter<NPULSES; counter++)
+            amplitudes[idx](counter) = resultAmplitudes(counter);
     }
 }
 
@@ -470,26 +418,6 @@ void minimization_procedure(
         offsetForHashes,
         offsetForInputs);
     cudaCheck(cudaGetLastError());
-
-    //
-    // permute computed amplitudes
-    // and assign the final uncalibared energy value
-    //
-    /*
-    unsigned int threadsPermute = 32 * EcalDataFrame::MAXSAMPLES; // 32 * 10
-    unsigned int blocksPermute = threadsPermute > 10 * totalChannels
-        ? 1
-        : (10 * totalChannels + threadsPermute - 1) / threadsPermute;
-    int bytesPermute = threadsPermute * sizeof(SampleVector::Scalar);
-    kernel_permute_results<<<blocksPermute, threadsPermute, 
-                             bytesPermute, cudaStream.id()>>>(
-        (SampleVector*)eventOutputGPU.amplitudesAll,
-        scratch.activeBXs,
-        eventOutputGPU.amplitude,
-        scratch.acState,
-        totalChannels);
-    cudaCheck(cudaGetLastError());
-    */
 }
 
 }
