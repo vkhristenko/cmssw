@@ -104,16 +104,13 @@ void eigen_solve_submatrix(SampleMatrix& mat,
 
 __device__
 __forceinline__
-bool update_covariance(SampleMatrix const& noisecov,
-                       EcalPulseCovariance const& pulse_covariance,
-                       SampleMatrix& inverse_cov,
-                       BXVectorType const& bxs,
-                       SampleDecompLLT& covariance_decomposition,
-                       SampleVector const& amplitudes) {
+bool update_covariance(
+        EcalPulseCovariance const& pulse_covariance,
+        SampleMatrix& inverse_cov,
+        BXVectorType const& bxs,
+        SampleVector const& amplitudes) {
     constexpr int nsamples = SampleVector::RowsAtCompileTime;
     constexpr int npulses = BXVectorType::RowsAtCompileTime;
-
-    inverse_cov = noisecov;
 
     for (unsigned int ipulse=0; ipulse<npulses; ipulse++) {
         auto const amplitude = amplitudes.coeff(ipulse);
@@ -131,17 +128,9 @@ bool update_covariance(SampleMatrix const& noisecov,
         for (int row=first_sample_t; row<nsamples; row++) {
             for (int col=first_sample_t; col<nsamples; col++) {
                 inverse_cov.coeffRef(row, col) += value_sq * 
-                    pulse_covariance.covval[row + offset][col + offset];
+                    __ldg(&pulse_covariance.covval[row + offset][col + offset]);
             }
         }
-        /*
-        inverse_cov.block(first_sample_t, first_sample_t, 
-                          nsample_pulse, nsample_pulse)
-            += value_sq * full_pulse_cov.block(first_sample_t + offset,
-                                               first_sample_t + offset,
-                                               nsample_pulse,
-                                               nsample_pulse);
-                                               */
     }
 
     return true;
@@ -225,12 +214,12 @@ void kernel_minimize(
             if (iter >= max_iterations)
                 break;
 
+            inverse_cov = noisecov[idx];
+
             update_covariance(
-                noisecov[idx], 
                 pulse_covariance[hashedId],
                 inverse_cov,
                 bxs[idx],
-                covariance_decomposition,
                 amplitudes[idx]);
 
             // compute actual covariance decomposition
