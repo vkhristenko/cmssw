@@ -138,11 +138,12 @@ int adc(uint16_t sample) { return sample & 0xfff; }
 __forceinline__ __device__
 int gainId(uint16_t sample) { return (sample>>12) & 0x3; }
 
+template<int NTHREADS>
 __global__
 void kernel_unpack_test(
-        unsigned char const* data,
-        uint32_t const* offsets,
-        int const* feds,
+        unsigned char const* __restrict__ data,
+        uint32_t const* __restrict__ offsets,
+        int const* __restrict__ feds,
         uint16_t *samplesEB,
         uint16_t *samplesEE,
         uint32_t *idsEB,
@@ -329,9 +330,15 @@ void kernel_unpack_test(
         // go thru all the channels
         // get the next channel coordinates
         uint32_t nchannels = (block_length - 1) / 3;
-        for (uint32_t i=0; i<nchannels; ++i) {
+
+        // 1 threads per channel in this block
+        for (uint32_t ich=0; ich<nchannels; ich+=NTHREADS) {
+            auto const i_to_access = ich + threadIdx.x;
+            // threads outside of the range -> leave the loop
+            if (i_to_access>=nchannels) break;
+
             // inc the channel's counter and get the pos where to store
-            auto const wdata = current_tower_block[1 + i*3];
+            auto const wdata = current_tower_block[1 + i_to_access*3];
             uint8_t const stripid = wdata & 0x7;
             uint8_t const xtalid = (wdata >> 4) & 0x7;
             ElectronicsIdGPU eid{fed2dcc(fed), ttid, stripid, xtalid};
@@ -347,12 +354,12 @@ void kernel_unpack_test(
             sampleValues[0] = (wdata >> 16) & 0x3fff;
             sampleValues[1] = (wdata >> 32) & 0x3fff;
             sampleValues[2] = (wdata >> 48) & 0x3fff;
-            auto const wdata1 = current_tower_block[2+i*3];
+            auto const wdata1 = current_tower_block[2+i_to_access*3];
             sampleValues[3] = wdata1 & 0x3fff;
             sampleValues[4] = (wdata1 >> 16) & 0x3fff;
             sampleValues[5] = (wdata1 >> 32) & 0x3fff;
             sampleValues[6] = (wdata1 >> 48) & 0x3fff;
-            auto const wdata2 = current_tower_block[3+i*3];
+            auto const wdata2 = current_tower_block[3+i_to_access*3];
             sampleValues[7] = wdata2 & 0x3fff;
             sampleValues[8] = (wdata2 >> 16) & 0x3fff;
             sampleValues[9] = (wdata2 >> 32) & 0x3fff;
@@ -409,19 +416,6 @@ void kernel_unpack_test(
             samples[pos*10 + 9] = sampleValues[9];
         }
 
-        // test electronics id
-        /*ElectronicsIdGPU eid{fed2dcc(fed), ttid, stripid, xtalid};
-        auto const didraw = isBarrel 
-            ? compute_ebdetid(eid)
-            : eid2did[eid.linearIndex()];
-        printf("raweid = %u linear index = %u did = %u\n",
-            eid.rawId(), eid.linearIndex(), didraw);
-
-        DetId did{didraw};
-        printf("det id string = %s\n", 
-            did.subdetId() == EcalBarrel ? "Barrel" : "Endcap");
-            */
-
         current_tower_block += block_length;
     }
 }
@@ -457,7 +451,7 @@ void entryPoint(
                                cudaMemcpyHostToDevice,
                                cudaStream.id()) );
 
-    kernel_unpack_test<<<nfedsWithData,1, 0, cudaStream.id()>>>(
+    kernel_unpack_test<32><<<nfedsWithData,32, 0, cudaStream.id()>>>(
         inputGPU.data,
         inputGPU.offsets,
         inputGPU.feds,
