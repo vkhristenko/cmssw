@@ -409,7 +409,8 @@ void fnnls(
             }
 
             // FIXME: temporary solution. my cholesky impl is unstable yielding nans
-            // this check removes nans
+            // this check removes nans - do not accept solution unless all values 
+            // are stable
             if (hasNans) break;
             if (!hasNegative) {
                 for (int i=0; i<npassive; i++) {

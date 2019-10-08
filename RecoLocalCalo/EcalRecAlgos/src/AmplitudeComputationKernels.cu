@@ -172,6 +172,13 @@ void kernel_minimize(
 
     using DataType = SampleVector::Scalar;
 
+    extern __shared__ char shrmem[];
+    DataType *shrMatrixLForFnnlsStorage = 
+        reinterpret_cast<DataType*>(shrmem) + MapSymM<DataType, NPULSES>::total * threadIdx.x;
+    DataType *shrAtAStorage = 
+        reinterpret_cast<DataType*>(shrmem) + MapSymM<DataType, NPULSES>::total * (
+            threadIdx.x + blockDim.x);
+
     // FIXME: remove eitehr idx or ch -> they are teh same thing
     int idx = threadIdx.x + blockDim.x*blockIdx.x;
     auto const ch = idx;
@@ -244,8 +251,8 @@ void kernel_minimize(
             solve_forward_subst_vector(reg_b, samples[idx], matrixL);
 
             // FIXME: shared mem
-            DataType AtAStorage[MapSymM<DataType, NPULSES>::total];
-            MapSymM<DataType, NPULSES> AtA{AtAStorage};
+            //DataType AtAStorage[MapSymM<DataType, NPULSES>::total];
+            MapSymM<DataType, NPULSES> AtA{shrAtAStorage};
             //SampleMatrix AtA;
             SampleVector Atb;
             #pragma unroll
@@ -296,15 +303,9 @@ void kernel_minimize(
                 Atb(icol) = sum_atb;
             }
             
-            /*
-            inplace_fnnls(
-                AtA, Atb, amplitudes[idx],
-                npassive, bxs[idx], pulse_matrix[idx]);
-            */
-
             // FIXME: shared mem
-            DataType matrixLForFnnlsStorage[MapSymM<DataType, NPULSES>::total];
-            MapSymM<DataType, NPULSES> matrixLForFnnls{matrixLForFnnlsStorage};
+            //DataType matrixLForFnnlsStorage[MapSymM<DataType, NPULSES>::total];
+            MapSymM<DataType, NPULSES> matrixLForFnnls{shrMatrixLForFnnlsStorage};
 
             fnnls(
                 AtA,
@@ -317,13 +318,6 @@ void kernel_minimize(
                 500
                 );
                 
-            /*
-            chi2_now = compute_chi2(
-                covariance_decomposition,
-                pulse_matrix[idx],
-                amplitudes[idx],
-                samples[idx]);
-            */
             {    
                 DataType accum[NSAMPLES];
                 DataType results[NPULSES];
@@ -446,6 +440,7 @@ void minimization_procedure(
         ConditionsProducts const& conditions,
         ConfigurationParameters const& configParameters,
         cuda::stream_t<>& cudaStream) {
+    using DataType = SampleVector::Scalar;
     unsigned int totalChannels = eventInputGPU.ebDigis.ndigis
         + eventInputGPU.eeDigis.ndigis;
 //    unsigned int threads_min = conf.threads.x;
@@ -456,7 +451,9 @@ void minimization_procedure(
         : (totalChannels + threads_min - 1) / threads_min;
     uint32_t const offsetForHashes = conditions.offsetForHashes;
     uint32_t const offsetForInputs = eventInputGPU.ebDigis.ndigis;
-    kernel_minimize<<<blocks_min, threads_min, 0, cudaStream.id()>>>(
+    auto const nbytesShared = 2 * threads_min * 
+        MapSymM<DataType, SampleVector::RowsAtCompileTime>::total * sizeof(DataType);
+    kernel_minimize<<<blocks_min, threads_min, nbytesShared, cudaStream.id()>>>(
         eventInputGPU.ebDigis.ids,
         eventInputGPU.eeDigis.ids,
         scratch.noisecov,
