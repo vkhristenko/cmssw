@@ -400,7 +400,18 @@ void fnnls(
             }
 
             // done if solution values are all positive
-            if (s.head(npassive).minCoeff() > 0.f) {
+            bool hasNegative = false;
+            bool hasNans = false;
+            for (int counter=0; counter<npassive; counter++) {
+                auto const s_ii = s(counter);
+                hasNegative |= s_ii <= 0;
+                hasNans |= isnan(s_ii);
+            }
+
+            // FIXME: temporary solution. my cholesky impl is unstable yielding nans
+            // this check removes nans
+            if (hasNans) break;
+            if (!hasNegative) {
                 for (int i=0; i<npassive; i++) {
                     auto const i_real = pulseOffsets(i);
                     solution(i_real) = s(i);
