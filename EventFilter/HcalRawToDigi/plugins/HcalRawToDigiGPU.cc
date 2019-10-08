@@ -76,7 +76,7 @@ void HcalRawToDigiGPU::fillDescriptions(
         feds[i] = i + FEDNumbering::MINHCALuTCAFEDID;
     desc.add<std::vector<int>>("FEDs", feds);
     desc.add<uint32_t>("maxChannelsF01HE", 10000u);
-    desc.add<uint32_t>("maxChannelsF5HB", 5000u);
+    desc.add<uint32_t>("maxChannelsF5HB", 10000u);
     desc.add<uint32_t>("nsamplesF01HE", 8);
     desc.add<uint32_t>("nsamplesF5HB", 8);
     desc.add<std::string>("digisLabelF5HB", "f5HBDigisGPU");

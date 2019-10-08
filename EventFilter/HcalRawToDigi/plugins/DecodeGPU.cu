@@ -71,6 +71,9 @@ void kernel_rawdecode_test(
         uint32_t const nBytesTotal) {
     // in order to properly use cooperative groups
     static_assert(is_power_of_two(NTHREADS) == true && NTHREADS<=32);
+    
+    thread_block_tile<NTHREADS> thread_group = 
+        tiled_partition<NTHREADS>(this_thread_block());
 
     auto const iamc = threadIdx.x / NTHREADS;
     auto const ifed = blockIdx.x;
@@ -80,8 +83,7 @@ void kernel_rawdecode_test(
         ? nBytesTotal - offset 
         : offsets[ifed+1] - offset;
 
-    thread_block_tile<NTHREADS> thread_group = 
-        tiled_partition<NTHREADS>(this_thread_block());
+    if (ifed>0 || iamc>0) return;
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
     printf("ifed = %d fed = %d offset = %u size = %u\n", ifed, fed, offset, size);
@@ -205,15 +207,24 @@ void kernel_rawdecode_test(
         auto const* const start_ptr = ptr;
 
         // skip to the header word of the right channel for this thread
-        for (int counter=0; counter<thread_group.thread_rank(); counter++) {
+        int counter = 0;
+        while (counter < thread_group.thread_rank()) {
             // just a check for threads that land beyond the end
             if (ptr == end) break;
 
             // move ptr one forward past header
-            ++ptr;
+            if (is_channel_header_word(ptr))
+                ++ptr;
+            else {
+                // go to the next channel and do not consider this guy as a
+                // channel
+                while (!is_channel_header_word(ptr) && ptr!=end) ++ptr;
+                continue;
+            }
 
             // skip
-            while (!is_channel_header_word(ptr) && ptr!=end) ++ptr;
+            while (ptr!=end && !is_channel_header_word(ptr)) ++ptr;
+            counter++;
         }
 
         // assume that if all is valid, ptr points 
@@ -226,7 +237,7 @@ void kernel_rawdecode_test(
         //    continue;
         //}
 
-        // when the end is near, channels will land outside of the [ptr, end)
+        // when the end is near, channels will land outside of the [start_ptr, end)
         // region
         if (ptr != end) {
             // for all of the flavors, these 2 guys have the same bit layout
@@ -270,9 +281,12 @@ void kernel_rawdecode_test(
 
                 // inc the number of digis of this type
                 auto const pos = atomicAdd(&pChannelsCounters[OutputF01HE], 1);
+                
+                printf("rank = %d pos = %d\n", thread_group.thread_rank(), pos);
 
                 // store to global mem words for this digi
                 idsF01HE[pos] = did.rawId();
+
                 for (uint32_t iword=0; iword<expected_words; iword++)
                     digisF01HE[pos*expected_words + iword] = 
                         channel_header_word[iword];
@@ -400,6 +414,8 @@ void kernel_rawdecode_test(
 
                 // inc the number of digis of this type
                 auto const pos = atomicAdd(&pChannelsCounters[OutputF5HB], 1);
+                
+                printf("rank = %d pos = %d\n", thread_group.thread_rank(), pos);
 
                 // store to global mem words for this digi
                 idsF5HB[pos] = did.rawId();
@@ -456,6 +472,9 @@ void kernel_rawdecode_test(
         // thread with rank 31 of the group will have the ptr pointing to the 
         // header word of the next channel or the end
         int const offset_to_shuffle = ptr - start_ptr;
+
+        printf("rank = %d offset = %d\n", thread_group.thread_rank(),
+            offset_to_shuffle);
 
         // always receive from the last guy in the group
         auto const offset_for_rank31 = thread_group.shfl(31, offset_to_shuffle);
