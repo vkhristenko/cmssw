@@ -102,11 +102,11 @@ void eigen_solve_submatrix(SampleMatrix& mat,
                 M(5, 9), M(6, 9), M(7, 9), M(8, 9), M(9, 9) \
             )
 
-__device__
-__forceinline__
+template<typename MatrixType>
+__device__ __forceinline__
 bool update_covariance(
         EcalPulseCovariance const& pulse_covariance,
-        SampleMatrix& inverse_cov,
+        MatrixType& inverse_cov,
         BXVectorType const& bxs,
         SampleVector const& amplitudes) {
     constexpr int nsamples = SampleVector::RowsAtCompileTime;
@@ -125,9 +125,9 @@ bool update_covariance(
 
         unsigned int nsample_pulse = nsamples - first_sample_t;
 
-        for (int row=first_sample_t; row<nsamples; row++) {
-            for (int col=first_sample_t; col<nsamples; col++) {
-                inverse_cov.coeffRef(row, col) += value_sq * 
+        for (int col=first_sample_t; col<nsamples; col++) {
+            for (int row=col; row<nsamples; row++) {
+                inverse_cov(row, col) += value_sq * 
                     __ldg(&pulse_covariance.covval[row + offset][col + offset]);
             }
         }
@@ -179,6 +179,8 @@ void kernel_minimize(
     constexpr auto NPULSES = SampleMatrix::RowsAtCompileTime;
     static_assert(NSAMPLES == NPULSES);
 
+    using DataType = SampleVector::Scalar;
+
     // FIXME: remove eitehr idx or ch -> they are teh same thing
     int idx = threadIdx.x + blockDim.x*blockIdx.x;
     auto const ch = idx;
@@ -205,8 +207,8 @@ void kernel_minimize(
         int npassive = 0;
 
         // inits
-        SampleDecompLLT covariance_decomposition;
-        SampleMatrix inverse_cov;
+        //SampleDecompLLT covariance_decomposition;
+        //SampleMatrix inverse_cov;
         SampleVector::Scalar chi2 = 0, chi2_now = 0;
 
         // loop until ocnverge
@@ -214,17 +216,29 @@ void kernel_minimize(
             if (iter >= max_iterations)
                 break;
 
-            inverse_cov = noisecov[idx];
+            //inverse_cov = noisecov[idx];
+            DataType covMatrixStorage[MapSymM<DataType, NSAMPLES>::total];
+            MapSymM<DataType, NSAMPLES> covMatrix{covMatrixStorage};
+            int counter = 0;
+            #pragma unroll
+            for (int col=0; col<NSAMPLES; col++)
+                #pragma unroll
+                for (int row=col; row<NSAMPLES; row++)
+                    covMatrixStorage[counter++] = __ldg(
+                        &noisecov[idx].coeffRef(row, col));
 
             update_covariance(
                 pulse_covariance[hashedId],
-                inverse_cov,
+                covMatrix,
                 bxs[idx],
                 amplitudes[idx]);
 
             // compute actual covariance decomposition
-            covariance_decomposition.compute(inverse_cov);
-            auto const& matrixL = covariance_decomposition.matrixL();
+            //covariance_decomposition.compute(inverse_cov);
+            //auto const& matrixL = covariance_decomposition.matrixL();
+            DataType matrixLStorage[MapSymM<DataType, NSAMPLES>::total];
+            MapSymM<DataType, NSAMPLES> matrixL{matrixLStorage};
+            compute_decomposition_unrolled(matrixL, covMatrix);
 
             //
             // replace eigen
@@ -362,11 +376,76 @@ void kernel_minimize(
                 AtA, Atb, amplitudes[idx],
                 npassive, bxs[idx], pulse_matrix[idx]);
                 
+            /*
             chi2_now = compute_chi2(
                 covariance_decomposition,
                 pulse_matrix[idx],
                 amplitudes[idx],
                 samples[idx]);
+            */
+            {    
+                DataType accum[NSAMPLES];
+                DataType results[NPULSES];
+
+                #pragma unroll
+                for (int counter=0; counter<NPULSES; counter++)
+                        results[counter] = amplitudes[idx](counter);
+
+                // load accum
+                #pragma unroll
+                for (int counter=0; counter<NSAMPLES; counter++)
+                    accum[counter] = -samples[idx](counter);
+
+                // iterate
+                for (int icol=0; icol<NPULSES; icol++) {
+                    DataType pm_col[NSAMPLES];
+
+                    // preload a column of pulse matrix
+                    #pragma unroll
+                    for (int counter=0; counter<NSAMPLES; counter++)
+                        pm_col[counter] = pulse_matrix[idx].coeffRef(counter, icol);
+
+                    // accum
+                    #pragma unroll
+                    for (int counter=0; counter<NSAMPLES; counter++)
+                        accum[counter] += results[icol] * pm_col[counter];
+                }
+
+                DataType reg_L[NSAMPLES];
+                DataType accumSum = 0;
+
+                // preload a column and load column 0 of cholesky
+                #pragma unroll
+                for (int i=0; i<NSAMPLES; i++)
+                    reg_L[i] = matrixL(i, 0);
+
+                // compute x0 and store it
+                auto x_prev = accum[0] / reg_L[0];
+                accumSum += x_prev * x_prev;
+
+                // iterate
+                #pragma unroll
+                for (int iL=1; iL<NSAMPLES; iL++) {
+                    // update accum
+                    #pragma unroll
+                    for (int counter=iL; counter<NSAMPLES; counter++)
+                        accum[counter] -= x_prev * reg_L[counter];
+
+                    // load the next column of cholesky
+                    #pragma unroll
+                    for (int counter=iL; counter<NSAMPLES; counter++)
+                        reg_L[counter] = matrixL(counter, iL);
+
+                    // compute the next x for M(iL, icol)
+                    x_prev = accum[iL] / reg_L[iL];
+
+                    // store teh result value
+                    accumSum += x_prev * x_prev;
+                }
+
+                chi2_now = accumSum;
+            }
+
             auto deltachi2 = chi2_now - chi2;
 
 
