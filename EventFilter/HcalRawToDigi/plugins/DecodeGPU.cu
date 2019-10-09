@@ -83,7 +83,11 @@ void kernel_rawdecode_test(
         ? nBytesTotal - offset 
         : offsets[ifed+1] - offset;
 
+#ifdef HCAL_RAWDECODE_GPUDEBUG_CG
     if (ifed>0 || iamc>0) return;
+    printf("threadIdx.x = %d rank = %d iamc = %d\n",
+        threadIdx.x, thread_group.thread_rank(), iamc);
+#endif
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
     printf("ifed = %d fed = %d offset = %u size = %u\n", ifed, fed, offset, size);
@@ -199,12 +203,17 @@ void kernel_rawdecode_test(
         + channelDataSize;
     auto const* ptr = reinterpret_cast<uint16_t const*>(channelDataBuffer64Start);
     auto const* end = reinterpret_cast<uint16_t const*>(channelDataBuffer64End); 
+    auto const t_rank = thread_group.thread_rank();
 
     // iterate thru the channel data
     while (ptr != end) {
         // this is the starting point for this thread group for this iteration
         // with respect to this pointer every thread will move forward afterwards
         auto const* const start_ptr = ptr;
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG_CG
+        thread_group.sync();
+#endif
 
         // skip to the header word of the right channel for this thread
         int counter = 0;
@@ -218,7 +227,7 @@ void kernel_rawdecode_test(
             else {
                 // go to the next channel and do not consider this guy as a
                 // channel
-                while (!is_channel_header_word(ptr) && ptr!=end) ++ptr;
+                while (ptr!=end && !is_channel_header_word(ptr)) ++ptr;
                 continue;
             }
 
@@ -226,6 +235,12 @@ void kernel_rawdecode_test(
             while (ptr!=end && !is_channel_header_word(ptr)) ++ptr;
             counter++;
         }
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG_CG
+        thread_group.sync();
+        printf("ptr - start_ptr = %d counter = %d rank = %d\n",
+            static_cast<int>(ptr - start_ptr), counter, t_rank);
+#endif
 
         // assume that if all is valid, ptr points 
         // to the header word of the channel to be decoded
@@ -281,8 +296,9 @@ void kernel_rawdecode_test(
 
                 // inc the number of digis of this type
                 auto const pos = atomicAdd(&pChannelsCounters[OutputF01HE], 1);
-                
+#ifdef HCAL_RAWDECODE_GPUDEBUG_CG
                 printf("rank = %d pos = %d\n", thread_group.thread_rank(), pos);
+#endif
 
                 // store to global mem words for this digi
                 idsF01HE[pos] = did.rawId();
@@ -414,8 +430,10 @@ void kernel_rawdecode_test(
 
                 // inc the number of digis of this type
                 auto const pos = atomicAdd(&pChannelsCounters[OutputF5HB], 1);
-                
+     
+#ifdef HCAL_RAWDECODE_GPUDEBUG_CG
                 printf("rank = %d pos = %d\n", thread_group.thread_rank(), pos);
+#endif
 
                 // store to global mem words for this digi
                 idsF5HB[pos] = did.rawId();
@@ -473,11 +491,14 @@ void kernel_rawdecode_test(
         // header word of the next channel or the end
         int const offset_to_shuffle = ptr - start_ptr;
 
-        printf("rank = %d offset = %d\n", thread_group.thread_rank(),
-            offset_to_shuffle);
-
         // always receive from the last guy in the group
-        auto const offset_for_rank31 = thread_group.shfl(31, offset_to_shuffle);
+        auto const offset_for_rank31 = thread_group.shfl(offset_to_shuffle, 31);
+
+#ifdef HCAL_RAWDECODE_GPUDEBUG_CG
+        printf("rank = %d offset_to_shuffle = %d offset_for_rank32 = %d\n", 
+            thread_group.thread_rank(), offset_to_shuffle,
+            offset_for_rank31);
+#endif
 
         // update the ptr for all threads of this group
         // NOTE: relative to the start_ptr that is the same for all threads of 
