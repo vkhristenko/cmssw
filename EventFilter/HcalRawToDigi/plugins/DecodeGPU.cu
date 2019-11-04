@@ -138,7 +138,7 @@ void kernel_rawdecode_test(
     uint16_t const amcid = word & 0xffff;
     int const slot = (word >> 16) & 0xf;
     int const amcBlockNumber = (word >> 20) & 0xff;
-    //int const amcSize = (word >> 32) & 0xffffff;
+    int const amcSize = (word >> 32) & 0xffffff;
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
     printf("fed = %d amcid = %u slot = %d amcBlockNumber = %d\n",
@@ -168,7 +168,9 @@ void kernel_rawdecode_test(
 
     // uhtr header v1 1st 64 bits
     auto const payload64_w0 = payload64[0];
-    uint32_t const data_length64 = payload64_w0 & 0xfffff;
+    // uhtr n bytes comes from amcSize, according to the cpu version!
+    //uint32_t const data_length64 = payload64_w0 & 0xfffff;
+    uint32_t const data_length64 = amcSize;
     uint16_t bcn = (payload64_w0 >> 20) & 0xfff;
     uint32_t evn = (payload64_w0 >> 32) & 0xffffff;
 
@@ -227,12 +229,16 @@ void kernel_rawdecode_test(
             else {
                 // go to the next channel and do not consider this guy as a
                 // channel
-                while (ptr!=end && !is_channel_header_word(ptr)) ++ptr;
+                while (ptr!=end)
+                    if (!is_channel_header_word(ptr)) ++ptr;
+                    else break;
                 continue;
             }
 
             // skip
-            while (ptr!=end && !is_channel_header_word(ptr)) ++ptr;
+            while (ptr!=end)
+                if (!is_channel_header_word(ptr)) ++ptr;
+                else break;
             counter++;
         }
 
@@ -492,7 +498,7 @@ void kernel_rawdecode_test(
         int const offset_to_shuffle = ptr - start_ptr;
 
         // always receive from the last guy in the group
-        auto const offset_for_rank31 = thread_group.shfl(offset_to_shuffle, 31);
+        auto const offset_for_rank31 = thread_group.shfl(offset_to_shuffle, NTHREADS-1);
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG_CG
         printf("rank = %d offset_to_shuffle = %d offset_for_rank32 = %d\n", 
