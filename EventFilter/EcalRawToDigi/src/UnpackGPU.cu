@@ -215,6 +215,7 @@ void kernel_unpack_test(
     auto const w2 = buffer[2];
     uint32_t const run_type = w2 & 0xffffffff;
     uint16_t const det_trigger_type = (w2 >> 32) & 0xffff;
+    uint8_t const fov = (w2 >> 48) & 0xf;
     uint8_t w2_dcc = (w2 >> 56) & 0x3f;
     uint8_t w2_bid_dcc = (w2 >> 62) & 0x3;
     //printf("run_type = %u det_trigger_type = %u w2_dcc = %u w2_bid_dcc = %u\n", 
@@ -317,7 +318,7 @@ void kernel_unpack_test(
         uint16_t const dccl1 = lv1 & 0xfff;
         //printf("dccbx = %u bxlocal = %u dccl1 = %u l1local = %u\n",
         //    dccbx, bxlocal, dccl1, lv1local);
-        if (!is_synced_towerblock(dccbx, bxlocal, dccl1, lv1local)) {
+        if (fov>=1 && !is_synced_towerblock(dccbx, bxlocal, dccl1, lv1local)) {
             current_tower_block += block_length;
             continue;
         }
