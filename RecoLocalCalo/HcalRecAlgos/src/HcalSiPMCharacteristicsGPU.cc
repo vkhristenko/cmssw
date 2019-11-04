@@ -5,6 +5,8 @@
 #include "FWCore/Utilities/interface/typelookup.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
 
+#include "FWCore/Utilities/interface/Exception.h"
+
 HcalSiPMCharacteristicsGPU::HcalSiPMCharacteristicsGPU(HcalSiPMCharacteristics const& parameters) 
     : pixels_(parameters.getTypes())
     , auxi1_(parameters.getTypes())
