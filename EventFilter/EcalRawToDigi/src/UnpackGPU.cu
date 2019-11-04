@@ -318,6 +318,7 @@ void kernel_unpack_test(
         uint16_t const dccl1 = lv1 & 0xfff;
         //printf("dccbx = %u bxlocal = %u dccl1 = %u l1local = %u\n",
         //    dccbx, bxlocal, dccl1, lv1local);
+        // fov>=1 is required to support simulated data for which bx==bxlocal==0
         if (fov>=1 && !is_synced_towerblock(dccbx, bxlocal, dccl1, lv1local)) {
             current_tower_block += block_length;
             continue;
