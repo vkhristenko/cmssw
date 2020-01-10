@@ -8,8 +8,6 @@
 #include "HeterogeneousCore/CUDACore/interface/CUDAESProduct.h"
 #endif
 
-#include <cuda/api_wrappers.h>
-
 namespace hcal { namespace raw {
 
 class ElectronicsMappingGPU {
@@ -31,7 +29,7 @@ public:
     ~ElectronicsMappingGPU() = default;
 
     // get device pointers
-    Product const& getProduct(cuda::stream_t<>&) const;
+    Product const& getProduct(cudaStream_t) const;
 
     // 
     static std::string name() { return std::string{"hcalElectronicsMappingGPU"}; }

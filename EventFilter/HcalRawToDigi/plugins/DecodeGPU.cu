@@ -518,7 +518,7 @@ void entryPoint(
         OutputDataGPU& outputGPU, ScratchDataGPU &scratchGPU,
         OutputDataCPU& outputCPU,
         ConditionsProducts const& conditions, ConfigurationParameters const& config,
-        cuda::stream_t<> &cudaStream,
+        cudaStream_t cudaStream,
         uint32_t const nfedsWithData,
         uint32_t const nbytesTotal) {
     // transfer
@@ -526,24 +526,24 @@ void entryPoint(
         inputCPU.data.data(),
         nbytesTotal * sizeof(unsigned char),
         cudaMemcpyHostToDevice,
-        cudaStream.id()) );
+        cudaStream) );
     cudaCheck( cudaMemcpyAsync(inputGPU.offsets,
         inputCPU.offsets.data(),
         nfedsWithData * sizeof(uint32_t),
         cudaMemcpyHostToDevice,
-        cudaStream.id()) );
+        cudaStream) );
     cudaCheck( cudaMemsetAsync(scratchGPU.pChannelsCounters,
                                0,
                                sizeof(uint32_t) * numOutputCollections,
-                               cudaStream.id()) );
+                               cudaStream) );
     cudaCheck( cudaMemcpyAsync(inputGPU.feds,
         inputCPU.feds.data(),
         nfedsWithData * sizeof(int),
         cudaMemcpyHostToDevice,
-        cudaStream.id()) );
+        cudaStream) );
 
     // 12 is the max number of modules per crate
-    kernel_rawdecode_test<32><<<nfedsWithData, 12*32, 0, cudaStream.id()>>>(
+    kernel_rawdecode_test<32><<<nfedsWithData, 12*32, 0, cudaStream>>>(
         inputGPU.data,
         inputGPU.offsets,
         inputGPU.feds,
@@ -564,7 +564,7 @@ void entryPoint(
                               scratchGPU.pChannelsCounters,
                               sizeof(uint32_t) * numOutputCollections,
                               cudaMemcpyDeviceToHost,
-                              cudaStream.id()) );
+                              cudaStream) );
 }
 
 }}

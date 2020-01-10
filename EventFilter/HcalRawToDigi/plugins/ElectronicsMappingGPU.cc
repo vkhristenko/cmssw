@@ -41,10 +41,10 @@ ElectronicsMappingGPU::Product::~Product() {
 }
 
 ElectronicsMappingGPU::Product const& ElectronicsMappingGPU::getProduct(
-        cuda::stream_t<>& cudaStream) const
+        cudaStream_t cudaStream) const
 {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](ElectronicsMappingGPU::Product& product, cuda::stream_t<>& cudaStream) {
+        [this](ElectronicsMappingGPU::Product& product, cudaStream_t cudaStream) {
             // malloc
             cudaCheck( cudaMalloc((void**)&product.eid2did,
                                   this->eid2did_.size() * sizeof(uint32_t)) );
@@ -56,12 +56,12 @@ ElectronicsMappingGPU::Product const& ElectronicsMappingGPU::getProduct(
                                        this->eid2did_.data(),
                                        this->eid2did_.size() * sizeof(uint32_t),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.eid2tid,
                                        this->eid2tid_.data(),
                                        this->eid2tid_.size() * sizeof(uint32_t),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
         }
     );
 
