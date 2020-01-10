@@ -68,19 +68,19 @@ HcalRecoParamsWithPulseShapesGPU::HcalRecoParamsWithPulseShapesGPU(HcalRecoParam
             auto const offset25 = newId*HcalConst::nsPerBX;
             auto const numShapes = newId;
             for (int i=0; i<HcalConst::maxPSshapeBin; i++) {
-                acc25nsVec_[offset256*numShapes + i] = functor.acc25nsVec[i];
-                diff25nsItvlVec_[offset256*numShapes + i] = functor.diff25nsItvlVec[i];
+                acc25nsVec_[offset256*numShapes + i] = functor.get_acc25nsVec()[i];
+                diff25nsItvlVec_[offset256*numShapes + i] = functor.get_diff25nsItvlVec()[i];
             }
 
             for (int i=0; i<HcalConst::nsPerBX; i++) {
                 accVarLenIdxMinusOneVec_[offset25*numShapes + i] = 
-                    functor.accVarLenIdxMinusOneVec[i];
+                    functor.get_accVarLenIdxMinusOneVec()[i];
                 diffVarItvlIdxMinusOneVec_[offset25*numShapes + i] = 
-                    functor.diffVarItvlIdxMinusOneVec[i];
+                    functor.get_diffVarItvlIdxMinusOneVec()[i];
                 accVarLenIdxZEROVec_[offset25*numShapes + i] = 
-                    functor.accVarLenIdxZEROVec[i];
+                    functor.get_accVarLenIdxZEROVec()[i];
                 diffVarItvlIdxZEROVec_[offset25*numShapes + i] = 
-                    functor.diffVarItvlIdxZEROVec[i];
+                    functor.get_diffVarItvlIdxZEROVec()[i];
             }
         } else {
             // already recorded this pulse shape, just set id
@@ -137,19 +137,19 @@ HcalRecoParamsWithPulseShapesGPU::HcalRecoParamsWithPulseShapesGPU(HcalRecoParam
             auto const offset25 = newId*HcalConst::nsPerBX;
             auto const numShapes = newId;
             for (int i=0; i<HcalConst::maxPSshapeBin; i++) {
-                acc25nsVec_[offset256*numShapes + i] = functor.acc25nsVec[i];
-                diff25nsItvlVec_[offset256*numShapes + i] = functor.diff25nsItvlVec[i];
+                acc25nsVec_[offset256*numShapes + i] = functor.get_acc25nsVec()[i];
+                diff25nsItvlVec_[offset256*numShapes + i] = functor.get_diff25nsItvlVec()[i];
             }
 
             for (int i=0; i<HcalConst::nsPerBX; i++) {
                 accVarLenIdxMinusOneVec_[offset25*numShapes + i] = 
-                    functor.accVarLenIdxMinusOneVec[i];
+                    functor.get_accVarLenIdxMinusOneVec()[i];
                 diffVarItvlIdxMinusOneVec_[offset25*numShapes + i] = 
-                    functor.diffVarItvlIdxMinusOneVec[i];
+                    functor.get_diffVarItvlIdxMinusOneVec()[i];
                 accVarLenIdxZEROVec_[offset25*numShapes + i] = 
-                    functor.accVarLenIdxZEROVec[i];
+                    functor.get_accVarLenIdxZEROVec()[i];
                 diffVarItvlIdxZEROVec_[offset25*numShapes + i] = 
-                    functor.diffVarItvlIdxZEROVec[i];
+                    functor.get_diffVarItvlIdxZEROVec()[i];
             }
         } else {
             // already recorded this pulse shape, just set id
