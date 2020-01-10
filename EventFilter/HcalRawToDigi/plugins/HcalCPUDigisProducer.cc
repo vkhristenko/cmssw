@@ -122,7 +122,7 @@ void HcalCPUDigisProducer::acquire(
                                    src,
                                    dest.size() * sizeof(type),
                                    cudaMemcpyDeviceToHost,
-                                   ctx.stream().id()) );
+                                   ctx.stream()) );
     };
 
     lambdaToTransfer(digisf01HE_.data, f01HEDigis.data);
