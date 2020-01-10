@@ -32,9 +32,9 @@ HcalLUTCorrsGPU::Product::~Product() {
 }
 
 HcalLUTCorrsGPU::Product const& HcalLUTCorrsGPU::getProduct(
-        cuda::stream_t<>& cudaStream) const {
+        cudaStream_t cudaStream) const {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](HcalLUTCorrsGPU::Product& product, cuda::stream_t<>& cudaStream){
+        [this](HcalLUTCorrsGPU::Product& product, cudaStream_t cudaStream){
             // malloc
             cudaCheck( cudaMalloc((void**)&product.value, 
                 this->value_.size() * sizeof(float)) );
@@ -44,7 +44,7 @@ HcalLUTCorrsGPU::Product const& HcalLUTCorrsGPU::getProduct(
                                        this->value_.data(),
                                        this->value_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
         });
 
     return product;

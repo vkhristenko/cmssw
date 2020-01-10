@@ -32,9 +32,9 @@ HcalTimeCorrsGPU::Product::~Product() {
 }
 
 HcalTimeCorrsGPU::Product const& HcalTimeCorrsGPU::getProduct(
-        cuda::stream_t<>& cudaStream) const {
+        cudaStream_t cudaStream) const {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](HcalTimeCorrsGPU::Product& product, cuda::stream_t<>& cudaStream){
+        [this](HcalTimeCorrsGPU::Product& product, cudaStream_t cudaStream){
             // malloc
             cudaCheck( cudaMalloc((void**)&product.value, 
                 this->value_.size() * sizeof(float)) );
@@ -44,7 +44,7 @@ HcalTimeCorrsGPU::Product const& HcalTimeCorrsGPU::getProduct(
                                        this->value_.data(),
                                        this->value_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
         });
 
     return product;

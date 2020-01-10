@@ -94,9 +94,9 @@ HcalPedestalWidthsGPU::Product::~Product() {
 }
 
 HcalPedestalWidthsGPU::Product const& HcalPedestalWidthsGPU::getProduct(
-        cuda::stream_t<>& cudaStream) const {
+        cudaStream_t cudaStream) const {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](HcalPedestalWidthsGPU::Product& product, cuda::stream_t<>& cudaStream){
+        [this](HcalPedestalWidthsGPU::Product& product, cudaStream_t cudaStream){
             // malloc
             cudaCheck( cudaMalloc((void**)&product.sigma00,
                 this->sigma00_.size() * sizeof(float)) );
@@ -139,85 +139,85 @@ HcalPedestalWidthsGPU::Product const& HcalPedestalWidthsGPU::getProduct(
                                        this->sigma00_.data(),
                                        this->sigma00_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.sigma01, 
                                        this->sigma01_.data(),
                                        this->sigma01_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.sigma02, 
                                        this->sigma02_.data(),
                                        this->sigma02_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.sigma03, 
                                        this->sigma03_.data(),
                                        this->sigma03_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             
             cudaCheck( cudaMemcpyAsync(product.sigma10, 
                                        this->sigma10_.data(),
                                        this->sigma10_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.sigma11, 
                                        this->sigma11_.data(),
                                        this->sigma11_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.sigma12, 
                                        this->sigma12_.data(),
                                        this->sigma12_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.sigma13, 
                                        this->sigma13_.data(),
                                        this->sigma13_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             
             cudaCheck( cudaMemcpyAsync(product.sigma20, 
                                        this->sigma20_.data(),
                                        this->sigma20_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.sigma21, 
                                        this->sigma21_.data(),
                                        this->sigma21_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.sigma22, 
                                        this->sigma22_.data(),
                                        this->sigma22_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.sigma23, 
                                        this->sigma23_.data(),
                                        this->sigma23_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             
             cudaCheck( cudaMemcpyAsync(product.sigma30, 
                                        this->sigma30_.data(),
                                        this->sigma30_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.sigma31, 
                                        this->sigma31_.data(),
                                        this->sigma31_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.sigma32, 
                                        this->sigma32_.data(),
                                        this->sigma32_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.sigma33, 
                                        this->sigma33_.data(),
                                        this->sigma33_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
         });
 
     return product;

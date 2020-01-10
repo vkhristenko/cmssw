@@ -45,9 +45,9 @@ HcalGainWidthsGPU::Product::~Product() {
 }
 
 HcalGainWidthsGPU::Product const& HcalGainWidthsGPU::getProduct(
-        cuda::stream_t<>& cudaStream) const {
+        cudaStream_t cudaStream) const {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](HcalGainWidthsGPU::Product& product, cuda::stream_t<>& cudaStream){
+        [this](HcalGainWidthsGPU::Product& product, cudaStream_t cudaStream){
             // malloc
             cudaCheck( cudaMalloc((void**)&product.value0, 
                 this->value0_.size() * sizeof(float)) );
@@ -63,22 +63,22 @@ HcalGainWidthsGPU::Product const& HcalGainWidthsGPU::getProduct(
                                        this->value0_.data(),
                                        this->value0_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.value1, 
                                        this->value1_.data(),
                                        this->value1_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.value2, 
                                        this->value2_.data(),
                                        this->value2_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.value3, 
                                        this->value3_.data(),
                                        this->value3_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
         });
 
     return product;

@@ -34,7 +34,7 @@ public:
     ~HcalPedestalsGPU() = default;
 
     // get device pointers
-    Product const& getProduct(cuda::stream_t<>&) const;
+    Product const& getProduct(cudaStream_t) const;
 
     // as in cpu version
     bool unitIsADC() const { return unitIsADC_; }

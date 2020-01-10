@@ -178,9 +178,9 @@ HcalRecoParamsWithPulseShapesGPU::Product::~Product() {
 
 HcalRecoParamsWithPulseShapesGPU::Product const& 
 HcalRecoParamsWithPulseShapesGPU::getProduct(
-        cuda::stream_t<>& cudaStream) const {
+        cudaStream_t cudaStream) const {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](HcalRecoParamsWithPulseShapesGPU::Product& product, cuda::stream_t<>& cudaStream){
+        [this](HcalRecoParamsWithPulseShapesGPU::Product& product, cudaStream_t cudaStream){
             // malloc
             cudaCheck( cudaMalloc((void**)&product.param1, 
                 this->param1_.size() * sizeof(uint32_t)) );
@@ -206,51 +206,51 @@ HcalRecoParamsWithPulseShapesGPU::getProduct(
                                        this->param1_.data(),
                                        this->param1_.size() * sizeof(uint32_t),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.param2, 
                                        this->param2_.data(),
                                        this->param2_.size() * sizeof(uint32_t),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.ids, 
                                        this->ids_.data(),
                                        this->ids_.size() * sizeof(uint32_t),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.acc25nsVec,
                                        this->acc25nsVec_.data(),
                                        this->acc25nsVec_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.diff25nsItvlVec,
                                        this->diff25nsItvlVec_.data(),
                                        this->diff25nsItvlVec_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.accVarLenIdxMinusOneVec,
                                        this->accVarLenIdxMinusOneVec_.data(),
                                        this->accVarLenIdxMinusOneVec_.size() 
                                        * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.diffVarItvlIdxMinusOneVec,
                                        this->diffVarItvlIdxMinusOneVec_.data(),
                                        this->diffVarItvlIdxMinusOneVec_.size() 
                                        * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.accVarLenIdxZEROVec,
                                        this->accVarLenIdxZEROVec_.data(),
                                        this->accVarLenIdxZEROVec_.size() 
                                        * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.diffVarItvlIdxZEROVec,
                                        this->diffVarItvlIdxZEROVec_.data(),
                                        this->diffVarItvlIdxZEROVec_.size() 
                                        * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
         });
 
     return product;

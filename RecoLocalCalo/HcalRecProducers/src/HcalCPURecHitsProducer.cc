@@ -91,7 +91,7 @@ void HcalCPURecHitsProducer::acquire(
                                    src,
                                    dest.size() * sizeof(type),
                                    cudaMemcpyDeviceToHost,
-                                   ctx.stream().id()) );
+                                   ctx.stream()) );
     };
 
     lambdaToTransfer(tmpRecHits_.energy, recHits.energy);

@@ -33,7 +33,7 @@ public:
     ~HcalRecoParamsWithPulseShapesGPU() = default;
 
     // get device pointers
-    Product const& getProduct(cuda::stream_t<>&) const;
+    Product const& getProduct(cudaStream_t) const;
 
     // 
     static std::string name() { return std::string{"hcalRecoParamsWithPulseShapesGPU"}; }

@@ -1704,7 +1704,7 @@ void entryPoint(
         ConditionsProducts const& conditions,
         ScratchDataGPU &scratch,
         ConfigParameters const& configParameters,
-        cuda::stream_t<>& cudaStream) {
+        cudaStream_t cudaStream) {
     auto const totalChannels = inputGPU.f01HEDigis.size + inputGPU.f5HBDigis.size;
 
     // FIXME: may be move this assignment to emphasize this more clearly
@@ -1725,7 +1725,7 @@ void entryPoint(
         : (totalChannels + threadsPerBlock.y - 1) / threadsPerBlock.y;
     int nbytesShared = ((2*f01nsamples + 2)*sizeof(float) + sizeof(uint64_t) )*
         configParameters.kprep1dChannelsPerBlock;
-    kernel_prep1d_sameNumberOfSamples<<<blocks, threadsPerBlock, nbytesShared, cudaStream.id()>>>(
+    kernel_prep1d_sameNumberOfSamples<<<blocks, threadsPerBlock, nbytesShared, cudaStream>>>(
         scratch.amplitudes,
         scratch.noiseTerms,
         outputGPU.recHits.energy,
@@ -1802,7 +1802,7 @@ void entryPoint(
     std::cout << "blocks: " << blocks2 << std::endl;
 #endif
 
-    kernel_prep_pulseMatrices_sameNumberOfSamples<<<blocks2, threadsPerBlock2, 0, cudaStream.id()>>>(
+    kernel_prep_pulseMatrices_sameNumberOfSamples<<<blocks2, threadsPerBlock2, 0, cudaStream>>>(
         scratch.pulseMatrices,
         scratch.pulseMatricesM,
         scratch.pulseMatricesP,
@@ -1853,7 +1853,7 @@ void entryPoint(
             : (totalChannels + threadsPerBlock - 1) / threadsPerBlock;
         auto const nbytesShared = 2 * threadsPerBlock * 
             MapSymM<float, 8>::total * sizeof(float);
-        kernel_minimize<8, 8><<<blocks, threadsPerBlock, nbytesShared, cudaStream.id()>>>(
+        kernel_minimize<8, 8><<<blocks, threadsPerBlock, nbytesShared, cudaStream>>>(
             outputGPU.recHits.energy,
             outputGPU.recHits.chi2,
             scratch.amplitudes,

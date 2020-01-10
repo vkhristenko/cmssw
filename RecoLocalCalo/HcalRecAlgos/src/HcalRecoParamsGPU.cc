@@ -37,9 +37,9 @@ HcalRecoParamsGPU::Product::~Product() {
 }
 
 HcalRecoParamsGPU::Product const& HcalRecoParamsGPU::getProduct(
-        cuda::stream_t<>& cudaStream) const {
+        cudaStream_t cudaStream) const {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](HcalRecoParamsGPU::Product& product, cuda::stream_t<>& cudaStream){
+        [this](HcalRecoParamsGPU::Product& product, cudaStream_t cudaStream){
             // malloc
             cudaCheck( cudaMalloc((void**)&product.param1, 
                 this->param1_.size() * sizeof(uint32_t)) );
@@ -51,12 +51,12 @@ HcalRecoParamsGPU::Product const& HcalRecoParamsGPU::getProduct(
                                        this->param1_.data(),
                                        this->param1_.size() * sizeof(uint32_t),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.param2, 
                                        this->param2_.data(),
                                        this->param2_.size() * sizeof(uint32_t),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
         });
 
     return product;

@@ -127,9 +127,9 @@ HcalConvertedPedestalsGPU::Product::~Product() {
 }
 
 HcalConvertedPedestalsGPU::Product const& HcalConvertedPedestalsGPU::getProduct(
-        cuda::stream_t<>& cudaStream) const {
+        cudaStream_t cudaStream) const {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](HcalConvertedPedestalsGPU::Product& product, cuda::stream_t<>& cudaStream){
+        [this](HcalConvertedPedestalsGPU::Product& product, cudaStream_t cudaStream){
             // malloc
             cudaCheck( cudaMalloc((void**)&product.values, 
                 this->values_.size() * sizeof(float)) );
@@ -139,7 +139,7 @@ HcalConvertedPedestalsGPU::Product const& HcalConvertedPedestalsGPU::getProduct(
                                        this->values_.data(),
                                        this->values_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
         });
 
     return product;

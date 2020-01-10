@@ -52,9 +52,9 @@ HcalSiPMCharacteristicsGPU::Product::~Product() {
 }
 
 HcalSiPMCharacteristicsGPU::Product const& HcalSiPMCharacteristicsGPU::getProduct(
-        cuda::stream_t<>& cudaStream) const {
+        cudaStream_t cudaStream) const {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](HcalSiPMCharacteristicsGPU::Product& product, cuda::stream_t<>& cudaStream){
+        [this](HcalSiPMCharacteristicsGPU::Product& product, cudaStream_t cudaStream){
             // malloc
             cudaCheck( cudaMalloc((void**)&product.pixels,
                 this->pixels_.size() * sizeof(int)) );
@@ -76,37 +76,37 @@ HcalSiPMCharacteristicsGPU::Product const& HcalSiPMCharacteristicsGPU::getProduc
                                        this->pixels_.data(),
                                        this->pixels_.size() * sizeof(int),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.auxi1,
                                        this->auxi1_.data(),
                                        this->auxi1_.size() * sizeof(int),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.parLin1,
                                        this->parLin1_.data(),
                                        this->parLin1_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.parLin2,
                                        this->parLin2_.data(),
                                        this->parLin2_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.parLin3,
                                        this->parLin3_.data(),
                                        this->parLin3_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.crossTalk,
                                        this->crossTalk_.data(),
                                        this->crossTalk_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             cudaCheck( cudaMemcpyAsync(product.auxi2,
                                        this->auxi2_.data(),
                                        this->auxi2_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
         });
 
     return product;

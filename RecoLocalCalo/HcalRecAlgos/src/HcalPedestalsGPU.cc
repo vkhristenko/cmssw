@@ -58,9 +58,9 @@ HcalPedestalsGPU::Product::~Product() {
 }
 
 HcalPedestalsGPU::Product const& HcalPedestalsGPU::getProduct(
-        cuda::stream_t<>& cudaStream) const {
+        cudaStream_t cudaStream) const {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](HcalPedestalsGPU::Product& product, cuda::stream_t<>& cudaStream){
+        [this](HcalPedestalsGPU::Product& product, cudaStream_t cudaStream){
             // malloc
             cudaCheck( cudaMalloc((void**)&product.values, 
                 this->values_.size() * sizeof(float)) );
@@ -73,13 +73,13 @@ HcalPedestalsGPU::Product const& HcalPedestalsGPU::getProduct(
                                        this->values_.data(),
                                        this->values_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             
             cudaCheck( cudaMemcpyAsync(product.widths, 
                                        this->widths_.data(),
                                        this->widths_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
         });
 
     return product;

@@ -10,7 +10,7 @@ namespace hcal { namespace mahi {
 void entryPoint(
         InputDataGPU const&, OutputDataGPU&,
         ConditionsProducts const&, ScratchDataGPU&,
-        ConfigParameters const&, cuda::stream_t<>&);
+        ConfigParameters const&, cudaStream_t);
 
 }}
 

@@ -45,9 +45,9 @@ HcalQIECodersGPU::Product::~Product() {
 }
 
 HcalQIECodersGPU::Product const& HcalQIECodersGPU::getProduct(
-        cuda::stream_t<>& cudaStream) const {
+        cudaStream_t cudaStream) const {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](HcalQIECodersGPU::Product& product, cuda::stream_t<>& cudaStream){
+        [this](HcalQIECodersGPU::Product& product, cudaStream_t cudaStream){
             // malloc
             cudaCheck( cudaMalloc((void**)&product.offsets,
                 this->offsets_.size() * sizeof(float)) );
@@ -60,14 +60,14 @@ HcalQIECodersGPU::Product const& HcalQIECodersGPU::getProduct(
                                        this->offsets_.data(),
                                        this->offsets_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
             
             // slope
             cudaCheck( cudaMemcpyAsync(product.slopes, 
                                        this->slopes_.data(),
                                        this->slopes_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
         });
 
     return product;

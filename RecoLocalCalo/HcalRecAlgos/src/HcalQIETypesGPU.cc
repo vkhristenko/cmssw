@@ -32,9 +32,9 @@ HcalQIETypesGPU::Product::~Product() {
 }
 
 HcalQIETypesGPU::Product const& HcalQIETypesGPU::getProduct(
-        cuda::stream_t<>& cudaStream) const {
+        cudaStream_t cudaStream) const {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](HcalQIETypesGPU::Product& product, cuda::stream_t<>& cudaStream){
+        [this](HcalQIETypesGPU::Product& product, cudaStream_t cudaStream){
             // malloc
             cudaCheck( cudaMalloc((void**)&product.values, 
                 this->values_.size() * sizeof(int)) );
@@ -44,7 +44,7 @@ HcalQIETypesGPU::Product const& HcalQIETypesGPU::getProduct(
                                        this->values_.data(),
                                        this->values_.size() * sizeof(int),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
         });
 
     return product;

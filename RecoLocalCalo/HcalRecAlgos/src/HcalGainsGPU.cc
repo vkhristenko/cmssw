@@ -40,9 +40,9 @@ HcalGainsGPU::Product::~Product() {
 }
 
 HcalGainsGPU::Product const& HcalGainsGPU::getProduct(
-        cuda::stream_t<>& cudaStream) const {
+        cudaStream_t cudaStream) const {
     auto const& product = product_.dataForCurrentDeviceAsync(cudaStream,
-        [this](HcalGainsGPU::Product& product, cuda::stream_t<>& cudaStream){
+        [this](HcalGainsGPU::Product& product, cudaStream_t cudaStream){
             // malloc
             cudaCheck( cudaMalloc((void**)&product.values, 
                 this->values_.size() * sizeof(float)) );
@@ -52,7 +52,7 @@ HcalGainsGPU::Product const& HcalGainsGPU::getProduct(
                                        this->values_.data(),
                                        this->values_.size() * sizeof(float),
                                        cudaMemcpyHostToDevice,
-                                       cudaStream.id()) );
+                                       cudaStream) );
         });
 
     return product;
