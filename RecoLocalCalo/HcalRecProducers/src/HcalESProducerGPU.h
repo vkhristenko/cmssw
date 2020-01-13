@@ -15,23 +15,24 @@
 #include <iostream>
 #include <array>
 #include <tuple>
+#include <utility>
 
 template<typename Record, typename Target, typename Source>
 class HcalESProducerGPU : public edm::ESProducer {
 public:
-    explicit HcalESProducerGPU(edm::ParameterSet const& ps) 
-        : label_{ps.getParameter<std::string>("label")}
-    {
+    explicit HcalESProducerGPU(edm::ParameterSet const& ps) {
+        auto const label = ps.getParameter<std::string>("label");
         std::string name = ps.getParameter<std::string>("ComponentName");
-        setWhatProduced(this, name);
+        auto cc = setWhatProduced(this, name);
+
+        cc.setConsumes(token_, edm::ESInputTag{"", label});
     }
    
     std::unique_ptr<Target> produce(Record const& record) {
         // retrieve conditions in old format 
-        edm::ESTransientHandle<Source> product;
-        record.get(label_, product);
+        auto sourceProduct = record.getTransientHandle(token_);
 
-        return std::make_unique<Target>(*product);
+        return std::make_unique<Target>(*sourceProduct);
     }
 
     static void fillDescriptions(edm::ConfigurationDescriptions& confDesc) {
@@ -44,8 +45,52 @@ public:
     }
 
 private:
-    std::string label_;
+    edm::ESGetToken<Source, Record> token_;
 };
+
+namespace detail {
+// simple implementation of a type zipper over 2 tuples
+// here, the main requirement is the default constructor fro Gen template
+// which __does__ exist for ESGetToken
+
+template
+<
+    template<typename, typename> class Gen,
+    typename Tuple1,
+    typename Tuple2
+>
+struct TypeZipper;
+
+template
+<
+    template<typename, typename> class Gen,
+    typename Tuple1,
+    typename Tuple2,
+    std::size_t... Is
+>
+auto TypeZipperImpl(
+        Tuple1 const& t1,
+        Tuple2 const& t2,
+        std::index_sequence<Is...>) {
+    return std::make_tuple(Gen<
+        typename std::tuple_element<Is, Tuple1>::type,
+        typename std::tuple_element<Is, Tuple2>::type>{}...);
+}
+
+template
+<
+    template<typename, typename> class Gen,
+    typename... Ts1,
+    typename... Ts2
+>
+struct TypeZipper<Gen, std::tuple<Ts1...>, std::tuple<Ts2...>> {
+    static_assert(sizeof...(Ts1) == sizeof...(Ts2));
+    using type = typename std::decay<decltype(
+        TypeZipperImpl<Gen>(std::tuple<Ts1...>{}, std::tuple<Ts2...>{},
+            std::index_sequence_for<Ts1...>{}))>::type;
+};
+
+}
 
 template
 <
@@ -70,23 +115,23 @@ class HcalESProducerGPUWithDependencies
     : public edm::ESProducer {
 public:
     static constexpr std::size_t nsources = sizeof...(Dependencies);
-    /*using HostType = edm::ESProductHost<Target,
-                                        DepsRecords...>;
-                                        */
+    static_assert(sizeof...(Dependencies) == sizeof...(DepsRecords));
 
     explicit HcalESProducerGPUWithDependencies(edm::ParameterSet const& ps) {
-        for (std::size_t i=0; i<labels_.size(); i++)
-            labels_[i] = ps.getParameter<std::string>("label" + std::to_string(i));
+        std::vector<std::string> labels(nsources);
+        for (std::size_t i=0; i<labels.size(); i++)
+            labels[i] = ps.getParameter<std::string>("label" + std::to_string(i));
 
         std::string name = ps.getParameter<std::string>("ComponentName");
-        setWhatProduced(this, name);
+        auto cc = setWhatProduced(this, name);
+        WalkConsumes<nsources-1, decltype(cc)>::iterate(cc, tokens_, labels);
     }
 
     std::unique_ptr<Target> produce(CombinedRecord<DepsRecords...> const& record) {
         auto handles = std::tuple<edm::ESTransientHandle<Dependencies>...>{};
         WalkAndCall<nsources-1, 
                     edm::ESTransientHandle<Dependencies>...>::iterate(
-            record, handles, labels_);
+            record, handles, tokens_);
 
         return std::apply(
             [](auto const&... handles) {
@@ -108,17 +153,45 @@ public:
     }
 
 private:
+    using TokenType = typename detail::TypeZipper<
+        edm::ESGetToken,
+        std::tuple<Dependencies...>,
+        std::tuple<DepsRecords...>>::type;
+    TokenType tokens_;
+
+private:
+    template<std::size_t N, typename CC>
+    struct WalkConsumes {
+        static void iterate(CC& cc, TokenType& tokens, 
+                            std::vector<std::string> const& labels) {
+            cc.setConsumes(std::get<N>(tokens), edm::ESInputTag{"", labels[N]});
+            WalkConsumes<N-1, CC>::iterate(cc, tokens, labels);
+        }
+    };
+    
+    template<typename CC>
+    struct WalkConsumes<0, CC> {
+        static void iterate(CC& cc, TokenType& tokens, 
+                            std::vector<std::string> const& labels) {
+            cc.setConsumes(std::get<0>(tokens), edm::ESInputTag{"", labels[0]});
+        }
+    };
+
     template<std::size_t N, typename... Types>
     struct WalkAndCall {
         static void iterate(
                 CombinedRecord<DepsRecords...> const& containingRecord, 
                 std::tuple<Types...>& ts,
-                std::array<std::string, nsources> const& labels) {
+                TokenType const& tokens) {
             using Record = 
                 typename std::tuple_element<N, std::tuple<DepsRecords...>>::type;
+            // get the right dependent record
             auto const& record = containingRecord.template getRecord<Record>();
-            record.get(labels[N], std::get<N>(ts));
-            WalkAndCall<N-1, Types...>::iterate(containingRecord, ts, labels);
+            // assign the right element of the tuple
+            //record.get(labels[N], std::get<N>(ts));
+            std::get<N>(ts) = record.getTransientHandle(std::get<N>(tokens));
+            // iterate
+            WalkAndCall<N-1, Types...>::iterate(containingRecord, ts, tokens);
         }
     };
 
@@ -127,17 +200,16 @@ private:
         static void iterate(
                 CombinedRecord<DepsRecords...> const& containingRecord, 
                 std::tuple<Types...>& ts,
-                std::array<std::string, nsources> const& labels) {
+                TokenType const& tokens) {
             using Record = 
                 typename std::tuple_element<0, std::tuple<DepsRecords...>>::type;
+            // get the right dependent record
             auto const& record = containingRecord.template getRecord<Record>();
-            record.get(labels[0], std::get<0>(ts));
+            // assign the very first element of the tuple 
+            //record.get(labels[0], std::get<0>(ts));
+            std::get<0>(ts) = record.getTransientHandle(std::get<0>(tokens));
         }
     };
-
-private:
-    std::array<std::string, nsources> labels_;
-    //edm::ReusableObjectHolder<HostType> holder_;
 };
 
 #endif
