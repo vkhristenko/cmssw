@@ -129,6 +129,20 @@ struct DigiCollectionBase : public common::AddSize<typename StoragePolicy::TagTy
         data.resize(size * stride);
     }
     
+    template<typename T = typename StoragePolicy::TagType>
+    typename std::enable_if<std::is_same<T, common::tags::Vec>::value, void>::type
+    reserve(std::size_t size) {
+        ids.reserve(size);
+        data.reserve(size * stride);
+    }
+    
+    template<typename T = typename StoragePolicy::TagType>
+    typename std::enable_if<std::is_same<T, common::tags::Vec>::value, void>::type
+    clear() {
+        ids.clear();
+        data.clear();
+    }
+    
     typename StoragePolicy::template StorageSelector<uint32_t>::type ids;
     typename StoragePolicy::template StorageSelector<uint16_t>::type data;
     uint32_t stride;
@@ -162,6 +176,20 @@ struct DigiCollection<Flavor5, StoragePolicy>
     resize(std::size_t size) {
         DigiCollectionBase<StoragePolicy>::resize(size);
         npresamples.resize(size);
+    }
+    
+    template<typename T = typename StoragePolicy::TagType>
+    typename std::enable_if<std::is_same<T, common::tags::Vec>::value, void>::type
+    reserve(std::size_t size) {
+        DigiCollectionBase<StoragePolicy>::reserve(size);
+        npresamples.reserve(size);
+    }
+    
+    template<typename T = typename StoragePolicy::TagType>
+    typename std::enable_if<std::is_same<T, common::tags::Vec>::value, void>::type
+    clear() {
+        DigiCollectionBase<StoragePolicy>::clear();
+        npresamples.clear();
     }
 
     // add npresamples member
