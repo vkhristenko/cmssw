@@ -172,13 +172,15 @@ void HcalDigisProducerGPU::acquire(
         auto const presamples = hbhe.presamples();
         hf5_.ids.push_back(id);
         hf5_.npresamples.push_back(presamples);
-        auto stride = hcal::compute_stride<hcal::Flavor5>(config_.nsamplesF5HB);
+        int stride = hcal::compute_stride<hcal::Flavor5>(config_.nsamplesF5HB);
         for (int i=0; i<hcal::Flavor5::HEADER_WORDS; i++)
             hf5_.data.push_back(0);
         for (int i=0; i<stride-hcal::Flavor5::HEADER_WORDS; i++) {
-            uint8_t s0 = static_cast<uint8_t>(hbhe.sample(2*i).raw());
-            uint8_t s1 = static_cast<uint8_t>(hbhe.sample(2*i+1).raw());
-            uint16_t sample = (s1 << 8) || s1;
+            uint16_t s0 = (0 << 7) |
+                (static_cast<uint8_t>(hbhe.sample(2*i).adc()) & 0x7f);
+            uint16_t s1 = (0 << 7) | 
+                (static_cast<uint8_t>(hbhe.sample(2*i+1).adc()) & 0x7f);
+            uint16_t sample = (s1 << 8) | s0;
             hf5_.data.push_back(sample);
         }
     }
@@ -188,8 +190,12 @@ void HcalDigisProducerGPU::acquire(
         if (digi.flavor()!=0 and digi.flavor()!=1) continue;
         auto const id = digi.detid().rawId();
         hf01_.ids.push_back(id);
-        for (int sample=0; sample<digi.samples(); sample++)
-            hf01_.data.push_back((*qie11Digis)[i][sample]);
+        for (int hw=0; hw<hcal::Flavor01::HEADER_WORDS; hw++)
+            hf01_.data.push_back(0);
+        for (int sample=0; sample<digi.samples(); sample++) {
+            hf01_.data.push_back(
+                (*qie11Digis)[i][hcal::Flavor01::HEADER_WORDS + sample]);
+        }
     }
 
     auto lambdaToTransfer = [&ctx](auto* dest, auto const& src) {
