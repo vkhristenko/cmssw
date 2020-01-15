@@ -204,7 +204,6 @@ void kernel_rawdecode_test(
     auto const* channelDataBuffer64End = channelDataBuffer64Start 
         + channelDataSize;
     auto const* ptr = reinterpret_cast<uint16_t const*>(channelDataBuffer64Start);
-    //auto const* end = reinterpret_cast<uint16_t const*>(channelDataBuffer64End); 
     auto const* end = ptr + sizeof(uint64_t) / sizeof(uint16_t) * (channelDataSize - 1);
     auto const t_rank = thread_group.thread_rank();
 
