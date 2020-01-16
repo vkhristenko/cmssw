@@ -41,6 +41,10 @@ private:
         CUDAProduct<hcal::DigiCollection<hcal::Flavor5, 
                     hcal::common::ViewStoragePolicy>>;
     edm::EDGetTokenT<IProductTypef5> digisF5HBTokenIn_;
+    using IProductTypef3 =
+        CUDAProduct<hcal::DigiCollection<hcal::Flavor3,
+                    hcal::common::ViewStoragePolicy>>;
+    edm::EDGetTokenT<IProductTypef3> digisF3HBTokenIn_;
 
     using OProductTypef01 = 
         hcal::DigiCollection<hcal::Flavor01, 
@@ -52,10 +56,16 @@ private:
                              hcal::common::VecStoragePolicy<
                                  hcal::CUDAHostAllocatorAlias>>;
     edm::EDPutTokenT<OProductTypef5> digisF5HBTokenOut_;
+    using OProductTypef3 =
+        hcal::DigiCollection<hcal::Flavor3,
+                             hcal::common::VecStoragePolicy<
+                                hcal::CUDAHostAllocatorAlias>>;
+    edm::EDPutTokenT<OProductTypef3> digisF3HBTokenOut_;
 
     // needed to pass data from acquire to produce
     OProductTypef01 digisf01HE_;
     OProductTypef5 digisf5HB_;
+    OProductTypef3 digisf3HB_;
 };
 
 void HcalCPUDigisProducer::fillDescriptions(
@@ -66,8 +76,11 @@ void HcalCPUDigisProducer::fillDescriptions(
         edm::InputTag{"hcalRawToDigiGPU", "f01HEDigisGPU"});
     desc.add<edm::InputTag>("digisLabelF5HBIn", 
         edm::InputTag{"hcalRawToDigiGPU", "f5HBDigisGPU"});
+    desc.add<edm::InputTag>("digisLabelF3HBIn",
+        edm::InputTag{"hcalRawToDigiGPU", "f3HBDigisGPU"});
     desc.add<std::string>("digisLabelF01HEOut", "f01HEDigis");
     desc.add<std::string>("digisLabelF5HBOut", "f5HBDigis");
+    desc.add<std::string>("digisLabelF3HBOut", "f3HBDigis");
 
     std::string label = "hcalCPUDigisProducer";
     confDesc.add(label, desc);
@@ -79,10 +92,14 @@ HcalCPUDigisProducer::HcalCPUDigisProducer(
         ps.getParameter<edm::InputTag>("digisLabelF01HEIn"))}
     , digisF5HBTokenIn_{consumes<IProductTypef5>(
         ps.getParameter<edm::InputTag>("digisLabelF5HBIn"))}
+    , digisF3HBTokenIn_{consumes<IProductTypef3>(
+        ps.getParameter<edm::InputTag>("digisLabelF3HBIn"))}
     , digisF01HETokenOut_{produces<OProductTypef01>(
         ps.getParameter<std::string>("digisLabelF01HEOut"))}
     , digisF5HBTokenOut_{produces<OProductTypef5>(
         ps.getParameter<std::string>("digisLabelF5HBOut"))}
+    , digisF3HBTokenOut_{produces<OProductTypef3>(
+        ps.getParameter<std::string>("digisLabelF3HBOut"))}
 {}
 
 HcalCPUDigisProducer::~HcalCPUDigisProducer() {}
@@ -95,15 +112,19 @@ void HcalCPUDigisProducer::acquire(
     // retrieve data/ctx
     auto const& f01HEProduct = event.get(digisF01HETokenIn_);
     auto const& f5HBProduct = event.get(digisF5HBTokenIn_);
+    auto const& f3HBProduct = event.get(digisF3HBTokenIn_);
     CUDAScopedContextAcquire ctx{f01HEProduct, std::move(taskHolder)};
     auto const& f01HEDigis = ctx.get(f01HEProduct);
     auto const& f5HBDigis = ctx.get(f5HBProduct);
+    auto const& f3HBDigis = ctx.get(f3HBProduct);
 
     // resize out tmp buffers
     digisf01HE_.stride = f01HEDigis.stride;
     digisf5HB_.stride = f5HBDigis.stride;
+    digisf3HB_.stride = f3HBDigis.stride;
     digisf01HE_.resize(f01HEDigis.size);
     digisf5HB_.resize(f5HBDigis.size);
+    digisf3HB_.resize(f3HBDigis.size);
 
     /*
     idsf01he.resize(f01HEDigis.ndigis);
@@ -127,9 +148,13 @@ void HcalCPUDigisProducer::acquire(
 
     lambdaToTransfer(digisf01HE_.data, f01HEDigis.data);
     lambdaToTransfer(digisf01HE_.ids, f01HEDigis.ids);
+
     lambdaToTransfer(digisf5HB_.data, f5HBDigis.data);
     lambdaToTransfer(digisf5HB_.ids, f5HBDigis.ids);
     lambdaToTransfer(digisf5HB_.npresamples, f5HBDigis.npresamples);
+    
+    lambdaToTransfer(digisf3HB_.data, f3HBDigis.data);
+    lambdaToTransfer(digisf3HB_.ids, f3HBDigis.ids);
 
     /*
     // enqeue transfers
@@ -167,9 +192,11 @@ void HcalCPUDigisProducer::produce(
 {
     auto outf01 = std::make_unique<OProductTypef01>(std::move(digisf01HE_));
     auto outf5 = std::make_unique<OProductTypef5>(std::move(digisf5HB_));
+    auto outf3 = std::make_unique<OProductTypef3>(std::move(digisf3HB_));
 
     event.put(digisF01HETokenOut_, std::move(outf01));
     event.put(digisF5HBTokenOut_, std::move(outf5));
+    event.put(digisF3HBTokenOut_, std::move(outf3));
 
     // output collections
     /*
