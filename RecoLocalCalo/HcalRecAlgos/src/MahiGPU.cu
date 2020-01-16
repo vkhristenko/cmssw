@@ -231,11 +231,15 @@ void kernel_prep1d_sameNumberOfSamples(
         float *outputChi2,
         uint16_t const* dataf01HE,
         uint16_t const* dataf5HB,
+        uint16_t const* dataf3HB,
         uint32_t const* idsf01HE,
         uint32_t const* idsf5HB,
+        uint32_t const* idsf3HB,
         uint32_t const stridef01HE,
         uint32_t const stridef5HB,
+        uint32_t const stridef3HB,
         uint32_t const nchannelsf01HE,
+        uint32_t const nchannelsf5HB,
         uint8_t const* npresamplesf5HB,
         int8_t *soiSamples,
         float *method0Energy,
@@ -326,29 +330,41 @@ void kernel_prep1d_sameNumberOfSamples(
     auto *noiseTermsForChannel = noiseTerms + nsamplesExpected * gch;
 
     // get event input quantities
-    auto const stride = gch >= nchannelsf01HE
-        ? stridef5HB
-        : stridef01HE;
-    auto const nsamples = gch >= nchannelsf01HE
-        ? compute_nsamples<Flavor5>(stride)
-        : compute_nsamples<Flavor01>(stride);
+    auto const stride = gch < nchannelsf01HE
+        ? stridef01HE
+        : (gch < nchannelsf01HE + nchannelsf5HB
+            ? stridef5HB
+            : stridef3HB);
+    auto const nsamples = gch < nchannelsf01HE
+        ? compute_nsamples<Flavor01>(stride)
+        : (gch < nchannelsf01HE + nchannelsf5HB
+            ? compute_nsamples<Flavor5>(stride)
+            : compute_nsamples<Flavor3>(stride));
     
 #ifdef HCAL_MAHI_GPUDEBUG
     assert(nsamples == nsamplesExpected);
 #endif
 
-    auto const id = gch >= nchannelsf01HE
-        ? idsf5HB[gch - nchannelsf01HE]
-        : idsf01HE[gch];
+    auto const id = gch < nchannelsf01HE
+        ? idsf01HE[gch]
+        : (gch < nchannelsf01HE + nchannelsf5HB
+            ? idsf5HB[gch - nchannelsf01HE]
+            : idsf3HB[gch - nchannelsf01HE - nchannelsf5HB]);
     auto const did = HcalDetId{id};
-    auto const adc = gch >= nchannelsf01HE
-        ? adc_for_sample<Flavor5>(
-            dataf5HB + stride*(gch - nchannelsf01HE), sample)
-        : adc_for_sample<Flavor01>(dataf01HE + stride*gch, sample);
-    auto const capid = gch >= nchannelsf01HE
-        ? capid_for_sample<Flavor5>(
-            dataf5HB + stride*(gch - nchannelsf01HE), sample)
-        : capid_for_sample<Flavor01>(dataf01HE + stride*gch, sample);
+    auto const adc = gch < nchannelsf01HE
+        ? adc_for_sample<Flavor01>(dataf01HE + stride*gch, sample);
+        : (gch < nchannelsf01HE + nchannelsf5HB 
+            ? adc_for_sample<Flavor5>(
+                dataf5HB + stride*(gch - nchannelsf01HE), sample)
+            : adc_for_sample<Flavor3>(
+                dataf3HB + stride*(gch - nchannelsf01HE - nchannelsf5HB), sample));
+    auto const capid = gch < nchannelsf01HE
+        ? capid_for_sample<Flavor01>(dataf01HE + stride*gch, sample)
+        : (gch < nchannelsf01HE + nchannelsf5HB
+            ? capid_for_sample<Flavor5>(
+                dataf5HB + stride*(gch - nchannelsf01HE), sample)
+            : capid_for_sample<Flavor3>(
+                dataf3HB + stride*(gch - nchannelsf01HE - nchannelsf5HB), sample));
 
 #ifdef HCAL_MAHI_GPUDEBUG
 #ifdef HCAL_MAHI_GPUDEBUG_FILTERDETID
@@ -1705,7 +1721,8 @@ void entryPoint(
         ScratchDataGPU &scratch,
         ConfigParameters const& configParameters,
         cudaStream_t cudaStream) {
-    auto const totalChannels = inputGPU.f01HEDigis.size + inputGPU.f5HBDigis.size;
+    auto const totalChannels = inputGPU.f01HEDigis.size + inputGPU.f5HBDigis.size +
+        inputGPU.f3HBDigis.size;
 
     // FIXME: may be move this assignment to emphasize this more clearly
     // FIXME: number of channels for output might change given that 
@@ -1717,7 +1734,8 @@ void entryPoint(
     // or modifying existing one
     auto const f01nsamples = compute_nsamples<Flavor01>(inputGPU.f01HEDigis.stride);
     auto const f5nsamples = compute_nsamples<Flavor5>(inputGPU.f5HBDigis.stride);
-    assert(f01nsamples == f5nsamples);
+    auto const f3nsamples = compute_nsamples<Flavor3>(inputGPU.f3HBDigis.stride);
+    assert(f01nsamples == f5nsamples && f01nsamples == f3nsamples);
 
     dim3 threadsPerBlock{f01nsamples, configParameters.kprep1dChannelsPerBlock};
     int blocks = static_cast<uint32_t>(threadsPerBlock.y) > totalChannels
@@ -1732,11 +1750,15 @@ void entryPoint(
         outputGPU.recHits.chi2,
         inputGPU.f01HEDigis.data,
         inputGPU.f5HBDigis.data,
+        inputGPU.f3HBDigis.data,
         inputGPU.f01HEDigis.ids,
         inputGPU.f5HBDigis.ids,
+        inputGPU.f3HBDigis.ids,
         inputGPU.f01HEDigis.stride,
         inputGPU.f5HBDigis.stride,
+        inputGPU.f3HBDigis.stride,
         inputGPU.f01HEDigis.size,
+        inputGPU.f5HBDigis.size,
         inputGPU.f5HBDigis.npresamples,
         scratch.soiSamples,
         outputGPU.recHits.energyM0,

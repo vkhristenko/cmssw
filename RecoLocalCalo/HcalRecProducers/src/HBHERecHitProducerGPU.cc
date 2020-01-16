@@ -69,6 +69,12 @@ private:
         CUDAProduct<hcal::DigiCollection<hcal::Flavor5,
                     hcal::common::ViewStoragePolicy>>;
     edm::EDGetTokenT<IProductTypef5> digisTokenF5HB_;
+
+    using IProductTypef3 =
+        CUDAProduct<hcal::DigiCollection<hcal::Flavor3,
+                    hcal::common::ViewStoragePolicy>>;
+    edm::EDGetTokenT<IProductTypef3> digisTokenF3HB_;
+
     using RecHitType = hcal::RecHitCollection<hcal::common::ViewStoragePolicy>;
     using OProductType = CUDAProduct<RecHitType>;
     edm::EDPutTokenT<OProductType> rechitsM0Token_;
@@ -86,6 +92,9 @@ HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps)
     , digisTokenF5HB_{
         consumes<IProductTypef5>(
             ps.getParameter<edm::InputTag>("digisLabelF5HB"))}
+    , digisTokenF3HB_{
+        consumes<IProductTypef3>(
+            ps.getParameter<edm::InputTag>("digisLabelF3HB"))}
     , rechitsM0Token_{
         produces<OProductType>(
             ps.getParameter<std::string>("recHitsLabelM0HBHE"))}
@@ -189,11 +198,13 @@ void HBHERecHitProducerGPU::acquire(
     // input + raii
     auto const& f01HEProduct = event.get(digisTokenF01HE_);
     auto const& f5HBProduct = event.get(digisTokenF5HB_);
+    auto const& f3HBProduct = event.get(digisTokenF3HB_);
     CUDAScopedContextAcquire ctx{f01HEProduct, std::move(holder), cudaState_};
     auto const& f01HEDigis = ctx.get(f01HEProduct);
     auto const& f5HBDigis = ctx.get(f5HBProduct);
+    auto const& f3HBDigis = ctx.get(f3HBProduct);
 
-    hcal::mahi::InputDataGPU inputGPU{f01HEDigis, f5HBDigis};
+    hcal::mahi::InputDataGPU inputGPU{f01HEDigis, f5HBDigis, f3HBDigis};
 
     // conditions
     edm::ESHandle<HcalRecoParamsWithPulseShapesGPU> recoParamsHandle;

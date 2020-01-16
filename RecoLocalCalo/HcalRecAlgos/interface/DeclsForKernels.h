@@ -143,6 +143,7 @@ struct ScratchDataGPU {
 struct InputDataGPU {
     DigiCollection<Flavor01, common::ViewStoragePolicy> const& f01HEDigis;
     DigiCollection<Flavor5, common::ViewStoragePolicy> const& f5HBDigis;
+    DigiCollection<Flavor3, common::ViewStoragePolicy> const& f3HBDigis;
 };
 
 }}
