@@ -188,6 +188,8 @@ void HcalDigisProducerGPU::acquire(
     for (unsigned int i=0; i<qie11Digis->size(); i++) {
         auto const& digi = QIE11DataFrame{(*qie11Digis)[i]};
         if (digi.flavor()!=0 and digi.flavor()!=1) continue;
+        if (digi.detid().subdetId()!=HcalBarrel and
+            digi.detid().subdetId()!=HcalEndcap) continue;
         auto const id = digi.detid().rawId();
         hf01_.ids.push_back(id);
         for (int hw=0; hw<hcal::Flavor01::HEADER_WORDS; hw++)
