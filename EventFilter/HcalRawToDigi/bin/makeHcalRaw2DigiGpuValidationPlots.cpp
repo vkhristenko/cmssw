@@ -173,6 +173,9 @@ int main(int argc, char *argv[]) {
                     auto const cputdc = cpudf[sample].tdc();
                     auto const gputdc = hcal::tdc_for_sample<hcal::Flavor01>(
                         df_start, sample);
+                    auto const cpucapid = cpudf[sample].capid();
+                    auto const gpucapid = hcal::capid_for_sample<hcal::Flavor01>(
+                        df_start, sample);
 
                     hADCf01HEGPU->Fill(gpuadc);
                     hADCf01HECPU->Fill(cpuadc);
@@ -185,6 +188,7 @@ int main(int argc, char *argv[]) {
                     // in the adc values at all!
                     assert(static_cast<uint8_t>(cpuadc) == gpuadc);
                     assert(static_cast<uint8_t>(cputdc) == gputdc);
+                    assert(static_cast<uint8_t>(cpucapid) == gpucapid);
                 }
             }
         }
@@ -224,6 +228,9 @@ int main(int argc, char *argv[]) {
                     auto const cpuadc = cpudf.sample(sample).adc();
                     auto const gpuadc = hcal::adc_for_sample<hcal::Flavor5>(
                         df_start, sample);
+                    auto const cpucapid = cpudf.sample(sample).capid();
+                    auto const gpucapid = hcal::capid_for_sample<hcal::Flavor01>(
+                        df_start, sample);
 
                     hADCf5HBGPU->Fill(gpuadc);
                     hADCf5HBCPU->Fill(cpuadc);
@@ -231,6 +238,7 @@ int main(int argc, char *argv[]) {
 
                     // the must for us at RAW Decoding stage
                     assert(static_cast<hcal::Flavor5::adc_type>(cpuadc) == gpuadc);
+                    assert(static_cast<uint8_t>(cpucapid) == gpucapid);
                 }
             }
         }

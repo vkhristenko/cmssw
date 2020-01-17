@@ -173,8 +173,15 @@ void HcalDigisProducerGPU::acquire(
         hf5_.ids.push_back(id);
         hf5_.npresamples.push_back(presamples);
         int stride = hcal::compute_stride<hcal::Flavor5>(config_.nsamplesF5HB);
-        for (int i=0; i<hcal::Flavor5::HEADER_WORDS; i++)
-            hf5_.data.push_back(0);
+        // simple for now...
+        static_assert(hcal::Flavor5::HEADER_WORDS == 1);
+        uint16_t header_word = (1 << 15) |
+            (0x5 << 12) |
+            (0 << 10) |
+            ((hbhe.sample(0).capid() & 0x3) << 8);
+        hf5_.data.push_back(header_word);
+        //for (int i=0; i<hcal::Flavor5::HEADER_WORDS; i++)
+        //    hf5_.data.push_back(0);
         for (int i=0; i<stride-hcal::Flavor5::HEADER_WORDS; i++) {
             uint16_t s0 = (0 << 7) |
                 (static_cast<uint8_t>(hbhe.sample(2*i).adc()) & 0x7f);
@@ -193,7 +200,7 @@ void HcalDigisProducerGPU::acquire(
         auto const id = digi.detid().rawId();
         hf01_.ids.push_back(id);
         for (int hw=0; hw<hcal::Flavor01::HEADER_WORDS; hw++)
-            hf01_.data.push_back(0);
+            hf01_.data.push_back((*qie11Digis)[i][hw]);
         for (int sample=0; sample<digi.samples(); sample++) {
             hf01_.data.push_back(
                 (*qie11Digis)[i][hcal::Flavor01::HEADER_WORDS + sample]);
