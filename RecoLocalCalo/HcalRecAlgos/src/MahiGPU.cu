@@ -352,7 +352,7 @@ void kernel_prep1d_sameNumberOfSamples(
             : idsf3HB[gch - nchannelsf01HE - nchannelsf5HB]);
     auto const did = HcalDetId{id};
     auto const adc = gch < nchannelsf01HE
-        ? adc_for_sample<Flavor01>(dataf01HE + stride*gch, sample);
+        ? adc_for_sample<Flavor01>(dataf01HE + stride*gch, sample)
         : (gch < nchannelsf01HE + nchannelsf5HB 
             ? adc_for_sample<Flavor5>(
                 dataf5HB + stride*(gch - nchannelsf01HE), sample)
