@@ -65,9 +65,12 @@ void kernel_rawdecode_test(
         uint16_t *digisF5HB,
         uint32_t *idsF5HB,
         uint8_t *npresamplesF5HB,
+        uint16_t *digisF3HB,
+        uint32_t *idsF3HB,
         uint32_t *pChannelsCounters,
         uint32_t const nsamplesF01HE,
         uint32_t const nsamplesF5HB,
+        uint32_t const nsamplesF3HB,
         uint32_t const nBytesTotal) {
     // in order to properly use cooperative groups
     static_assert(is_power_of_two(NTHREADS) == true && NTHREADS<=32);
@@ -321,7 +324,6 @@ void kernel_rawdecode_test(
             }
             case 3: 
             {
-                /*
                 // treat eid and did
                 uint8_t fiber = (channelid >> 3) & 0x1f;
                 uint8_t fchannel = channelid & 0x7;
@@ -337,7 +339,7 @@ void kernel_rawdecode_test(
 #endif
 
                 // remove digis not for HE
-                if (did.subdetId() != HcalEndcap) 
+                if (did.subdetId() != HcalBarrel) 
                     break;
 
                 // count words
@@ -347,23 +349,22 @@ void kernel_rawdecode_test(
                 uint32_t const nwords = channel_end - channel_header_word;
 
                 // filter out this digi if nwords does not equal expected
-                auto const expected_words = compute_stride<Flavor3>(nsamplesF3HE);
+                auto const expected_words = compute_stride<Flavor3>(nsamplesF3HB);
                 if (nwords != expected_words)
                     break;
 
                 // inc the number of digis of this type
-                auto const pos = atomicAdd(&pChannelsCounters[OutputF3HE], 1);
+                auto const pos = atomicAdd(&pChannelsCounters[OutputF3HB], 1);
 
                 // store to global mem words for this digi
-                idsF3HE[pos] = did.rawId();
+                idsF3HB[pos] = did.rawId();
                 for (uint32_t iword=0; iword<expected_words; iword++)
-                    digisF3HE[pos*expected_words + iword] = 
+                    digisF3HB[pos*expected_words + iword] = 
                         channel_header_word[iword];
 
 #ifdef HCAL_RAWDECODE_GPUDEBUG
                 printf("nwords = %u\n", nwords);
 #endif
-                */
 
                 break;
             }
@@ -554,9 +555,12 @@ void entryPoint(
         outputGPU.digisF5HB.data,
         outputGPU.digisF5HB.ids,
         outputGPU.digisF5HB.npresamples,
+        outputGPU.digisF3HB.data,
+        outputGPU.digisF3HB.ids,
         scratchGPU.pChannelsCounters,
         config.nsamplesF01HE,
         config.nsamplesF5HB,
+        config.nsamplesF3HB,
         nbytesTotal);
     cudaCheck( cudaGetLastError() );
 

@@ -18,15 +18,18 @@ constexpr uint32_t nbytes_per_fed_max = 10 * 1024;
 
 // each collection corresponds to a particular flavor with a certain number of 
 // samples per digi
-constexpr uint32_t numOutputCollections = 2;
+constexpr uint32_t numOutputCollections = 3;
 constexpr uint8_t OutputF01HE = 0;
 constexpr uint8_t OutputF5HB = 1;
+constexpr uint8_t OutputF3HB = 2;
 
 struct ConfigurationParameters {
     uint32_t maxChannelsF01HE;
     uint32_t maxChannelsF5HB;
+    uint32_t maxChannelsF3HB;
     uint32_t nsamplesF01HE;
     uint32_t nsamplesF5HB;
+    uint32_t nsamplesF3HB;
 };
 
 struct InputDataCPU {
@@ -69,6 +72,7 @@ struct ScratchDataGPU {
 struct OutputDataGPU {
     DigiCollection<Flavor01, common::ViewStoragePolicy> digisF01HE;
     DigiCollection<Flavor5, common::ViewStoragePolicy> digisF5HB;
+    DigiCollection<Flavor3, common::ViewStoragePolicy> digisF3HB;
 
     // qie 11 HE
     /*
@@ -95,16 +99,29 @@ struct OutputDataGPU {
             sizeof(uint32_t) * config.maxChannelsF5HB) );
         cudaCheck( cudaMalloc((void**)&digisF5HB.npresamples,
             sizeof(uint8_t) * config.maxChannelsF5HB) );
+
+        cudaCheck( cudaMalloc((void**)&digisF3HB.data,
+            config.maxChannelsF3HB * sizeof(uint16_t) *
+            compute_stride<Flavor3>(config.nsamplesF3HB)) );
+        cudaCheck( cudaMalloc((void**)&digisF3HB.ids,
+            config.maxChannelsF3HB * sizeof(uint32_t)) );
     }
 
     void deallocate(ConfigurationParameters const& config) {
         if (digisF01HE.data) {
             cudaCheck( cudaFree(digisF01HE.data) );
             cudaCheck( cudaFree(digisF01HE.ids) );
+        }
 
+        if (digisF5HB.data) {
             cudaCheck( cudaFree(digisF5HB.data) );
             cudaCheck( cudaFree(digisF5HB.ids) );
             cudaCheck( cudaFree(digisF5HB.npresamples) );
+        }
+    
+        if (digisF3HB.data) {
+            cudaCheck( cudaFree(digisF3HB.data) );
+            cudaCheck( cudaFree(digisF3HB.ids) );
         }    
     }
 };

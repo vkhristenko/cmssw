@@ -51,6 +51,10 @@ private:
         CUDAProduct<hcal::DigiCollection<hcal::Flavor5, 
                     hcal::common::ViewStoragePolicy>>;
     edm::EDPutTokenT<ProductTypef5> digisF5HBToken_;
+    using ProductTypef3 =
+        CUDAProduct<hcal::DigiCollection<hcal::Flavor3,
+                    hcal::common::ViewStoragePolicy>>;
+    edm::EDPutTokenT<ProductTypef3> digisF3HBToken_;
 
     CUDAContextState cudaState_;
 
@@ -77,10 +81,13 @@ void HcalRawToDigiGPU::fillDescriptions(
     desc.add<std::vector<int>>("FEDs", feds);
     desc.add<uint32_t>("maxChannelsF01HE", 10000u);
     desc.add<uint32_t>("maxChannelsF5HB", 10000u);
+    desc.add<uint32_t>("maxChannelsF3HB", 10000u);
     desc.add<uint32_t>("nsamplesF01HE", 8);
     desc.add<uint32_t>("nsamplesF5HB", 8);
+    desc.add<uint32_t>("nsamplesF3HB", 8);
     desc.add<std::string>("digisLabelF5HB", "f5HBDigisGPU");
     desc.add<std::string>("digisLabelF01HE", "f01HEDigisGPU");
+    desc.add<std::string>("digisLabelF3HB", "f3HBDigisGPU");
 
     std::string label = "hcalRawToDigiGPU";
     confDesc.add(label, desc);
@@ -94,12 +101,16 @@ HcalRawToDigiGPU::HcalRawToDigiGPU(
         ps.getParameter<std::string>("digisLabelF01HE"))}
     , digisF5HBToken_{produces<ProductTypef5>(
         ps.getParameter<std::string>("digisLabelF5HB"))}
+    , digisF3HBToken_{produces<ProductTypef3>(
+        ps.getParameter<std::string>("digisLabelF3HB"))}
     , fedsToUnpack_{ps.getParameter<std::vector<int>>("FEDs")}
 {
     config_.maxChannelsF01HE = ps.getParameter<uint32_t>("maxChannelsF01HE");
     config_.maxChannelsF5HB = ps.getParameter<uint32_t>("maxChannelsF5HB");
+    config_.maxChannelsF3HB = ps.getParameter<uint32_t>("maxChannelsF3HB");
     config_.nsamplesF01HE = ps.getParameter<uint32_t>("nsamplesF01HE");
     config_.nsamplesF5HB = ps.getParameter<uint32_t>("nsamplesF5HB");
+    config_.nsamplesF3HB = ps.getParameter<uint32_t>("nsamplesF3HB");
 
     inputCPU_.allocate();
     inputGPU_.allocate();
@@ -185,12 +196,16 @@ void HcalRawToDigiGPU::produce(
     // FIXME: use sizes of views directly for cuda mem cpy?
     auto const nchannelsF01HE = outputCPU_.nchannels[hcal::raw::OutputF01HE];
     auto const nchannelsF5HB = outputCPU_.nchannels[hcal::raw::OutputF5HB];
+    auto const nchannelsF3HB = outputCPU_.nchannels[hcal::raw::OutputF3HB];
     outputGPU_.digisF01HE.size = nchannelsF01HE;
     outputGPU_.digisF5HB.size = nchannelsF5HB;
+    outputGPU_.digisF3HB.size = nchannelsF3HB;
     outputGPU_.digisF01HE.stride = 
         hcal::compute_stride<hcal::Flavor01>(config_.nsamplesF01HE);
     outputGPU_.digisF5HB.stride = 
         hcal::compute_stride<hcal::Flavor5>(config_.nsamplesF5HB);
+    outputGPU_.digisF3HB.stride =
+        hcal::compute_stride<hcal::Flavor3>(config_.nsamplesF3HB);
 
     /*
     hcal::DigiCollection<hcal::Flavor01> digisF01HE{outputGPU_.idsF01HE,
@@ -203,6 +218,7 @@ void HcalRawToDigiGPU::produce(
 
     ctx.emplace(event, digisF01HEToken_, std::move(outputGPU_.digisF01HE));
     ctx.emplace(event, digisF5HBToken_, std::move(outputGPU_.digisF5HB));
+    ctx.emplace(event, digisF3HBToken_, std::move(outputGPU_.digisF3HB));
 }
 
 DEFINE_FWK_MODULE(HcalRawToDigiGPU);

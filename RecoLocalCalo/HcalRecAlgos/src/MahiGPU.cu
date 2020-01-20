@@ -231,11 +231,15 @@ void kernel_prep1d_sameNumberOfSamples(
         float *outputChi2,
         uint16_t const* dataf01HE,
         uint16_t const* dataf5HB,
+        uint16_t const* dataf3HB,
         uint32_t const* idsf01HE,
         uint32_t const* idsf5HB,
+        uint32_t const* idsf3HB,
         uint32_t const stridef01HE,
         uint32_t const stridef5HB,
+        uint32_t const stridef3HB,
         uint32_t const nchannelsf01HE,
+        uint32_t const nchannelsf5HB,
         uint8_t const* npresamplesf5HB,
         int8_t *soiSamples,
         float *method0Energy,
@@ -324,31 +328,44 @@ void kernel_prep1d_sameNumberOfSamples(
     // offset output
     auto *amplitudesForChannel = amplitudes + nsamplesExpected * gch;
     auto *noiseTermsForChannel = noiseTerms + nsamplesExpected * gch;
+    auto const nchannelsf015 = nchannelsf01HE + nchannelsf5HB;
 
     // get event input quantities
-    auto const stride = gch >= nchannelsf01HE
-        ? stridef5HB
-        : stridef01HE;
-    auto const nsamples = gch >= nchannelsf01HE
-        ? compute_nsamples<Flavor5>(stride)
-        : compute_nsamples<Flavor01>(stride);
+    auto const stride = gch < nchannelsf01HE
+        ? stridef01HE
+        : (gch < nchannelsf015
+            ? stridef5HB
+            : stridef3HB);
+    auto const nsamples = gch < nchannelsf01HE
+        ? compute_nsamples<Flavor01>(stride)
+        : (gch < nchannelsf015
+            ? compute_nsamples<Flavor5>(stride)
+            : compute_nsamples<Flavor3>(stride));
     
 #ifdef HCAL_MAHI_GPUDEBUG
     assert(nsamples == nsamplesExpected);
 #endif
 
-    auto const id = gch >= nchannelsf01HE
-        ? idsf5HB[gch - nchannelsf01HE]
-        : idsf01HE[gch];
+    auto const id = gch < nchannelsf01HE
+        ? idsf01HE[gch]
+        : (gch < nchannelsf015
+            ? idsf5HB[gch - nchannelsf01HE]
+            : idsf3HB[gch - nchannelsf015]);
     auto const did = HcalDetId{id};
-    auto const adc = gch >= nchannelsf01HE
-        ? adc_for_sample<Flavor5>(
-            dataf5HB + stride*(gch - nchannelsf01HE), sample)
-        : adc_for_sample<Flavor01>(dataf01HE + stride*gch, sample);
-    auto const capid = gch >= nchannelsf01HE
-        ? capid_for_sample<Flavor5>(
-            dataf5HB + stride*(gch - nchannelsf01HE), sample)
-        : capid_for_sample<Flavor01>(dataf01HE + stride*gch, sample);
+    auto const adc = gch < nchannelsf01HE
+        ? adc_for_sample<Flavor01>(dataf01HE + stride*gch, sample)
+        : (gch < nchannelsf015
+            ? adc_for_sample<Flavor5>(
+                dataf5HB + stride*(gch - nchannelsf01HE), sample)
+            : adc_for_sample<Flavor3>(
+                dataf3HB + stride*(gch - nchannelsf015), sample));
+    auto const capid = gch < nchannelsf01HE
+        ? capid_for_sample<Flavor01>(dataf01HE + stride*gch, sample)
+        : (gch < nchannelsf015
+            ? capid_for_sample<Flavor5>(
+                dataf5HB + stride*(gch - nchannelsf01HE), sample)
+            : capid_for_sample<Flavor3>(
+                dataf3HB + stride*(gch - nchannelsf015), sample));
 
 #ifdef HCAL_MAHI_GPUDEBUG
 #ifdef HCAL_MAHI_GPUDEBUG_FILTERDETID
@@ -371,7 +388,8 @@ void kernel_prep1d_sameNumberOfSamples(
         hashedId*HcalQIECodersGPU::numValuesPerChannel;
     auto const* pedestalsForChannel = pedestals +
         hashedId*4;
-    auto const* pedestalWidthsForChannel = useEffectivePedestals && gch < nchannelsf01HE
+    auto const* pedestalWidthsForChannel = useEffectivePedestals && (
+            gch < nchannelsf01HE || gch >= nchannelsf015)
         ? effectivePedestalWidths + hashedId*4
         : pedestalWidths + hashedId*4;
     auto const* gains = gainValues + 
@@ -382,7 +400,8 @@ void kernel_prep1d_sameNumberOfSamples(
     auto const pedestal = pedestalsForChannel[capid];
     auto const pedestalWidth = pedestalWidthsForChannel[capid];
     // if needed, only use effective pedestals for f01
-    auto const pedestalToUseForMethod0 = useEffectivePedestals && gch < nchannelsf01HE
+    auto const pedestalToUseForMethod0 = useEffectivePedestals && (
+            gch < nchannelsf01HE || gch >= nchannelsf015)
         ? effectivePedestals[hashedId*4 + capid]
         : pedestal;
     auto const sipmType = sipmTypeValues[hashedId];
@@ -403,17 +422,27 @@ void kernel_prep1d_sameNumberOfSamples(
         // NOTE: assume that soi is high only for a single guy!
         //   which must be the case. cpu version does not check for that
         //   if that is not the case, we will see that with cuda mmecheck
-        auto const soibit = soibit_for_sample<Flavor01>(dataf01HE + stride*gch, 
-            sample);
+        auto const soibit = soibit_for_sample<Flavor01>(
+            dataf01HE + stride*gch, sample);
         if (soibit==1)
+            soiSamples[gch] = sample;
+    } else if (gch >= nchannelsf015) {
+        auto const soibit = soibit_for_sample<Flavor3>(
+            dataf3HB + stride*(gch - nchannelsf015), sample);
+        if (soibit == 1)
             soiSamples[gch] = sample;
     }
     __syncthreads();
-    int32_t const soi = gch >= nchannelsf01HE
-        ? npresamplesf5HB[gch - nchannelsf01HE]
-        : soiSamples[gch];
+    int32_t const soi = gch < nchannelsf01HE
+        ? soiSamples[gch]
+        : (gch < nchannelsf015
+            ? npresamplesf5HB[gch - nchannelsf01HE]
+            : soiSamples[gch - nchannelsf015]);
+    //int32_t const soi = gch >= nchannelsf01HE
+    //    ? npresamplesf5HB[gch - nchannelsf01HE]
+    //    : soiSamples[gch];
     // this is here just to make things uniform...
-    if (gch >= nchannelsf01HE && sample==0)
+    if (gch >= nchannelsf01HE && gch < nchannelsf015 && sample==0)
         soiSamples[gch] = npresamplesf5HB[gch - nchannelsf01HE];
 
     // 
@@ -429,13 +458,13 @@ void kernel_prep1d_sameNumberOfSamples(
         capid,
         qieOffsets,
         qieSlopes,
-        gch < nchannelsf01HE);
-    if (gch >= nchannelsf01HE) {
+        gch < nchannelsf01HE || gch >= nchannelsf015);
+    if (gch >= nchannelsf01HE && gch < nchannelsf015) {
         // flavor 5
         rawCharge = charge;
         tdcTime = HcalSpecialTimes::UNKNOWN_T_NOTDC;
     } else {
-        // flavor 0 or 1
+        // flavor 0 or 1 or 3
         // conditions needed for sipms
         auto const parLin1 = parLin1Values[sipmType-1];
         auto const parLin2 = parLin2Values[sipmType-1];
@@ -450,8 +479,13 @@ void kernel_prep1d_sameNumberOfSamples(
         auto const factor = compute_reco_correction_factor(
             parLin1, parLin2, parLin3, effectivePixelsFired);
         rawCharge = (charge - pedestal)*factor + pedestal;
-        tdcTime = HcalSpecialTimes::getTDCTime(
-            tdc_for_sample<Flavor01>(dataf01HE + stride*gch, sample));
+        if (gch < nchannelsf01HE)
+            tdcTime = HcalSpecialTimes::getTDCTime(
+                tdc_for_sample<Flavor01>(dataf01HE + stride*gch, sample));
+        else if (gch >= nchannelsf015)
+            tdcTime = HcalSpecialTimes::getTDCTime(
+                tdc_for_sample<Flavor3>(
+                    dataf3HB + stride*(gch - nchannelsf015), sample));
 
 #ifdef HCAL_MAHI_GPUDEBUG
         printf("first = %d last = %d sipmQ = %f factor = %f rawCharge = %f\n", 
@@ -669,7 +703,9 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
         float const* amplitudes,
         uint32_t const* idsf01HE,
         uint32_t const* idsf5HB,
+        uint32_t const* idsf3HB,
         uint32_t const nchannelsf01HE,
+        uint32_t const nchannelsf5HB,
         uint32_t const nchannelsTotal,
         int8_t const* soiSamples,
         uint32_t const* recoPulseShapeIds,
@@ -703,14 +739,20 @@ void kernel_prep_pulseMatrices_sameNumberOfSamples(
     auto const nsamples = blockDim.x;
     auto const lch = threadIdx.z;
     auto const gch = lch + blockIdx.x*blockDim.z;
+    auto const nchannelsf015 = nchannelsf01HE + nchannelsf5HB;
 
     if (gch >= nchannelsTotal) return;
 
     // conditions
-    auto const id = gch >= nchannelsf01HE
-        ? idsf5HB[gch - nchannelsf01HE]
-        : idsf01HE[gch];
-    auto const deltaT = gch >= nchannelsf01HE
+    auto const id = gch < nchannelsf01HE
+        ? idsf01HE[gch]
+        : (gch < nchannelsf015
+            ? idsf5HB[gch - nchannelsf01HE]
+            : idsf3HB[gch - nchannelsf015]);
+    //auto const id = gch >= nchannelsf01HE
+    //    ? idsf5HB[gch - nchannelsf01HE]
+    //    : idsf01HE[gch];
+    auto const deltaT = gch >= nchannelsf01HE && gch < nchannelsf015
         ? timeSigmaHPD
         : timeSigmaSiPM;
     auto const did = DetId{id};
@@ -1322,9 +1364,11 @@ void kernel_minimize(
         bool const useEffectivePedestals,
         uint32_t const* __restrict__ idsf01HE,
         uint32_t const* __restrict__ idsf5HB,
+        uint32_t const* __restrict__ idsf3HB,
         float const* __restrict__ gainValues,
         float const* __restrict__ respCorrectionValues,
         uint32_t const nchannelsf01HE,
+        uint32_t const nchannelsf5HB,
         uint32_t const nchannelsTotal,
         uint32_t const offsetForHashes,
         int const maxDepthHB,
@@ -1341,6 +1385,7 @@ void kernel_minimize(
 
     // indices
     auto const gch = threadIdx.x + blockIdx.x * blockDim.x;
+    auto const nchannelsf015 = nchannelsf01HE + nchannelsf5HB;
     if (gch >= nchannelsTotal) return;
 
     // if chi2 is set to -9999 do not run minimization
@@ -1355,16 +1400,22 @@ void kernel_minimize(
         reinterpret_cast<float*>(shrmem) + MapSymM<float, NPULSES>::total*(threadIdx.x + blockDim.x);
 
     // conditions for pedestal widths
-    auto const id = gch >= nchannelsf01HE
-        ? idsf5HB[gch - nchannelsf01HE]
-        : idsf01HE[gch];
+    auto const id = gch < nchannelsf01HE
+        ? idsf01HE[gch]
+        : (gch < nchannelsf015
+            ? idsf5HB[gch - nchannelsf01HE]
+            : idsf3HB[gch - nchannelsf015]);
+    //auto const id = gch >= nchannelsf01HE
+    //    ? idsf5HB[gch - nchannelsf01HE]
+    //    : idsf01HE[gch];
     auto const did = DetId{id};
     auto const hashedId = did.subdetId() == HcalBarrel
         ? did2linearIndexHB(id, maxDepthHB, firstHBRing, lastHBRing, nEtaHB)
         : did2linearIndexHE(id, maxDepthHE, maxPhiHE, firstHERing, lastHERing, nEtaHE)
             + offsetForHashes;
 
-    auto const* pedestalWidthsForChannel = useEffectivePedestals && gch < nchannelsf01HE
+    auto const* pedestalWidthsForChannel = useEffectivePedestals && (
+            gch < nchannelsf01HE || gch >= nchannelsf015)
         ? effectivePedestalWidths + hashedId*4
         : pedestalWidths + hashedId*4;
     auto const averagePedestalWidth2 = 0.25 * (
@@ -1705,7 +1756,8 @@ void entryPoint(
         ScratchDataGPU &scratch,
         ConfigParameters const& configParameters,
         cudaStream_t cudaStream) {
-    auto const totalChannels = inputGPU.f01HEDigis.size + inputGPU.f5HBDigis.size;
+    auto const totalChannels = inputGPU.f01HEDigis.size + inputGPU.f5HBDigis.size +
+        inputGPU.f3HBDigis.size;
 
     // FIXME: may be move this assignment to emphasize this more clearly
     // FIXME: number of channels for output might change given that 
@@ -1717,7 +1769,8 @@ void entryPoint(
     // or modifying existing one
     auto const f01nsamples = compute_nsamples<Flavor01>(inputGPU.f01HEDigis.stride);
     auto const f5nsamples = compute_nsamples<Flavor5>(inputGPU.f5HBDigis.stride);
-    assert(f01nsamples == f5nsamples);
+    auto const f3nsamples = compute_nsamples<Flavor3>(inputGPU.f3HBDigis.stride);
+    assert(f01nsamples == f5nsamples && f01nsamples == f3nsamples);
 
     dim3 threadsPerBlock{f01nsamples, configParameters.kprep1dChannelsPerBlock};
     int blocks = static_cast<uint32_t>(threadsPerBlock.y) > totalChannels
@@ -1732,11 +1785,15 @@ void entryPoint(
         outputGPU.recHits.chi2,
         inputGPU.f01HEDigis.data,
         inputGPU.f5HBDigis.data,
+        inputGPU.f3HBDigis.data,
         inputGPU.f01HEDigis.ids,
         inputGPU.f5HBDigis.ids,
+        inputGPU.f3HBDigis.ids,
         inputGPU.f01HEDigis.stride,
         inputGPU.f5HBDigis.stride,
+        inputGPU.f3HBDigis.stride,
         inputGPU.f01HEDigis.size,
+        inputGPU.f5HBDigis.size,
         inputGPU.f5HBDigis.npresamples,
         scratch.soiSamples,
         outputGPU.recHits.energyM0,
@@ -1810,7 +1867,9 @@ void entryPoint(
         scratch.amplitudes,
         inputGPU.f01HEDigis.ids,
         inputGPU.f5HBDigis.ids,
+        inputGPU.f3HBDigis.ids,
         inputGPU.f01HEDigis.size,
+        inputGPU.f5HBDigis.size,
         totalChannels,
         scratch.soiSamples,
         conditions.recoParams.ids,
@@ -1868,9 +1927,11 @@ void entryPoint(
             configParameters.useEffectivePedestals,
             inputGPU.f01HEDigis.ids,
             inputGPU.f5HBDigis.ids,
+            inputGPU.f3HBDigis.ids,
             conditions.gains.values,
             conditions.respCorrs.values,
             inputGPU.f01HEDigis.size,
+            inputGPU.f5HBDigis.size,
             totalChannels,
             conditions.offsetForHashes,
             conditions.topology->maxDepthHB(),
