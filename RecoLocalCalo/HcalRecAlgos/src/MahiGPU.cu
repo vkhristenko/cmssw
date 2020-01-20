@@ -437,7 +437,7 @@ void kernel_prep1d_sameNumberOfSamples(
         ? soiSamples[gch]
         : (gch < nchannelsf015
             ? npresamplesf5HB[gch - nchannelsf01HE]
-            : soiSamples[gch - nchannelsf015]);
+            : soiSamples[gch]);
     //int32_t const soi = gch >= nchannelsf01HE
     //    ? npresamplesf5HB[gch - nchannelsf01HE]
     //    : soiSamples[gch];
