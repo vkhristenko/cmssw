@@ -162,6 +162,8 @@ void HBHERecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& cde
         edm::InputTag{"hcalRawToDigiGPU", "f01HEDigisGPU"});
     desc.add<edm::InputTag>("digisLabelF5HB", 
         edm::InputTag{"hcalRawToDigiGPU", "f5HBDigisGPU"});
+    desc.add<edm::InputTag>("digisLabelF3HB", 
+        edm::InputTag{"hcalRawToDigiGPU", "f3HBDigisGPU"});
     desc.add<std::string>("recHitsLabelM0HBHE", "recHitsM0HBHE");
     desc.add<int>("sipmQTSShift", 0);
     desc.add<int>("sipmQNTStoSum", 3);
