@@ -168,7 +168,7 @@ EcalUncalibratedRecHit EcalUncalibRecHitMultiFitAlgo::makeRecHit(const EcalDataF
       noisecov += _addPedestalUncertainty*_addPedestalUncertainty*SampleMatrix::Ones();
     }
   }
-  
+ 
   //optimized one-pulse fit for hlt
   bool usePrefit = false;
   if (_doPrefit) {

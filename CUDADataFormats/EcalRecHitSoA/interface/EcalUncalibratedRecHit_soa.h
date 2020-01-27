@@ -31,7 +31,7 @@ namespace ecal {
     };
     
   }
-  
+ 
   template<typename T, typename L = Tag::soa>
   struct type_wrapper {
     using type = std::vector<T, CUDAHostAllocator<T>>;
@@ -52,6 +52,8 @@ namespace ecal {
     UncalibratedRecHit& operator=(UncalibratedRecHit&&) = default;
     
     // TODO: std::array causes root's dictionary problems
+    //     ./CUDADataFormats/EcalRecHitSoA/interface/RecoTypes.h:using ComputationScalarType = float;
+    //     
     typename type_wrapper<reco::ComputationScalarType, L>::type amplitudesAll;
     //    typename type_wrapper<std::array<reco::ComputationScalarType, 
     //        EcalDataFrame::MAXSAMPLES>, L>::type amplitudesAll;

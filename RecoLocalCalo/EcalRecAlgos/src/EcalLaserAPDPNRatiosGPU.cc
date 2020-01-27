@@ -68,7 +68,7 @@ EcalLaserAPDPNRatiosGPU::EcalLaserAPDPNRatiosGPU(EcalLaserAPDPNRatios const& val
       }
     }
     
-    
+   
 
 EcalLaserAPDPNRatiosGPU::Product::~Product() {
     // deallocation
