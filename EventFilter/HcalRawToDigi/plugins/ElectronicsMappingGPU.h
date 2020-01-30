@@ -5,7 +5,7 @@
 
 #ifndef __CUDACC__
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
-#include "HeterogeneousCore/CUDACore/interface/CUDAESProduct.h"
+#include "HeterogeneousCore/CUDACore/interface/ESProduct.h"
 #endif
 
 namespace hcal { namespace raw {
@@ -40,7 +40,7 @@ private:
     std::vector<uint32_t, CUDAHostAllocator<uint32_t>> eid2tid_;
     std::vector<uint32_t, CUDAHostAllocator<uint32_t>> eid2did_;
 
-    CUDAESProduct<Product> product_;
+    cms::cuda::ESProduct<Product> product_;
 #endif
 };
 

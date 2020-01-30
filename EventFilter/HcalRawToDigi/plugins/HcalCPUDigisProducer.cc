@@ -6,7 +6,7 @@
 //#include "HeterogeneousCore/Producer/interface/HeterogeneousEvent.h"
 
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
-#include "HeterogeneousCore/CUDACore/interface/CUDAScopedContext.h"
+#include "HeterogeneousCore/CUDACore/interface/ScopedContext.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/EventSetup.h"
@@ -34,15 +34,15 @@ private:
 
 private:
     using IProductTypef01 = 
-        CUDAProduct<hcal::DigiCollection<hcal::Flavor01, 
+        cms::cuda::Product<hcal::DigiCollection<hcal::Flavor01, 
                     hcal::common::ViewStoragePolicy>>;
     edm::EDGetTokenT<IProductTypef01> digisF01HETokenIn_;
     using IProductTypef5 = 
-        CUDAProduct<hcal::DigiCollection<hcal::Flavor5, 
+        cms::cuda::Product<hcal::DigiCollection<hcal::Flavor5, 
                     hcal::common::ViewStoragePolicy>>;
     edm::EDGetTokenT<IProductTypef5> digisF5HBTokenIn_;
     using IProductTypef3 =
-        CUDAProduct<hcal::DigiCollection<hcal::Flavor3,
+        cms::cuda::Product<hcal::DigiCollection<hcal::Flavor3,
                     hcal::common::ViewStoragePolicy>>;
     edm::EDGetTokenT<IProductTypef3> digisF3HBTokenIn_;
 
@@ -113,7 +113,7 @@ void HcalCPUDigisProducer::acquire(
     auto const& f01HEProduct = event.get(digisF01HETokenIn_);
     auto const& f5HBProduct = event.get(digisF5HBTokenIn_);
     auto const& f3HBProduct = event.get(digisF3HBTokenIn_);
-    CUDAScopedContextAcquire ctx{f01HEProduct, std::move(taskHolder)};
+    cms::cuda::ScopedContextAcquire ctx{f01HEProduct, std::move(taskHolder)};
     auto const& f01HEDigis = ctx.get(f01HEProduct);
     auto const& f5HBDigis = ctx.get(f5HBProduct);
     auto const& f3HBDigis = ctx.get(f3HBProduct);

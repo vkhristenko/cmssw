@@ -4,7 +4,7 @@
 #include "FWCore/Framework/interface/stream/EDProducer.h"
 
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
-#include "HeterogeneousCore/CUDACore/interface/CUDAScopedContext.h"
+#include "HeterogeneousCore/CUDACore/interface/ScopedContext.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/EventSetup.h"
@@ -60,14 +60,14 @@ private:
             hcal::common::ViewStoragePolicy>;
 
     // output product tokens
-    using ProductTypef01 = CUDAProduct<DeviceCollectionf01>; 
+    using ProductTypef01 = cms::cuda::Product<DeviceCollectionf01>; 
     edm::EDPutTokenT<ProductTypef01> digisF01HEToken_;
-    using ProductTypef5 = CUDAProduct<DeviceCollectionf5>;
+    using ProductTypef5 = cms::cuda::Product<DeviceCollectionf5>;
     edm::EDPutTokenT<ProductTypef5> digisF5HBToken_;
-    using ProductTypef3 = CUDAProduct<DeviceCollectionf3>;
+    using ProductTypef3 = cms::cuda::Product<DeviceCollectionf3>;
     edm::EDPutTokenT<ProductTypef3> digisF3HBToken_;
 
-    CUDAContextState cudaState_;
+    cms::cuda::ContextState cudaState_;
 
     /*
     hcal::raw::ConfigurationParameters config_;
@@ -184,7 +184,8 @@ void HcalDigisProducerGPU::acquire(
         edm::WaitingTaskWithArenaHolder holder) 
 {
     // raii
-    CUDAScopedContextAcquire ctx{event.streamID(), std::move(holder), cudaState_};
+    cms::cuda::ScopedContextAcquire ctx{event.streamID(), std::move(holder), 
+        cudaState_};
 
     hf01_.clear();
     hf5_.clear();
@@ -273,7 +274,7 @@ void HcalDigisProducerGPU::produce(
         edm::Event& event, 
         edm::EventSetup const& setup) 
 {
-    CUDAScopedContextProduce ctx{cudaState_};
+    cms::cuda::ScopedContextProduce ctx{cudaState_};
 
     df01_.stride = hcal::compute_stride<hcal::Flavor01>(config_.nsamplesF01HE);
     df01_.size = hf01_.ids.size();

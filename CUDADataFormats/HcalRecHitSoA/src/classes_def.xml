@@ -11,6 +11,6 @@
             
             
 
-    <class name="CUDAProduct<hcal::RecHitCollection<hcal::common::ViewStoragePolicy>>" persistent="false" />
-    <class name="edm::Wrapper<CUDAProduct<hcal::RecHitCollection<hcal::common::ViewStoragePolicy>>>" persistent="false" />
+    <class name="cms::cuda::Product<hcal::RecHitCollection<hcal::common::ViewStoragePolicy>>" persistent="false" />
+    <class name="edm::Wrapper<cms::cuda::Product<hcal::RecHitCollection<hcal::common::ViewStoragePolicy>>>" persistent="false" />
 </lcgdict>

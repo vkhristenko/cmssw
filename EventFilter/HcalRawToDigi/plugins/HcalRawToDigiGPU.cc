@@ -6,7 +6,7 @@
 //#include "HeterogeneousCore/Producer/interface/HeterogeneousEvent.h"
 
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
-#include "HeterogeneousCore/CUDACore/interface/CUDAScopedContext.h"
+#include "HeterogeneousCore/CUDACore/interface/ScopedContext.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/EventSetup.h"
@@ -44,19 +44,19 @@ private:
 private:
     edm::EDGetTokenT<FEDRawDataCollection> rawDataToken_;
     using ProductTypef01 = 
-        CUDAProduct<hcal::DigiCollection<hcal::Flavor01, 
+        cms::cuda::Product<hcal::DigiCollection<hcal::Flavor01, 
                     hcal::common::ViewStoragePolicy>>; 
     edm::EDPutTokenT<ProductTypef01> digisF01HEToken_;
     using ProductTypef5 = 
-        CUDAProduct<hcal::DigiCollection<hcal::Flavor5, 
+        cms::cuda::Product<hcal::DigiCollection<hcal::Flavor5, 
                     hcal::common::ViewStoragePolicy>>;
     edm::EDPutTokenT<ProductTypef5> digisF5HBToken_;
     using ProductTypef3 =
-        CUDAProduct<hcal::DigiCollection<hcal::Flavor3,
+        cms::cuda::Product<hcal::DigiCollection<hcal::Flavor3,
                     hcal::common::ViewStoragePolicy>>;
     edm::EDPutTokenT<ProductTypef3> digisF3HBToken_;
 
-    CUDAContextState cudaState_;
+    cms::cuda::ContextState cudaState_;
 
     std::vector<int> fedsToUnpack_;
 
@@ -131,7 +131,8 @@ void HcalRawToDigiGPU::acquire(
         edm::WaitingTaskWithArenaHolder holder) 
 {
     // raii
-    CUDAScopedContextAcquire ctx{event.streamID(), std::move(holder), cudaState_};
+    cms::cuda::ScopedContextAcquire ctx{event.streamID(), std::move(holder), 
+        cudaState_};
 
     // conditions
     edm::ESHandle<hcal::raw::ElectronicsMappingGPU> eMappingHandle;
@@ -185,7 +186,7 @@ void HcalRawToDigiGPU::produce(
         edm::Event& event, 
         edm::EventSetup const& setup) 
 {
-    CUDAScopedContextProduce ctx{cudaState_};
+    cms::cuda::ScopedContextProduce ctx{cudaState_};
 
 #ifdef HCAL_RAWDECODE_CPUDEBUG
     printf("f01he channels = %u f5hb channesl = %u\n",
