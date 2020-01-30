@@ -14,7 +14,7 @@
 
 <use   name="HeterogeneousCore/CUDACore"/>
 <use   name="HeterogeneousCore/CUDAUtilities"/>
-<use   name="cuda-api-wrappers"/>
+<use   name="CUDADataFormats/Common" />
 <use   name="cuda"/>
 <use   name="CUDADataFormats/HcalDigi"/>
 <use   name="CUDADataFormats/HcalCommon"/>

@@ -5,7 +5,7 @@
 
 #ifndef __CUDACC__
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
-#include "HeterogeneousCore/CUDACore/interface/CUDAESProduct.h"
+#include "HeterogeneousCore/CUDACore/interface/ESProduct.h"
 #endif
 
 class HcalQIECodersGPU {
@@ -36,7 +36,7 @@ private:
     std::vector<float, CUDAHostAllocator<float>> offsets_;
     std::vector<float, CUDAHostAllocator<float>> slopes_;
 
-    CUDAESProduct<Product> product_;
+    cms::cuda::ESProduct<Product> product_;
 #endif
 };
 

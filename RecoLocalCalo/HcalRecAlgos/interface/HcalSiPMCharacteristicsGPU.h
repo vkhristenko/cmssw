@@ -5,7 +5,7 @@
 
 #ifndef __CUDACC__
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
-#include "HeterogeneousCore/CUDACore/interface/CUDAESProduct.h"
+#include "HeterogeneousCore/CUDACore/interface/ESProduct.h"
 #endif
 
 class HcalSiPMCharacteristicsGPU {
@@ -37,7 +37,7 @@ private:
     std::vector<float, CUDAHostAllocator<float>> parLin1_, parLin2_, parLin3_,
         crossTalk_, auxi2_;
 
-    CUDAESProduct<Product> product_;
+    cms::cuda::ESProduct<Product> product_;
 #endif
 };
 

@@ -5,7 +5,7 @@
 
 #ifndef __CUDACC__
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
-#include "HeterogeneousCore/CUDACore/interface/CUDAESProduct.h"
+#include "HeterogeneousCore/CUDACore/interface/ESProduct.h"
 #endif
 
 class HcalGainWidthsGPU {
@@ -35,7 +35,7 @@ private:
     uint64_t totalChannels_;
     std::vector<float, CUDAHostAllocator<float>> value0_, value1_, value2_, value3_;
 
-    CUDAESProduct<Product> product_;
+    cms::cuda::ESProduct<Product> product_;
 #endif
 };
 

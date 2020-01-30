@@ -5,7 +5,7 @@
 
 #ifndef __CUDACC__
 #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
-#include "HeterogeneousCore/CUDACore/interface/CUDAESProduct.h"
+#include "HeterogeneousCore/CUDACore/interface/ESProduct.h"
 #endif
 
 class HcalSiPMParametersGPU {
@@ -38,7 +38,7 @@ private:
                                                  width0_, width1_, width2_, width3_;
                                                  */
 
-    CUDAESProduct<Product> product_;
+    cms::cuda::ESProduct<Product> product_;
 #endif
 };
 

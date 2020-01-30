@@ -5,8 +5,6 @@
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/MahiGPU.h"
 
-#include <cuda/api_wrappers.h>
-
 #include <Eigen/Dense>
 
 #ifdef HCAL_MAHI_GPUDEBUG

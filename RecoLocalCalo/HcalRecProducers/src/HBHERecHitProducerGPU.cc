@@ -4,7 +4,7 @@
 //#include "HeterogeneousCore/Producer/interface/HeterogeneousEvent.h"
 
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
-#include "HeterogeneousCore/CUDACore/interface/CUDAScopedContext.h"
+#include "HeterogeneousCore/CUDACore/interface/ScopedContext.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/EventSetup.h"
@@ -61,28 +61,28 @@ private:
     void produce(edm::Event&, edm::EventSetup const&) override;
 
     using IProductTypef01 =
-        CUDAProduct<hcal::DigiCollection<hcal::Flavor01,
+        cms::cuda::Product<hcal::DigiCollection<hcal::Flavor01,
                     hcal::common::ViewStoragePolicy>>;
     edm::EDGetTokenT<IProductTypef01> digisTokenF01HE_;
 
     using IProductTypef5 =
-        CUDAProduct<hcal::DigiCollection<hcal::Flavor5,
+        cms::cuda::Product<hcal::DigiCollection<hcal::Flavor5,
                     hcal::common::ViewStoragePolicy>>;
     edm::EDGetTokenT<IProductTypef5> digisTokenF5HB_;
 
     using IProductTypef3 =
-        CUDAProduct<hcal::DigiCollection<hcal::Flavor3,
+        cms::cuda::Product<hcal::DigiCollection<hcal::Flavor3,
                     hcal::common::ViewStoragePolicy>>;
     edm::EDGetTokenT<IProductTypef3> digisTokenF3HB_;
 
     using RecHitType = hcal::RecHitCollection<hcal::common::ViewStoragePolicy>;
-    using OProductType = CUDAProduct<RecHitType>;
+    using OProductType = cms::cuda::Product<RecHitType>;
     edm::EDPutTokenT<OProductType> rechitsM0Token_;
 
     hcal::mahi::ConfigParameters configParameters_;
     hcal::mahi::OutputDataGPU outputGPU_;
     hcal::mahi::ScratchDataGPU scratchGPU_;
-    CUDAContextState cudaState_;
+    cms::cuda::ContextState cudaState_;
 };
 
 HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps) 
@@ -201,7 +201,7 @@ void HBHERecHitProducerGPU::acquire(
     auto const& f01HEProduct = event.get(digisTokenF01HE_);
     auto const& f5HBProduct = event.get(digisTokenF5HB_);
     auto const& f3HBProduct = event.get(digisTokenF3HB_);
-    CUDAScopedContextAcquire ctx{f01HEProduct, std::move(holder), cudaState_};
+    cms::cuda::ScopedContextAcquire ctx{f01HEProduct, std::move(holder), cudaState_};
     auto const& f01HEDigis = ctx.get(f01HEProduct);
     auto const& f5HBDigis = ctx.get(f5HBProduct);
     auto const& f3HBDigis = ctx.get(f3HBProduct);
@@ -305,7 +305,7 @@ void HBHERecHitProducerGPU::produce(
         edm::Event& event, 
         edm::EventSetup const& setup) 
 {
-    CUDAScopedContextProduce ctx{cudaState_};
+    cms::cuda::ScopedContextProduce ctx{cudaState_};
     ctx.emplace(event, rechitsM0Token_, std::move(outputGPU_.recHits));
 }
 

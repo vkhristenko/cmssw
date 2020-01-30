@@ -3,8 +3,6 @@
 
 #include "RecoLocalCalo/HcalRecAlgos/interface/DeclsForKernels.h"
 
-#include <cuda/api_wrappers.h>
-
 namespace hcal { namespace mahi {
 
 void entryPoint(

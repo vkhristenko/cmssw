@@ -6,7 +6,7 @@
 //#include "HeterogeneousCore/Producer/interface/HeterogeneousEvent.h"
 
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
-#include "HeterogeneousCore/CUDACore/interface/CUDAScopedContext.h"
+#include "HeterogeneousCore/CUDACore/interface/ScopedContext.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/EventSetup.h"
@@ -31,7 +31,7 @@ private:
     void produce(edm::Event&, edm::EventSetup const&) override;
 
 private:
-    using IProductType = CUDAProduct<hcal::RecHitCollection<hcal::common::ViewStoragePolicy>>;
+    using IProductType = cms::cuda::Product<hcal::RecHitCollection<hcal::common::ViewStoragePolicy>>;
     edm::EDGetTokenT<IProductType> recHitsM0TokenIn_;
     using OProductType = hcal::RecHitCollection<hcal::common::VecStoragePolicy<hcal::CUDAHostAllocatorAlias>>;
     edm::EDPutTokenT<OProductType> recHitsM0TokenOut_;
@@ -74,7 +74,7 @@ void HcalCPURecHitsProducer::acquire(
 {
     // retrieve data/ctx
     auto const& recHitsProduct = event.get(recHitsM0TokenIn_);
-    CUDAScopedContextAcquire ctx{recHitsProduct, std::move(taskHolder)};
+    cms::cuda::ScopedContextAcquire ctx{recHitsProduct, std::move(taskHolder)};
     auto const& recHits = ctx.get(recHitsProduct);
 
     // resize tmp buffers
