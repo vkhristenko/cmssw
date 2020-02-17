@@ -84,12 +84,13 @@ ecalRecHitGPU = cms.EDProducer("EcalRecHitProducerGPU",
                             
     ## for channel recovery
     #algoRecover = cms.string("EcalRecHitWorkerRecover"),
-    #recoverEBIsolatedChannels = cms.bool(False),
-    #recoverEEIsolatedChannels = cms.bool(False),
-    #recoverEBVFE  = cms.bool(False),
-    #recoverEEVFE  = cms.bool(False),
-    #recoverEBFE = cms.bool(True),
-    #recoverEEFE = cms.bool(True),
+    recoverEBIsolatedChannels = cms.bool(False),
+    recoverEEIsolatedChannels = cms.bool(False),
+    recoverEBVFE  = cms.bool(False),
+    recoverEEVFE  = cms.bool(False),
+    recoverEBFE = cms.bool(True),
+    recoverEEFE = cms.bool(True),
+
     ##db statuses for which recovery in EE/EB should not be attempted           
     #dbStatusToBeExcludedEE = cms.vint32(
                                         #14,  # dead, no TP

@@ -85,6 +85,12 @@ namespace ecal {
       int const* ChannelStatusToBeExcluded,
       uint32_t ChannelStatusToBeExcludedSize,   
       bool const killDeadChannels,
+      bool const recoverEBIsolatedChannels,
+      bool const recoverEEIsolatedChannels,
+      bool const recoverEBVFE,             
+      bool const recoverEEVFE,             
+      bool const recoverEBFE,             
+      bool const recoverEEFE,              
       float const EBLaserMIN,
       float const EELaserMIN,
       float const EBLaserMAX,
@@ -905,15 +911,663 @@ namespace ecal {
         }
         
         
+  
+  
+  
+  
+        // recover, killing, and other stuff
+        
+//         if ( recoverEBIsolatedChannels_ || recoverEBFE_ || killDeadChannels_ )
+//         {
+//           edm::Handle< std::set<EBDetId> > pEBDetId;
+//           const std::set<EBDetId> * detIds = nullptr;
+//           evt.getByToken( ebDetIdToBeRecoveredToken_, pEBDetId);
+//           detIds = pEBDetId.product();
+//           
+//           
+//           if ( detIds ) {
+//             edm::ESHandle<EcalChannelStatus> chStatus;
+//             es.get<EcalChannelStatusRcd>().get(chStatus);
+//             for( std::set<EBDetId>::const_iterator it = detIds->begin(); it != detIds->end(); ++it ) {
+//               // get channel status map to treat dead VFE separately
+//               EcalChannelStatusMap::const_iterator chit = chStatus->find( *it );
+//               EcalChannelStatusCode chStatusCode;
+//               if ( chit != chStatus->end() ) {
+//                 chStatusCode = *chit;
+//               } else {
+//                 edm::LogError("EcalRecHitProducerError") << "No channel status found for xtal "
+//                 << (*it).rawId()
+//                 << "! something wrong with EcalChannelStatus in your DB? ";
+//               }
+// 
+//     AM: 
+// EcalUncalibratedRecHit(
+//   const DetId& id, float ampl, float ped, float jit, float chi2, uint32_t flags = 0, uint32_t aux = 0);
+// 
+// 
+// 
+// 
+//               EcalUncalibratedRecHit urh;
+//               if ( chStatusCode.getStatusCode()  == EcalChannelStatusCode::kDeadVFE ) { // dead VFE (from DB info)
+//                 // uses the EcalUncalibratedRecHit to pass the DetId info
+//                 urh = EcalUncalibratedRecHit( *it, 0, 0, 0, 0, EcalRecHitWorkerBaseClass::EB_VFE );
+//                 if ( recoverEBVFE_ || killDeadChannels_ ) workerRecover_->run( evt, urh, *ebRecHits );
+//               } else {
+//                 // uses the EcalUncalibratedRecHit to pass the DetId info
+//                 urh = EcalUncalibratedRecHit( *it, 0, 0, 0, 0, EcalRecHitWorkerBaseClass::EB_single );
+//                 if ( recoverEBIsolatedChannels_ || killDeadChannels_ ) workerRecover_->run( evt, urh, *ebRecHits );
+//               }
+//               
+//             }
+//           }
+//         }
+  
+//   
+//   
+//   if ( recoverEEIsolatedChannels_ || recoverEEVFE_ || killDeadChannels_ )
+//   {
+//     edm::Handle< std::set<EEDetId> > pEEDetId;
+//     const std::set<EEDetId> * detIds = nullptr;
+//     
+//     evt.getByToken( eeDetIdToBeRecoveredToken_, pEEDetId);
+//     detIds = pEEDetId.product();
+//     
+//     if ( detIds ) {
+//       edm::ESHandle<EcalChannelStatus> chStatus;
+//       es.get<EcalChannelStatusRcd>().get(chStatus);
+//       for( std::set<EEDetId>::const_iterator it = detIds->begin(); it != detIds->end(); ++it ) {
+//         // get channel status map to treat dead VFE separately
+//         EcalChannelStatusMap::const_iterator chit = chStatus->find( *it );
+//         EcalChannelStatusCode chStatusCode;
+//         if ( chit != chStatus->end() ) {
+//           chStatusCode = *chit;
+//         } else {
+//           edm::LogError("EcalRecHitProducerError") << "No channel status found for xtal "
+//           << (*it).rawId()
+//           << "! something wrong with EcalChannelStatus in your DB? ";
+//         }
+//         EcalUncalibratedRecHit urh;
+//         if ( chStatusCode.getStatusCode()  == EcalChannelStatusCode::kDeadVFE) { // dead VFE (from DB info)
+//           // uses the EcalUncalibratedRecHit to pass the DetId info
+//           urh = EcalUncalibratedRecHit( *it, 0, 0, 0, 0, EcalRecHitWorkerBaseClass::EE_VFE );
+//           if ( recoverEEVFE_ || killDeadChannels_ ) workerRecover_->run( evt, urh, *eeRecHits );
+//         } else {
+//           // uses the EcalUncalibratedRecHit to pass the DetId info
+//           urh = EcalUncalibratedRecHit( *it, 0, 0, 0, 0, EcalRecHitWorkerBaseClass::EE_single );
+//           if ( recoverEEIsolatedChannels_ || killDeadChannels_ ) workerRecover_->run( evt, urh, *eeRecHits );
+//         }
+//       }
+//     }
+//   }
+//   
+    
+    
+
+    
+    //
+    // Structure:
+    //  EB
+    //  EE
+    //
+    //
+    //  - single MVA
+    //  - democratic sharing
+    //  - kill all the other cases
+    //
+    
+        bool is_Single = false;
+        bool is_FE     = false;
+        bool is_VFE    = false;
+        
+        bool is_recoverable = false; // DetIdToBeRecovered
         
         
-        //-- AM TEST just to test
-        //         flagBits[ch] = 42;
-        //         flagBits[ch] = 500;
-        //--
+//         // Integrity errors
+//         edm::Handle<EBDetIdCollection> ebIntegrityGainErrors;
+//         ev.getByToken(ebIntegrityGainErrorsToken_, ebIntegrityGainErrors);
+//         ebDetIdColls.push_back(ebIntegrityGainErrors);
+//         
+//         edm::Handle<EBDetIdCollection> ebIntegrityGainSwitchErrors;
+//         ev.getByToken(ebIntegrityGainSwitchErrorsToken_, ebIntegrityGainSwitchErrors);
+//         ebDetIdColls.push_back(ebIntegrityGainSwitchErrors);
+//         
+//         edm::Handle<EBDetIdCollection> ebIntegrityChIdErrors;
+//         ev.getByToken(ebIntegrityChIdErrorsToken_, ebIntegrityChIdErrors);
+//         ebDetIdColls.push_back(ebIntegrityChIdErrors);
+//         
+
+
+
+/* 
+ * find isolated dead channels (from DB info)           --> chStatus 10, 11, 12
+ * and group of dead channels w/ trigger(from DB info)  --> chStatus 13
+ * in interesting regions flagged by SRP
+ */
+//     const int flag = (*chit).getStatusCode();
+//     if (flag >= 10 && flag <= 12) {  // FIXME -- avoid hardcoded values...
+//       ebDetIdToRecover->insert(*itId);
+//     } else if (flag == 13 || flag == 14) {  // FIXME -- avoid hardcoded values...
+//       ebTTDetIdToRecover->insert((*itId).tower());
+      
+      
+        if ( dbstatus == 10 ||  dbstatus == 11 ||  dbstatus == 12 ) {
+          is_recoverable = true;
+        }
+        
+        
+        if (is_recoverable) {
+          if (dbstatus == EcalChannelStatusCode_Code::kDeadVFE) {
+            is_VFE = true;
+          }
+          else if (dbstatus == EcalChannelStatusCode_Code::kDeadVFE) {
+            is_FE = true;
+          }
+          else {
+            is_Single = true;
+          }
+          
+          
+          // EB
+          if (isBarrel) {
+            if (is_Single || is_FE || is_VFE) {           
+              // single MVA
+              if (is_Single && (recoverEBIsolatedChannels || !killDeadChannels) ) {
+               
+//                 
+//                 https://github.com/cms-sw/cmssw/blob/master/RecoLocalCalo/EcalRecProducers/plugins/EcalRecHitWorkerRecover.cc#L131
+//                 
+//                 float ebEn = ebDeadChannelCorrector.correct(
+//                   detId, result, singleRecoveryMethod_, singleRecoveryThreshold_, sum8RecoveryThreshold_, &AcceptRecHit);
+//                 EcalRecHit hit(detId, ebEn, 0., EcalRecHit::kDead);
+//                 
+                  
+              }
+              // decmocratic sharing
+              else if (is_FE && (recoverEBFE || !killDeadChannels) ) {
+               
+                
+                //                 for (std::vector<DetId>::const_iterator dit = vid.begin(); dit != vid.end(); ++dit) {
+                //                   if (alreadyInserted(*dit))
+                //                     continue;
+                //                   float theta = ebGeom_->getGeometry(*dit)->getPosition().theta();
+                //                   float tpEt = ecalScale_.getTPGInGeV(tp->compressedEt(), tp->id());
+                //                   if (checkChannelStatus(*dit, dbStatusToBeExcludedEB_)) {
+                //                     EcalRecHit hit(*dit, tpEt / ((float)vid.size()) / sin(theta), 0.);
+                //                     hit.setFlag(EcalRecHit::kTowerRecovered);
+                //                     if (tp->compressedEt() == 0xFF)
+                //                       hit.setFlag(EcalRecHit::kTPSaturated);
+                //                     if (tp->sFGVB())
+                //                       hit.setFlag(EcalRecHit::kL1SpikeFlag);
+                //                     insertRecHit(hit, result);
+                //                   }
+                
+                
+                
+                
+              }
+              // kill all the other cases
+              else {
+                energy[ch] = 0.;  // Need to set also the flags ...
+              }
+            }
+          }
+          // EE
+          else { 
+            if (is_Single || is_FE || is_VFE) {           
+              // single MVA
+              if (is_Single && (recoverEBIsolatedChannels || !killDeadChannels) ) {
+                
+//                 
+//                 https://github.com/cms-sw/cmssw/blob/master/RecoLocalCalo/EcalRecProducers/plugins/EcalRecHitWorkerRecover.cc#L149
+//                 
+//                 float eeEn = eeDeadChannelCorrector.correct(
+//                   detId, result, singleRecoveryMethod_, singleRecoveryThreshold_, sum8RecoveryThreshold_, &AcceptRecHit);
+//                 EcalRecHit hit(detId, eeEn, 0., EcalRecHit::kDead);
+//                 
+                
+              }
+              // decmocratic sharing
+              else if (is_FE && (recoverEBFE || !killDeadChannels) ) {
+  
+                
+                //                
+                //  Code is definitely too long ...              
+                //                
+                //                
+                //                
+                //                
+                //                
+                
+              }
+              // kill all the other cases
+              else {
+                energy[ch] = 0.;  // Need to set also the flags ...
+              }
+            }
+          }
+          
+        }   
+    
+  
+  
+//         // EB
+//         if (isBarrel) {
+//           
+//           if ( recoverEBIsolatedChannels || recoverEBFE || killDeadChannels ) {
+//             // set energy to 0 by hand
+//             //           if ( chStatusCode.getStatusCode()  == EcalChannelStatusCode::kDeadVFE ) { // dead VFE (from DB info)
+//             if (dbstatus == EcalChannelStatusCode_Code::kDeadVFE) {
+//               // EcalRecHitWorkerBaseClass::EB_VFE
+//               energy[ch] = 0.;  // --> not 0!
+//             }
+//             else {
+//               // EcalRecHitWorkerBaseClass::EB_single
+//               energy[ch] = 0.;  // --> not 0!
+//             }
+//           }  
+//         }
+//         // EE
+//         else {
+// 
+//           if ( recoverEEIsolatedChannels || recoverEBFE || killDeadChannels ) {
+//             // set energy to 0 by hand
+//             //           if ( chStatusCode.getStatusCode()  == EcalChannelStatusCode::kDeadVFE ) { // dead VFE (from DB info)
+//             if (dbstatus == EcalChannelStatusCode_Code::kDeadVFE) {
+//               // EcalRecHitWorkerBaseClass::EE_VFE
+//               energy[ch] = 0.;  // --> not 0!
+//             }      
+//             else {
+//               // EcalRecHitWorkerBaseClass::EE_single
+//               energy[ch] = 0.;  // --> not 0!
+//             }
+//           }  
+//           
+//         }
+  
+  
+  
+  
+  
+  
+//   if ( recoverEBFE_ || killDeadChannels_ )
+//   {
+//     edm::Handle< std::set<EcalTrigTowerDetId> > pEBFEId;
+//     const std::set<EcalTrigTowerDetId> * ttIds = nullptr;
+//     
+//     evt.getByToken( ebFEToBeRecoveredToken_, pEBFEId);
+//     ttIds = pEBFEId.product();
+//     
+//     if ( ttIds ) {
+//       for( std::set<EcalTrigTowerDetId>::const_iterator it = ttIds->begin(); it != ttIds->end(); ++it ) {
+//         // uses the EcalUncalibratedRecHit to pass the DetId info
+//         int ieta = (((*it).ietaAbs()-1)*5+1)*(*it).zside(); // from EcalTrigTowerConstituentsMap
+//         int iphi = (((*it).iphi()-1)*5+11)%360;             // from EcalTrigTowerConstituentsMap
+//         if( iphi <= 0 ) iphi += 360;                        // from EcalTrigTowerConstituentsMap
+//         EcalUncalibratedRecHit urh( EBDetId(ieta, iphi, EBDetId::ETAPHIMODE), 0, 0, 0, 0, EcalRecHitWorkerBaseClass::EB_FE );
+//         workerRecover_->run( evt, urh, *ebRecHits );
+//       }
+//     }
+//   }
+//   
+//   if ( recoverEEFE_ || killDeadChannels_ )
+//   {
+//     edm::Handle< std::set<EcalScDetId> > pEEFEId;
+//     const std::set<EcalScDetId> * scIds = nullptr;
+//     
+//     evt.getByToken( eeFEToBeRecoveredToken_, pEEFEId);
+//     scIds = pEEFEId.product();
+//     
+//     
+//     if ( scIds ) {
+//       for( std::set<EcalScDetId>::const_iterator it = scIds->begin(); it != scIds->end(); ++it ) {
+//         // uses the EcalUncalibratedRecHit to pass the DetId info
+//         if (EEDetId::validDetId( ((*it).ix()-1)*5+1, ((*it).iy()-1)*5+1, (*it).zside() )) {
+//           EcalUncalibratedRecHit urh( EEDetId( ((*it).ix()-1)*5+1, ((*it).iy()-1)*5+1, (*it).zside() ), 0, 0, 0, 0, EcalRecHitWorkerBaseClass::EE_FE );
+//           workerRecover_->run( evt, urh, *eeRecHits );
+//         }
+//       }
+//     }
+//   }
+//   
+  
+  
+  
+//         // EB
+//         if (isBarrel) {
+//           
+//           if ( recoverEBFE || killDeadChannels ) {
+//       
+//             // set to "0" the amplitudes of all the rechits that were not recovered 
+//             // and the seed (really?) of the trigger tower of "ebFEToBeRecoveredToken_" ,
+//             // e.g.     ebFEToBeRecovered = cms.InputTag("ecalDetIdToBeRecovered:ebFE"),
+//             //          eeFEToBeRecovered = cms.InputTag("ecalDetIdToBeRecovered:eeFE"),
+//             //   --> EcalDetIdToBeRecoveredProducer
+//             //            
+//             
+//             // --> not 0!
+//             
+//           }
+//         }
+//         // EE
+//         else {
+// 
+//           if ( recoverEEFE || killDeadChannels ) {
+//             
+//             // set to "0" the amplitudes of all the rechits that were not recovered 
+//             // and the seed (really?) of the trigger tower of "ebFEToBeRecoveredToken_" ,
+//             // e.g.     ebFEToBeRecovered = cms.InputTag("ecalDetIdToBeRecovered:ebFE"),
+//             //          eeFEToBeRecovered = cms.InputTag("ecalDetIdToBeRecovered:eeFE"),
+//             //   --> EcalDetIdToBeRecoveredProducer
+//             //
+//             
+//             // --> not 0!
+// 
+//           }
+//           
+//         }
         
         
         
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+//         if ( killDeadChannels_ ) {
+//           if (    (flags == EcalRecHitWorkerRecover::EB_single && !recoverEBIsolatedChannels_)
+//             || (flags == EcalRecHitWorkerRecover::EE_single && !recoverEEIsolatedChannels_)
+//             || (flags == EcalRecHitWorkerRecover::EB_VFE && !recoverEBVFE_)
+//             || (flags == EcalRecHitWorkerRecover::EE_VFE && !recoverEEVFE_)
+//           ) {
+//             EcalRecHit hit( detId, 0., 0., EcalRecHit::kDead );
+//             hit.setFlag( EcalRecHit::kDead)  ;
+//             insertRecHit( hit, result); // insert trivial rechit with kDead flag
+//             return true;
+//           } 
+//           if ( flags == EcalRecHitWorkerRecover::EB_FE && !recoverEBFE_) {
+//             EcalTrigTowerDetId ttDetId( ((EBDetId)detId).tower() );
+//             std::vector<DetId> vid = ttMap_->constituentsOf( ttDetId );
+//             for ( std::vector<DetId>::const_iterator dit = vid.begin(); dit != vid.end(); ++dit ) {
+//               EcalRecHit hit( (*dit), 0., 0., EcalRecHit::kDead );
+//               hit.setFlag( EcalRecHit::kDead ) ;
+//               insertRecHit( hit, result ); // insert trivial rechit with kDead flag
+//             }
+//             if(logWarningEtThreshold_EB_FE_<0)return true; // if you don't want log warning just return true
+//           }
+//           if ( flags == EcalRecHitWorkerRecover::EE_FE && !recoverEEFE_) {
+//             EEDetId id( detId );
+//             EcalScDetId sc( 1+(id.ix()-1)/5, 1+(id.iy()-1)/5, id.zside() );
+//             std::vector<DetId> eeC;
+//             for(int dx=1; dx<=5; ++dx){
+//               for(int dy=1; dy<=5; ++dy){
+//                 int ix = (sc.ix()-1)*5 + dx;
+//                 int iy = (sc.iy()-1)*5 + dy;
+//                 int iz = sc.zside();
+//                 if(EEDetId::validDetId(ix, iy, iz)){
+//                   eeC.push_back(EEDetId(ix, iy, iz));
+//                 }
+//               }
+//             }
+//             for ( size_t i = 0; i < eeC.size(); ++i ) {
+//               EcalRecHit hit( eeC[i], 0., 0., EcalRecHit::kDead );
+//               hit.setFlag( EcalRecHit::kDead ) ;
+//               insertRecHit( hit, result ); // insert trivial rechit with kDead flag
+//             }
+//             if(logWarningEtThreshold_EE_FE_<0)   return true; // if you don't want log warning just return true
+//           }
+//         }
+//         
+//         if ( flags == EcalRecHitWorkerRecover::EB_single ) {
+//           // recover as single dead channel
+//           ebDeadChannelCorrector.setCaloTopology(caloTopology_.product());
+//           
+//           // channel recovery. Accepted new RecHit has the flag AcceptRecHit=TRUE
+//           bool AcceptRecHit=true;
+//           EcalRecHit hit = ebDeadChannelCorrector.correct( detId, result, singleRecoveryMethod_, singleRecoveryThreshold_, &AcceptRecHit);
+//           
+//           if ( hit.energy() != 0 and AcceptRecHit == true ) {
+//             hit.setFlag( EcalRecHit::kNeighboursRecovered ) ;
+//           } else {
+//             // recovery failed
+//             hit.setFlag( EcalRecHit::kDead ) ;
+//           }
+//           insertRecHit( hit, result );
+//           
+//         } else if ( flags == EcalRecHitWorkerRecover::EE_single ) {
+//           // recover as single dead channel
+//           eeDeadChannelCorrector.setCaloTopology(caloTopology_.product());
+//           
+//           // channel recovery. Accepted new RecHit has the flag AcceptRecHit=TRUE
+//           bool AcceptRecHit=true;
+//           EcalRecHit hit = eeDeadChannelCorrector.correct( detId, result, singleRecoveryMethod_, singleRecoveryThreshold_, &AcceptRecHit);
+//           if ( hit.energy() != 0 and AcceptRecHit == true ) {
+//             hit.setFlag( EcalRecHit::kNeighboursRecovered ) ;
+//           } else {
+//             // recovery failed
+//             hit.setFlag( EcalRecHit::kDead ) ;
+//           }
+//           insertRecHit( hit, result );
+//           
+//         } else if ( flags == EcalRecHitWorkerRecover::EB_VFE ) {
+//           // recover as dead VFE
+//           EcalRecHit hit( detId, 0., 0.);
+//           hit.setFlag( EcalRecHit::kDead ) ;
+//           // recovery not implemented
+//           insertRecHit( hit, result );
+//         } else if ( flags == EcalRecHitWorkerRecover::EB_FE ) {
+//           // recover as dead TT
+//           
+//           EcalTrigTowerDetId ttDetId( ((EBDetId)detId).tower() );
+//           edm::Handle<EcalTrigPrimDigiCollection> pTPDigis;
+//           evt.getByToken(tpDigiToken_, pTPDigis);
+//           const EcalTrigPrimDigiCollection * tpDigis = nullptr;               
+//           tpDigis = pTPDigis.product();
+//           
+//           EcalTrigPrimDigiCollection::const_iterator tp = tpDigis->find( ttDetId );
+//           // recover the whole trigger tower
+//           if ( tp != tpDigis->end() ) {
+//             //std::vector<DetId> vid = ecalMapping_->dccTowerConstituents( ecalMapping_->DCCid( ttDetId ), ecalMapping_->iTT( ttDetId ) );
+//             std::vector<DetId> vid = ttMap_->constituentsOf( ttDetId );
+//             float tpEt  = ecalScale_.getTPGInGeV( tp->compressedEt(), tp->id() );
+//             float tpEtThreshEB = logWarningEtThreshold_EB_FE_;
+//             if(tpEt>tpEtThreshEB){
+//               edm::LogWarning("EnergyInDeadEB_FE")<<"TP energy in the dead TT = "<<tpEt<<" at "<<ttDetId;
+//             }
+//             if ( !killDeadChannels_ || recoverEBFE_ ) {  
+//               // democratic energy sharing
+//               
+//               for ( std::vector<DetId>::const_iterator dit = vid.begin(); dit != vid.end(); ++dit ) {
+//                 if (alreadyInserted(*dit)) continue;
+//                 float theta = ebGeom_->getGeometry(*dit)->getPosition().theta();
+//                 float tpEt  = ecalScale_.getTPGInGeV( tp->compressedEt(), tp->id() );
+//                 if(checkChannelStatus(*dit, dbStatusToBeExcludedEB_)){
+//                   EcalRecHit hit( *dit, tpEt /((float)vid.size()) / sin(theta), 0.);
+//                   hit.setFlag( EcalRecHit::kTowerRecovered ) ;
+//                   if ( tp->compressedEt() == 0xFF ) hit.setFlag( EcalRecHit::kTPSaturated );
+//                   if ( tp->sFGVB() ) hit.setFlag( EcalRecHit::kL1SpikeFlag );
+//                   insertRecHit( hit, result );
+//                 }
+//               }
+//             } else {
+//               // tp not found => recovery failed
+//               std::vector<DetId> vid = ttMap_->constituentsOf( ttDetId );
+//               for ( std::vector<DetId>::const_iterator dit = vid.begin(); dit != vid.end(); ++dit ) {
+//                 if (alreadyInserted(*dit)) continue;
+//                 EcalRecHit hit( *dit,0., 0. );
+//                 hit.setFlag( EcalRecHit::kDead ) ;
+//                 insertRecHit( hit, result );
+//               }
+//             }
+//           }
+//         } else if ( flags == EcalRecHitWorkerRecover::EE_FE ) {
+//           // Structure for recovery:
+//           // ** SC --> EEDetId constituents (eeC) --> associated Trigger Towers (aTT) --> EEDetId constituents (aTTC)
+//           // ** energy for a SC EEDetId = [ sum_aTT(energy) - sum_aTTC(energy) ] / N_eeC
+//           // .. i.e. the total energy of the TTs covering the SC minus 
+//           // .. the energy of the recHits in the TTs but not in the SC
+//           //std::vector<DetId> vid = ecalMapping_->dccTowerConstituents( ecalMapping_->DCCid( ttDetId ), ecalMapping_->iTT( ttDetId ) );
+//           // due to lack of implementation of the EcalTrigTowerDetId ix,iy methods in EE we compute Et recovered energies (in EB we compute E)
+//           
+//           EEDetId eeId( detId );
+//           EcalScDetId sc( (eeId.ix()-1)/5+1, (eeId.iy()-1)/5+1, eeId.zside() );
+//           std::set<DetId> eeC;
+//           for(int dx=1; dx<=5; ++dx){
+//             for(int dy=1; dy<=5; ++dy){
+//               int ix = (sc.ix()-1)*5 + dx;
+//               int iy = (sc.iy()-1)*5 + dy;
+//               int iz = sc.zside();
+//               if(EEDetId::validDetId(ix, iy, iz)){
+//                 EEDetId id(ix, iy, iz);
+//                 if (checkChannelStatus(id,dbStatusToBeExcludedEE_)){
+//                   eeC.insert(id);
+//                 } // check status
+//               }
+//             }
+//           }
+//           
+//           edm::Handle<EcalTrigPrimDigiCollection> pTPDigis;
+//           evt.getByToken(tpDigiToken_, pTPDigis);
+//           const EcalTrigPrimDigiCollection * tpDigis = nullptr;
+//           tpDigis = pTPDigis.product();
+//           
+//           // associated trigger towers
+//           std::set<EcalTrigTowerDetId> aTT;
+//           for ( std::set<DetId>::const_iterator it = eeC.begin(); it!=eeC.end(); ++it ) {
+//             aTT.insert( ttMap_->towerOf( *it ) );
+//           }
+//           // associated trigger towers: total energy
+//           float totE = 0;
+//           // associated trigger towers: EEDetId constituents
+//           std::set<DetId> aTTC;
+//           bool atLeastOneTPSaturated = false;
+//           for ( std::set<EcalTrigTowerDetId>::const_iterator it = aTT.begin(); it != aTT.end(); ++it ) {
+//             // add the energy of this trigger tower
+//             EcalTrigPrimDigiCollection::const_iterator itTP = tpDigis->find( *it );
+//             if ( itTP != tpDigis->end() ) {
+//               
+//               std::vector<DetId> v = ttMap_->constituentsOf( *it );
+//               
+//               // from the constituents, remove dead channels
+//               std::vector<DetId>::iterator ttcons = v.begin();
+//               while (ttcons != v.end()){
+//                 if (!checkChannelStatus(*ttcons,dbStatusToBeExcludedEE_)){
+//                   ttcons=v.erase(ttcons);
+//                 } else {
+//                   ++ttcons;
+//                 }
+//               }// while 
+//               
+//               if ( itTP->compressedEt() == 0xFF ){ // In the case of a saturated trigger tower, a fraction
+//                 atLeastOneTPSaturated = true; //of the saturated energy is put in: number of xtals in dead region/total xtals in TT *63.75
+//                 
+//                 //Alternative recovery algorithm that I will now investigate.
+//                 //Estimate energy sums the energy in the working channels, then decides how much energy
+//                 //to put here depending on that. Duncan 20101203
+//                 
+//                 totE += estimateEnergy(itTP->id().ietaAbs(), &result, eeC, v);
+//                 
+//                 /* 
+//                  *                         These commented out lines use
+//                  *                         64GeV*fraction of the TT overlapping the dead FE
+//                  *                        
+//                  *                      int count = 0;
+//                  *                      for (std::vector<DetId>::const_iterator idsit = v.begin(); idsit != v.end(); ++ idsit){
+//                  *                      std::set<DetId>::const_iterator itFind = eeC.find(*idsit);
+//                  *                      if (itFind != eeC.end())
+//                  *                      ++count;
+//               }
+//               //std::cout << count << ", " << v.size() << std::endl;
+//               totE+=((float)count/(float)v.size())* ((it->ietaAbs()>26)?2*ecalScale_.getTPGInGeV( itTP->compressedEt(), itTP->id() ):ecalScale_.getTPGInGeV( itTP->compressedEt(), itTP->id() ));*/
+//               }
+//               else {totE += ((it->ietaAbs()>26)?2:1)*ecalScale_.getTPGInGeV( itTP->compressedEt(), itTP->id() );}
+//               
+//               
+//               // get the trigger tower constituents
+//               
+//               if (itTP->compressedEt() == 0){ // If there's no energy in TT, the constituents are removed from the recovery.
+//                 for (size_t i = 0 ; i < v.size(); ++i)
+//                   eeC.erase(v[i]);
+//               }
+//               else if (itTP->compressedEt()!=0xFF){ //If it's saturated the energy has already been determined, so we do not want to subtract any channels
+//                 for ( size_t j = 0; j < v.size(); ++j ) {
+//                   aTTC.insert( v[j] );
+//                 }
+//               }
+//               
+//             }
+//           }
+//           // remove crystals of dead SC
+//           // (this step is not needed if sure that SC crystals are not 
+//           // in the recHit collection)
+//           
+//           for ( std::set<DetId>::const_iterator it = eeC.begin(); it != eeC.end(); ++it ) {
+//             aTTC.erase(*it);
+//           }
+//           // compute the total energy for the dead SC
+//           const EcalRecHitCollection * hits = &result;
+//           for ( std::set<DetId>::const_iterator it = aTTC.begin(); it != aTTC.end(); ++it ) {
+//             EcalRecHitCollection::const_iterator jt = hits->find( *it );
+//             if ( jt != hits->end() ) {
+//               float energy = jt->energy(); // Correct conversion to Et
+//               float eta = geo_->getPosition(jt->id()).eta();
+//               float pf = 1.0/cosh(eta);
+//               // use Et instead of E, consistent with the Et estimation of the associated TT
+//               totE -= energy*pf;
+//             }
+//           }
+//           
+//           
+//           float scEt = totE;
+//           float scEtThreshEE = logWarningEtThreshold_EE_FE_;
+//           if(scEt>scEtThreshEE){
+//             edm::LogWarning("EnergyInDeadEE_FE")<<"TP energy in the dead TT = "<<scEt<<" at "<<sc;
+//           }
+//           
+//           // assign the energy to the SC crystals
+//           if ( !killDeadChannels_ || recoverEEFE_ ) { // if eeC is empty, i.e. there are no hits 
+//             // in the tower, nothing is returned. No negative values from noise.
+//             for ( std::set<DetId>::const_iterator it = eeC.begin(); it != eeC.end(); ++it ) {
+//               
+//               float eta = geo_->getPosition(*it).eta(); //Convert back to E from Et for the recovered hits
+//               float pf = 1.0/cosh(eta);
+//               EcalRecHit hit( *it, totE / ((float)eeC.size()*pf), 0);
+//               
+//               if (atLeastOneTPSaturated) hit.setFlag(EcalRecHit::kTPSaturated );                            
+//               hit.setFlag(EcalRecHit::kTowerRecovered); 
+//               insertRecHit( hit, result );
+//               
+//             }// for
+//           }// if 
+//         }
+//         return true;
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+  
+  
+  
+  
+  
+  
+  
       }
       
     }
@@ -947,6 +1601,12 @@ namespace ecal {
         configParameters.ChannelStatusToBeExcluded,
         configParameters.ChannelStatusToBeExcludedSize,
         configParameters.killDeadChannels,
+        configParameters.recoverEBIsolatedChannels,
+        configParameters.recoverEEIsolatedChannels,
+        configParameters.recoverEBVFE,             
+        configParameters.recoverEEVFE,             
+        configParameters.recoverEBFE,             
+        configParameters.recoverEEFE,              
         configParameters.EBLaserMIN,
         configParameters.EELaserMIN,
         configParameters.EBLaserMAX,

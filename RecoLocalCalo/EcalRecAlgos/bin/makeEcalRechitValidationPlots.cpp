@@ -79,6 +79,18 @@ int main(int argc, char *argv[]) {
   auto hSelectedRechitsEEGPUCPUratio = new TH1D("RechitsEEGPU/CPUratio", "RechitsEEGPU/CPUratio; GPU/CPU", 200, 0.95, 1.05);
   auto hSelectedRechitsEBdeltavsCPU = new TH2D("RechitsEBdeltavsCPU", "RechitsEBdeltavsCPU", nbins, 0, last, nbins_delta, -delta, delta);
   auto hSelectedRechitsEEdeltavsCPU = new TH2D("RechitsEEdeltavsCPU", "RechitsEEdeltavsCPU", nbins, 0, last, nbins_delta, -delta, delta);
+
+  // RecHits plots for EB and EE on both GPU and CPU
+  auto hPositiveRechitsEBGPU = new TH1D("RechitsEBGPU", "RechitsEBGPU; No. of Rechits", nbins, 0, last);
+  auto hPositiveRechitsEBCPU = new TH1D("RechitsEBCPU", "RechitsEBCPU; No. of Rechits", nbins, 0, last);
+  auto hPositiveRechitsEEGPU = new TH1D("RechitsEEGPU", "RechitsEEGPU; No. of Rechits", nbins, 0, last);
+  auto hPositiveRechitsEECPU = new TH1D("RechitsEECPU", "RechitsEECPU; No. of Rechits", nbins, 0, last);
+  auto hPositiveRechitsEBGPUvsCPU = new TH2D("RechitsEBGPUvsCPU", "RechitsEBGPUvsCPU; CPU; GPU", last, 0, last, last, 0, last);
+  auto hPositiveRechitsEEGPUvsCPU = new TH2D("RechitsEEGPUvsCPU", "RechitsEEGPUvsCPU; CPU; GPU", last, 0, last, last, 0, last);
+  auto hPositiveRechitsEBGPUCPUratio = new TH1D("RechitsEBGPU/CPUratio", "RechitsEBGPU/CPUratio; GPU/CPU", 200, 0.95, 1.05);
+  auto hPositiveRechitsEEGPUCPUratio = new TH1D("RechitsEEGPU/CPUratio", "RechitsEEGPU/CPUratio; GPU/CPU", 200, 0.95, 1.05);
+  auto hPositiveRechitsEBdeltavsCPU = new TH2D("RechitsEBdeltavsCPU", "RechitsEBdeltavsCPU", nbins, 0, last, nbins_delta, -delta, delta);
+  auto hPositiveRechitsEEdeltavsCPU = new TH2D("RechitsEEdeltavsCPU", "RechitsEEdeltavsCPU", nbins, 0, last, nbins_delta, -delta, delta);
   
   // Energies plots for EB and EE on both GPU and CPU
   auto hEnergiesEBGPU = new TH1D("EnergiesEBGPU", "EnergiesEBGPU; Energy [GeV]", nbins_energy, 0, last_energy);
@@ -193,8 +205,10 @@ int main(int argc, char *argv[]) {
     uint selected_gpu_eb_size = 0;
     uint selected_gpu_ee_size = 0;
     
+    uint positive_gpu_eb_size = 0;
+    uint positive_gpu_ee_size = 0;
     
-    // EB:
+     // EB:
     for (uint32_t i=0; i<gpu_eb_size; ++i) {
       auto const did_gpu = wgpuEB->bareProduct().did[i]; // set the did for the current RecHit
       // Set the variables for GPU
@@ -206,6 +220,10 @@ int main(int argc, char *argv[]) {
       // you have "-1" if the crystal is not selected
       if ( enr_gpu>=0 ) {
         selected_gpu_eb_size++;
+        
+        if ( enr_gpu>0 ) {
+          positive_gpu_eb_size++;
+        }
         
         // find the Rechit on CPU reflecting the same did
         auto const cpu_iter = wcpuEB->bareProduct().find(DetId{did_gpu}); 
@@ -278,6 +296,10 @@ int main(int argc, char *argv[]) {
       // you have "-1" if the crystal is not selected
       if ( enr_gpu>=0 ) {
         selected_gpu_ee_size++;
+ 
+        if ( enr_gpu>0 ) {
+          positive_gpu_ee_size++;
+        }
         
         // find the Rechit on CPU reflecting the same did
         auto const cpu_iter = wcpuEE->bareProduct().find(DetId{did_gpu}); 
@@ -358,6 +380,46 @@ int main(int argc, char *argv[]) {
     hSelectedRechitsEEdeltavsCPU->Fill(cpu_ee_size, selected_gpu_ee_size-cpu_ee_size);
     
     
+    //
+    // now the rechit counting
+    //
+    
+    
+    uint positive_cpu_eb_size = 0;
+    uint positive_cpu_ee_size = 0;
+    
+    // EB:
+    for (uint32_t i=0; i<cpu_eb_size; ++i) {
+      auto const enr_cpu = wcpuEB->bareProduct()[i].energy(); 
+      if (enr_cpu > 0) {
+        positive_cpu_eb_size++;
+      }
+    }
+    // EE:
+    for (uint32_t i=0; i<cpu_ee_size; ++i) {
+      auto const enr_cpu = wcpuEE->bareProduct()[i].energy(); 
+      if (enr_cpu > 0) {
+        positive_cpu_ee_size++;
+      }
+    }
+    
+    
+    float positive_eb_ratio = (float) positive_gpu_eb_size/positive_cpu_eb_size;
+    float positive_ee_ratio = (float) positive_gpu_ee_size/positive_cpu_ee_size;
+    
+    // Filling up the histograms on events sizes for EB and EE on both GPU and CPU
+    hPositiveRechitsEBGPU->Fill(positive_gpu_eb_size);
+    hPositiveRechitsEBCPU->Fill(positive_cpu_eb_size);
+    hPositiveRechitsEEGPU->Fill(positive_gpu_ee_size);
+    hPositiveRechitsEECPU->Fill(positive_cpu_ee_size);
+    hPositiveRechitsEBGPUvsCPU->Fill(positive_cpu_eb_size, positive_gpu_eb_size);
+    hPositiveRechitsEEGPUvsCPU->Fill(positive_cpu_ee_size, positive_gpu_ee_size);
+    hPositiveRechitsEBGPUCPUratio->Fill(positive_eb_ratio);
+    hPositiveRechitsEEGPUCPUratio->Fill(positive_ee_ratio);
+    hPositiveRechitsEBdeltavsCPU->Fill(positive_cpu_eb_size, positive_gpu_eb_size-positive_cpu_eb_size);
+    hPositiveRechitsEEdeltavsCPU->Fill(positive_cpu_ee_size, positive_gpu_ee_size-positive_cpu_ee_size);
+    
+    
     
     if (cpu_eb_size != selected_gpu_eb_size or cpu_ee_size != selected_gpu_ee_size) {
       //       std::cerr << ie << ordinal[ie % 10] << " entry:\n"
@@ -380,6 +442,8 @@ int main(int argc, char *argv[]) {
     cAllRechits.Divide(3, 2);
     TCanvas cRechits("Rechits", "Rechits", 1750, 860);
     cRechits.Divide(3, 2);
+    TCanvas cRechitsPositive("RechitsPositive", "RechitsPositive", 1750, 860);
+    cRechitsPositive.Divide(3, 2);
     TCanvas cEnergies("Energies", "Energies", 1750, 860);
     cEnergies.Divide(3, 2);
     TCanvas cChi2("Chi2", "Chi2", 1750, 860);
@@ -500,6 +564,63 @@ int main(int argc, char *argv[]) {
     }
     cRechits.SaveAs("ecal-rechits.root");
     cRechits.SaveAs("ecal-rechits.png");
+    
+    
+    
+    
+    // Plotting the sizes of GPU vs CPU for each event of EB 
+    cRechitsPositive.cd(1);
+    {
+      gPad->SetLogy();
+      hPositiveRechitsEBCPU->SetLineColor(kRed);
+      hPositiveRechitsEBCPU->SetLineWidth(2);
+      hPositiveRechitsEBCPU->Draw("");
+      hPositiveRechitsEBGPU->SetLineColor(kBlue);
+      hPositiveRechitsEBGPU->SetLineWidth(2);
+      hPositiveRechitsEBGPU->Draw("sames");
+      cRechitsPositive.Update();
+      auto stats = (TPaveStats*)hPositiveRechitsEBGPU->FindObject("stats");
+      auto y2 = stats->GetY2NDC();
+      auto y1 = stats->GetY1NDC();
+      stats->SetY2NDC(y1);
+      stats->SetY1NDC(y1 - (y2-y1));
+    } 
+    cRechitsPositive.cd(4);
+    {
+      gPad->SetLogy();
+      hPositiveRechitsEECPU->SetLineColor(kRed);
+      hPositiveRechitsEECPU->SetLineWidth(2);
+      hPositiveRechitsEECPU->Draw("");
+      hPositiveRechitsEEGPU->SetLineColor(kBlue);
+      hPositiveRechitsEEGPU->SetLineWidth(2);
+      hPositiveRechitsEEGPU->Draw("sames");
+      cRechitsPositive.Update();
+      auto stats = (TPaveStats*)hPositiveRechitsEEGPU->FindObject("stats");
+      auto y2 = stats->GetY2NDC();
+      auto y1 = stats->GetY1NDC();
+      stats->SetY2NDC(y1);
+      stats->SetY1NDC(y1 - (y2-y1));
+    }
+    cRechitsPositive.cd(2); {
+      gStyle->SetPalette(55);
+      hPositiveRechitsEBGPUvsCPU->Draw("COLZ");
+    }
+    cRechitsPositive.cd(5); {
+      gStyle->SetPalette(55);
+      hPositiveRechitsEEGPUvsCPU->Draw("COLZ");
+    }
+    cRechitsPositive.cd(3); {
+      gPad->SetLogy();
+      //hPositiveRechitsEBdeltavsCPU->Draw("COLZ");
+      hPositiveRechitsEBGPUCPUratio->Draw("");
+    }
+    cRechitsPositive.cd(6); {
+      gPad->SetLogy();
+      //hPositiveRechitsEEdeltavsCPU->Draw("COLZ");
+      hPositiveRechitsEEGPUCPUratio->Draw("");
+    }
+    cRechitsPositive.SaveAs("ecal-rechits-positive.root");
+    cRechitsPositive.SaveAs("ecal-rechits-positive.png");
     
     
     cEnergies.cd(1);

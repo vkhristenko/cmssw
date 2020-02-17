@@ -285,6 +285,17 @@ EcalRecHitProducerGPU::EcalRecHitProducerGPU(const edm::ParameterSet& ps)   {
   configParameters_.flagmask = flagmask_;
   
   
+  // for recovery and killing
+  
+  configParameters_.recoverEBIsolatedChannels   = ps.getParameter<bool>("recoverEBIsolatedChannels");
+  configParameters_.recoverEEIsolatedChannels   = ps.getParameter<bool>("recoverEEIsolatedChannels");
+  configParameters_.recoverEBVFE                = ps.getParameter<bool>("recoverEBVFE");
+  configParameters_.recoverEEVFE                = ps.getParameter<bool>("recoverEEVFE");
+  configParameters_.recoverEBFE                 = ps.getParameter<bool>("recoverEBFE");
+  configParameters_.recoverEEFE                 = ps.getParameter<bool>("recoverEEFE");
+  
+  
+  
 }
 
 

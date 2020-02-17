@@ -310,6 +310,13 @@ namespace ecal {
       
       bool killDeadChannels;
       
+      bool recoverEBIsolatedChannels ;
+      bool recoverEEIsolatedChannels ;
+      bool recoverEBVFE              ;
+      bool recoverEEVFE              ;
+      bool recoverEBFE               ;
+      bool recoverEEFE               ;
+      
       float EBLaserMIN;
       float EELaserMIN;
       float EBLaserMAX;
@@ -324,7 +331,6 @@ namespace ecal {
       uint32_t flagmask;
       
       
-//       std::array<uint32_t, 3> kernelMinimizeThreads;
 //       
 //       bool shouldRunTimingComputation;
     };

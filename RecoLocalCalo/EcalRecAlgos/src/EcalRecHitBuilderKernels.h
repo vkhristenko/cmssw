@@ -18,6 +18,12 @@ namespace ecal {
       int const* ChannelStatusToBeExcluded,
       uint32_t ChannelStatusToBeExcludedSize, 
       bool killDeadChannels,
+      bool const recoverEBIsolatedChannels,
+      bool const recoverEEIsolatedChannels,
+      bool const recoverEBVFE,             
+      bool const recoverEEVFE,             
+      bool const recoverEBFE,             
+      bool const recoverEEFE,
       // for flags setting
       int const* expanded_v_DB_reco_flags,
       uint32_t const* expanded_Sizes_v_DB_reco_flags,

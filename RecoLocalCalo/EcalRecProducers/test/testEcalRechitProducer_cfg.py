@@ -181,17 +181,25 @@ process.ecalRecHitProducerGPU = process.ecalRecHitGPU.clone()
 #
 #process.ecalRecHit.killDeadChannels = cms.bool(False)
 #
-#process.ecalRecHit.recoverEBFE = cms.bool(False)
+process.ecalRecHit.recoverEBFE = cms.bool(False)
 #process.ecalRecHit.recoverEBIsolatedChannels = cms.bool(False)
 #process.ecalRecHit.recoverEBVFE = cms.bool(False)
-#
-#process.ecalRecHit.recoverEEFE = cms.bool(False)
+##
+process.ecalRecHit.recoverEEFE = cms.bool(False)
 #process.ecalRecHit.recoverEEIsolatedChannels = cms.bool(False)
 #process.ecalRecHit.recoverEEVFE = cms.bool(False)
 #
 #process.ecalRecHit.skipTimeCalib = cms.bool(True)
 #
 #process.ecalRecHitProducerGPU.killDeadChannels = cms.bool(False)
+#
+#
+#process.ecalRecHitProducerGPU.recoverEBFE = cms.bool(False)
+#process.ecalRecHitProducerGPU.recoverEBIsolatedChannels = cms.bool(False)
+#process.ecalRecHitProducerGPU.recoverEBVFE = cms.bool(False)
+#process.ecalRecHitProducerGPU.recoverEEFE = cms.bool(False)
+#process.ecalRecHitProducerGPU.recoverEEIsolatedChannels = cms.bool(False)
+#process.ecalRecHitProducerGPU.recoverEEVFE = cms.bool(False)
 #
 #
 #
