@@ -253,11 +253,11 @@ EcalRecHitProducer::produce(edm::Event& evt, const edm::EventSetup& es)
         eeRecHits->sort();
 	
         // AM TEST commented out only because not yet ported to GPU
-	// apply spike cleaning
-// 	if (cleaningAlgo_){
-// 	  cleaningAlgo_->setFlags(*ebRecHits);
-// 	  cleaningAlgo_->setFlags(*eeRecHits);
-// 	}
+// 	apply spike cleaning
+	if (cleaningAlgo_){
+	  cleaningAlgo_->setFlags(*ebRecHits);
+	  cleaningAlgo_->setFlags(*eeRecHits);
+	}
 
 
         // put the collection of recunstructed hits in the event   

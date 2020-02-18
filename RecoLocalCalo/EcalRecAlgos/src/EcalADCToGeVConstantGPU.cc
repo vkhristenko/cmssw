@@ -7,21 +7,7 @@ EcalADCToGeVConstantGPU::EcalADCToGeVConstantGPU(EcalADCToGeVConstant const& val
 : adc2gev_(2)  // size is 2, one form EB and one for EE
 {
   adc2gev_[0] = values.getEBValue();
-  adc2gev_[1] = values.getEEValue();
-  
-//   // fill in eb
-//   auto const& barrelValues = values.barrelItems();
-//   for (unsigned int i=0; i<barrelValues.size(); i++) {
-//     adc2gev_[i] = barrelValues[i].getEBValue();
-//   }
-//   
-//   // fill in ee
-//   auto const& endcapValues = values.endcapItems();
-//   auto const offset = barrelValues.size();
-//   for (unsigned int i=0; i<endcapValues.size(); i++) {
-//     adc2gev_[offset + i] = endcapValues[i].getEEValue();
-//   }
-  
+  adc2gev_[1] = values.getEEValue(); 
 }
 
 EcalADCToGeVConstantGPU::Product::~Product() {

@@ -150,8 +150,6 @@ void EcalCPURecHitProducer::acquire(
     
     
     
-    
-    
 //     for (unsigned int ieb = 0; ieb <  ebRecHits.size ; ieb++) {
 //       if (recHitsEB_.extra[ieb] != 0 ) std::cout << " [ " << ieb << " :: " << ebRecHits.size << " ] [ " << recHitsEB_.did[ieb] << " ] eb extra = " << recHitsEB_.extra[ieb] << std::endl;
 //     }

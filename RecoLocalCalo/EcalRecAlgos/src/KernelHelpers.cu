@@ -4,7 +4,7 @@
 #include "DataFormats/EcalDetId/interface/EEDetId.h"
 
 //
-// AM FIXME: can I remove "multifit" here?
+// AM TEST: can I remove "multifit" here?
 //           It will allow this to be used by other namespaces, such as "rechit"
 //
 

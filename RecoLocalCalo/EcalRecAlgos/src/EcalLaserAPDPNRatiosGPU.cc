@@ -12,36 +12,6 @@ EcalLaserAPDPNRatiosGPU::EcalLaserAPDPNRatiosGPU(EcalLaserAPDPNRatios const& val
     , t3_(values.getTimeMap().size())
     {
       
-//       auto getPair =
-//       [=](EcalLaserAPDPNRatios::EcalLaserAPDPNRatiosMap const& cond) -> EcalLaserAPDPNRatios::EcalLaserAPDPNpair {
-//         return isBarrel ? cond.barrel(xind) : cond.endcap(xind);
-//       };
-      
-//       
-//       apdpnpair = getPair(laserRatiosMap);
-//       
-//       apdpnpair.p1, ...
-//       
-
-//       
-//       iLM = MEEBGeom::lmr(ebid.ieta(), ebid.iphi());
-//       iLM = MEEEGeom::lmr(iX, iY, eeid.zside());
-//             
-//       timestamp = laserTimeMap[iLM - 1];
-//       
-//       if (iLM - 1 < (int)laserTimeMap.size()) {
-//         timestamp = laserTimeMap[iLM - 1];
-//       } 
-//       
-//       
-//       void  setValue(uint32_t rawId, const EcalLaserAPDPNpair& value) { laser_map[rawId] = value; };
-//       const EcalLaserAPDPNRatiosMap& getLaserMap() const { return laser_map; }
-//       
-//       void setTime(int hashedIndex, const EcalLaserTimeStamp& value) { time_map[hashedIndex] = value; };
-//       const EcalLaserTimeStampMap& getTimeMap() const { return time_map; }  
-//       
-      
-      
       // fill in eb
       //     auto const& barrelValues = values.barrelItems();
       for (unsigned int i=0; i<values.getLaserMap().barrelItems().size(); i++) {
