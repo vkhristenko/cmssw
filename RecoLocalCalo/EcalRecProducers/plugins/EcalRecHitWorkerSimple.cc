@@ -92,11 +92,6 @@ EcalRecHitWorkerSimple::run( const edm::Event & evt,
 
 	uint32_t flagBits = setFlagBits(v_DB_reco_flags_, dbstatus);
 
-        //
-        // AM FIXME: this is just a TEST
-//         flagBits = 0;
-        //
-        
         
 	float offsetTime = 0; // the global time phase
 	const EcalIntercalibConstantMap& icalMap = ical->getMap();  
@@ -149,9 +144,6 @@ EcalRecHitWorkerSimple::run( const edm::Event & evt,
                                                       /*recoflags_ 0*/ 
                                                       flagBits) );
 	
-        //
-        //---- AM FIXME Commented just for test, then it will be fixed   (4 lines below here)
-        //
         if (detid.subdetId() == EcalBarrel && (lasercalib < EBLaserMIN_ || lasercalib > EBLaserMAX_)) 
             myrechit.setFlag(EcalRecHit::kPoorCalib);
         if (detid.subdetId() == EcalEndcap && (lasercalib < EELaserMIN_ || lasercalib > EELaserMAX_)) 
@@ -166,13 +158,7 @@ EcalRecHitWorkerSimple::run( const edm::Event & evt,
 // Take our association map of dbstatuses-> recHit flagbits and return the apporpriate flagbit word
 uint32_t EcalRecHitWorkerSimple::setFlagBits(const std::vector<std::vector<uint32_t> >& map, 
 					     const uint32_t& status  ){
-  
-//   return status;
-  
-  //---- AM FIXME : this is just a TEST
-//   return 0;
-  //----
-  
+    
   for (unsigned int i = 0; i!=map.size(); ++i){
     if (std::find(map[i].begin(), map[i].end(),status)!= map[i].end()) 
       return 0x1 << i;

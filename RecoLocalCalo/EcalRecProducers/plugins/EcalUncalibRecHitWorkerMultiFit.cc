@@ -356,7 +356,7 @@ EcalUncalibRecHitWorkerMultiFit::run( const edm::Event & evt,
             //
             result.emplace_back((*itdg).id(), 4095*12, 0, 0, 0);
             auto & uncalibRecHit = result.back();
-            uncalibRecHit.setFlagBit( EcalUncalibratedRecHit::kSaturated );   // FIXME AM : TEST : remember to un-comment
+            uncalibRecHit.setFlagBit( EcalUncalibratedRecHit::kSaturated );
 	    // do not propagate the default chi2 = -1 value to the calib rechit (mapped to 64), set it to 0 when saturation
             uncalibRecHit.setChi2(0);
         } else if ( lastSampleBeforeSaturation >= -1 ) { // saturation on other samples: cannot extrapolate from the fourth one
@@ -367,7 +367,7 @@ EcalUncalibRecHitWorkerMultiFit::run( const edm::Event & evt,
             double amplitude = ((double)(((EcalDataFrame)(*itdg)).sample(5).adc()) - pedestal) * gainratio;
             result.emplace_back((*itdg).id(), amplitude, 0, 0, 0);
             auto & uncalibRecHit = result.back();
-            uncalibRecHit.setFlagBit( EcalUncalibratedRecHit::kSaturated );  //  FIXME AM : TEST : remember to un-comment
+            uncalibRecHit.setFlagBit( EcalUncalibratedRecHit::kSaturated );
             // do not propagate the default chi2 = -1 value to the calib rechit (mapped to 64), set it to 0 when saturation
             uncalibRecHit.setChi2(0);
         } else {

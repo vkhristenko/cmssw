@@ -182,9 +182,7 @@ public:
   }
   
   /// set the flags (from Flags or ESFlags) 
-  // ---- AM FIXME Just as a test     ----> when I forced to 0
   void setFlag(int flag) {flagBits_|= (0x1 << flag);}
-//   void setFlag(int flag) {flagBits_ = 0;}
   
   void unsetFlag(int flag) {flagBits_ &= ~(0x1 << flag);}
 
