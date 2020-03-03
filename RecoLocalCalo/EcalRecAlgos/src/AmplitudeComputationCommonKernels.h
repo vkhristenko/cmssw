@@ -53,9 +53,7 @@ void kernel_prep_1d_and_initialize(EcalPulseShape const* shapes_in,
 /// ([MAXSAMPLES, MAXSAMPLES], nchannels)
 ///
 __global__
-void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
-                    FullSampleMatrix* pulse_cov_out,
-                    SampleGainVector const* gainNoise,
+void kernel_prep_2d(SampleGainVector const* gainNoise,
                     uint32_t const* dids_eb,
                     uint32_t const* dids_ee,
                     float const* rms_x12,

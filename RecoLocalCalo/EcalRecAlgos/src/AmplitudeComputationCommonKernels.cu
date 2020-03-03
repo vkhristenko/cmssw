@@ -21,7 +21,6 @@ namespace ecal { namespace multifit {
 ///
 /// assume kernel launch configuration is 
 /// (MAXSAMPLES * nchannels, blocks)
-/// TODO: is there a point to split this kernel further to separate reductions
 /// 
 __global__
 void kernel_prep_1d_and_initialize(
@@ -354,9 +353,7 @@ void kernel_prep_1d_and_initialize(
 /// ([MAXSAMPLES, MAXSAMPLES], nchannels)
 ///
 __global__
-void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
-                    FullSampleMatrix* pulse_cov_out,
-                    SampleGainVector const* gainNoise,
+void kernel_prep_2d(SampleGainVector const* gainNoise,
                     uint32_t const* dids_eb,
                     uint32_t const* dids_ee,
                     float const* rms_x12,
@@ -414,11 +411,6 @@ void kernel_prep_2d(EcalPulseCovariance const* pulse_cov_in,
     bool tmp2 = isSaturated[ch];
     bool hasGainSwitch = tmp0 || tmp1 || tmp2;
     auto const vidx = ecal::abs(ty - tx);
-
-    // only ty == 0 and 1 will go for a second iteration
-    for (int iy=ty; iy<template_samples; iy+=nsamples)
-        for (int ix=tx; ix<template_samples; ix+=nsamples)
-            pulse_cov_out[ch](iy+7, ix+7) = pulse_cov_in[hashedId].covval[iy][ix];
 
     // non-divergent branch for all threads per block
     if (hasGainSwitch) {
