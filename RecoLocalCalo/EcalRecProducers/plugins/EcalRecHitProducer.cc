@@ -133,7 +133,8 @@ EcalRecHitProducer::produce(edm::Event& evt, const edm::EventSetup& es)
         ebRecHits->sort();
         eeRecHits->sort();
         
-        if ( recoverEBIsolatedChannels_ || recoverEBFE_ || killDeadChannels_ )
+//         if ( recoverEBIsolatedChannels_ || recoverEBFE_ || killDeadChannels_ ) //  <<--- it was like this. AM fix. TEST FIXME 
+        if ( recoverEBIsolatedChannels_ || recoverEBVFE_ || killDeadChannels_ )
         {
                 edm::Handle< std::set<EBDetId> > pEBDetId;
                 const std::set<EBDetId> * detIds = nullptr;
@@ -251,7 +252,8 @@ EcalRecHitProducer::produce(edm::Event& evt, const edm::EventSetup& es)
 	ebRecHits->sort();
         eeRecHits->sort();
 	
-	// apply spike cleaning
+        // AM TEST commented out only because not yet ported to GPU
+// 	apply spike cleaning
 	if (cleaningAlgo_){
 	  cleaningAlgo_->setFlags(*ebRecHits);
 	  cleaningAlgo_->setFlags(*eeRecHits);

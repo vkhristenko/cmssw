@@ -47,8 +47,6 @@ class EcalRecHitSimpleAlgo : public EcalRecHitAbsAlgo {
     EcalRecHit rh( uncalibRH.id(), energy, time );
     rh.setChi2( uncalibRH.chi2() );
     rh.setEnergyError( uncalibRH.amplitudeError()*adcToGeVConstant_*intercalibConstant);
-    /* rh.setOutOfTimeEnergy( uncalibRH.outOfTimeEnergy() * adcToGeVConstant_ * intercalibConstant ); */
-    /* rh.setOutOfTimeChi2( uncalibRH.outOfTimeChi2() ); */
     rh.setTimeError(uncalibRH.jitterErrorBits());
 
     // Now fill flags
@@ -85,6 +83,7 @@ class EcalRecHitSimpleAlgo : public EcalRecHitAbsAlgo {
     }
     
     if (good) rh.setFlag(EcalRecHit::kGood);
+
     return rh;
   }
 

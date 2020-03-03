@@ -477,7 +477,7 @@ void EcalRawToDigi::produce(edm::Event& e, const edm::EventSetup& es)
   
   
   // Add collections to the event 
-  
+
   if(put_){
     
     if( headerUnpacking_){ 
