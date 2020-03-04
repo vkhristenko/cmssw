@@ -351,6 +351,9 @@ EcalUncalibRecHitWorkerMultiFit::run( const edm::Event & evt,
         // === amplitude computation ===
 
         if ( lastSampleBeforeSaturation == 4 ) { // saturation on the expected max sample
+            //
+            // AM : TEST: no pedestal subtraction???  
+            //
             result.emplace_back((*itdg).id(), 4095*12, 0, 0, 0);
             auto & uncalibRecHit = result.back();
             uncalibRecHit.setFlagBit( EcalUncalibratedRecHit::kSaturated );

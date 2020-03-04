@@ -103,8 +103,8 @@ EcalUncalibRecHitProducer::produce(edm::Event& evt, const edm::EventSetup& es) {
 	evt.getByToken( eeDigiCollectionToken_, pEEDigis);            
 	eeDigis = pEEDigis.product(); // get a ptr to the product
 	edm::LogInfo("EcalUncalibRecHitInfo") << "total # eeDigis: " << eeDigis->size() ;
+         
         
-
         // tranparently get things from event setup
         worker_->set(es);
         worker_->set(evt);

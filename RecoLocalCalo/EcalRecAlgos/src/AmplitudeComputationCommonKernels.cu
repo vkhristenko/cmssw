@@ -102,8 +102,8 @@ void kernel_prep_1d_and_initialize(
         auto const isBarrel = did.subdetId() == EcalBarrel;
         // TODO offset for ee, 0 for eb
         auto const hashedId = isBarrel
-            ? hashedIndexEB(did.rawId())
-            : offsetForHashes + hashedIndexEE(did.rawId());
+            ? ecal::reconstruction::hashedIndexEB(did.rawId())
+            : offsetForHashes + ecal::reconstruction::hashedIndexEE(did.rawId());
 
 
         //
@@ -127,9 +127,9 @@ void kernel_prep_1d_and_initialize(
         SampleVector::Scalar gainratio = 0.;
 
         // store into shared mem for initialization
-        shr_hasSwitchToGain6[threadIdx.x] = gainId == EcalMgpaBitwiseGain6;
-        shr_hasSwitchToGain1[threadIdx.x] = gainId == EcalMgpaBitwiseGain1;
-        shr_hasSwitchToGain0_tmp[threadIdx.x] = gainId == EcalMgpaBitwiseGain0;
+        shr_hasSwitchToGain6[threadIdx.x] = (gainId == EcalMgpaBitwiseGain6);
+        shr_hasSwitchToGain1[threadIdx.x] = (gainId == EcalMgpaBitwiseGain1);
+        shr_hasSwitchToGain0_tmp[threadIdx.x] = (gainId == EcalMgpaBitwiseGain0);
         shr_hasSwitchToGain0[threadIdx.x] = shr_hasSwitchToGain0_tmp[threadIdx.x];
         shr_counts[threadIdx.x] = 0;
         __syncthreads();
@@ -141,7 +141,7 @@ void kernel_prep_1d_and_initialize(
                 shr_counts[threadIdx.x] += 
                     shr_hasSwitchToGain0[threadIdx.x+i];
         }
-        shr_isSaturated[threadIdx.x] = shr_counts[threadIdx.x] == 5;
+        shr_isSaturated[threadIdx.x] = (shr_counts[threadIdx.x] == 5);
 
         //
         // unrolled reductions
@@ -204,7 +204,7 @@ void kernel_prep_1d_and_initialize(
             hasSwitchToGain1[ch] = shr_hasSwitchToGain1[threadIdx.x];
 
             // set only for the threadIdx.x corresponding to sample==0
-            check_hasSwitchToGain0 = shr_hasSwitchToGain0_tmp[threadIdx.x];
+            check_hasSwitchToGain0 = shr_hasSwitchToGain0_tmp[threadIdx.x];  // AM : FIXME : why only for sample 0? It should be done for sample 5 since then used only for sample 5
 
             shr_isSaturated[threadIdx.x+3] = 
                 shr_isSaturated[threadIdx.x] || 
@@ -212,6 +212,10 @@ void kernel_prep_1d_and_initialize(
             isSaturated[ch] = shr_isSaturated[threadIdx.x+3];
         }
 
+        if (sample==sample_max) {
+          check_hasSwitchToGain0 = shr_hasSwitchToGain0_tmp[threadIdx.x];  // AM : FIXME : why only for sample 0? It should be done for sample 5 since then used only for sample 5
+        }
+        
         // TODO: w/o this sync, there is a race
         // if (threadIdx == sample_max) below uses max sample thread, not for 0 sample
         // check if we can remove it
@@ -245,7 +249,7 @@ void kernel_prep_1d_and_initialize(
         if (adc==0)
             printf("adc is zero\n");
 #endif
-
+        
         //
         // initialization
         //
@@ -279,34 +283,36 @@ void kernel_prep_1d_and_initialize(
             if (shr_hasSwitchToGain1[chStart])
                 flag |= 0x1 << EcalUncalibratedRecHit::kHasSwitchToGain1;
 
-            // this corresponds to cpu branching on lastSampleBeforeSaturation
-            // likely false
-            if (check_hasSwitchToGain0) {
-                // assign for the case some sample having gainId == 0
-                //energies[ch] = amplitudes[ch][sample_max];
-                energies[ch] = amplitude;
-
-                // check if samples before sample_max have true
-                bool saturated_before_max = false;
-                #pragma unroll
-                for (char ii=0; ii<5; ii++)
-                    saturated_before_max = saturated_before_max ||
-                        shr_hasSwitchToGain0[chStart + ii];
-
-                // if saturation is in the max sample and not in the first 5
-                if (!saturated_before_max && 
-                    shr_hasSwitchToGain0[threadMax])
-                    energies[ch] = 49140; // 4095 * 12
-                    //---- AM FIXME : no pedestal subtraction???  
-                    //It should be "(4095. - pedestal) * gainratio"
-
-                // set state flag to terminate further processing of this channel
-                acState[ch] = static_cast<char>(MinimizationState::Precomputed); 
-                flag |= 0x1 << EcalUncalibratedRecHit::kSaturated;
-                flags[ch] = flag;
-                return;
+            // check if samples before sample_max have true
+            bool saturated_before_max = false;
+            #pragma unroll
+            for (char ii=0; ii<5; ii++) {
+              saturated_before_max = saturated_before_max || shr_hasSwitchToGain0[chStart + ii];
             }
-
+            
+            // if saturation is in the max sample and not in the first 5
+            if (!saturated_before_max && shr_hasSwitchToGain0[threadMax]) {
+              energies[ch] = 49140; // 4095 * 12
+              //---- AM FIXME : no pedestal subtraction???  
+              //It should be "(4095. - pedestal) * gainratio"
+              acState[ch] = static_cast<char>(MinimizationState::Precomputed); 
+              flag |= 0x1 << EcalUncalibratedRecHit::kSaturated;   // FIXME AM : TEST : remember to un-comment
+              flags[ch] = flag;
+              return;
+            }
+            
+            if (check_hasSwitchToGain0) {
+              energies[ch] = amplitude;
+              // set state flag to terminate further processing of this channel
+              acState[ch] = static_cast<char>(MinimizationState::Precomputed); 
+              flag |= 0x1 << EcalUncalibratedRecHit::kSaturated;  //  FIXME AM : TEST : remember to un-comment
+              flags[ch] = flag;
+              return;
+            }
+            
+              
+            
+            
             // according to cpu version
 //            auto max_amplitude = amplitudes[ch][sample_max]; 
             auto const max_amplitude = amplitude;
@@ -391,8 +397,8 @@ void kernel_prep_2d(SampleGainVector const* gainNoise,
     auto const did = DetId{dids[inputCh]};
     auto const isBarrel = did.subdetId() == EcalBarrel;
     auto const hashedId = isBarrel
-        ? hashedIndexEB(did.rawId())
-        : offsetForHashes + hashedIndexEE(did.rawId());
+        ? ecal::reconstruction::hashedIndexEB(did.rawId())
+        : offsetForHashes + ecal::reconstruction::hashedIndexEE(did.rawId());
     auto const G12SamplesCorrelation = isBarrel
         ? G12SamplesCorrelationEB
         : G12SamplesCorrelationEE;

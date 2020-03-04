@@ -246,6 +246,7 @@ float EcalLaserDbService::getLaserCorrection (DetId const & xid, edm::Timestamp 
   if ( apdpnref != 0 && (t_i - t_f) != 0 && (lt_i - lt_f) != 0) {
     long long tt = t; // never subtract two unsigned!
     float interpolatedLaserResponse = p_i/apdpnref + float(tt-t_i)*(p_f-p_i)/(apdpnref*float(t_f-t_i)); 
+
     float interpolatedLinearResponse = lp_i/apdpnref + float(tt-lt_i)*(lp_f-lp_i)/(apdpnref*float(lt_f-lt_i)); // FIXED BY FC
     
     if(interpolatedLinearResponse >2.f || interpolatedLinearResponse <0.1f) 
@@ -267,7 +268,6 @@ float EcalLaserDbService::getLaserCorrection (DetId const & xid, edm::Timestamp 
       float interpolatedTransparencyResponse = interpolatedLaserResponse / interpolatedLinearResponse;
 
       correctionFactor =  1.f/( std::pow(interpolatedTransparencyResponse,alpha) *interpolatedLinearResponse  );
-      
     }
     
   } else {

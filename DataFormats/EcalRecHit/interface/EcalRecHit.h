@@ -183,6 +183,7 @@ public:
   
   /// set the flags (from Flags or ESFlags) 
   void setFlag(int flag) {flagBits_|= (0x1 << flag);}
+  
   void unsetFlag(int flag) {flagBits_ &= ~(0x1 << flag);}
 
   /// check if the flag is true
@@ -212,7 +213,14 @@ public:
     // no flag assigned, assume good
     return kGood;
   }
-
+  
+  uint32_t flagBits() const { return flagBits_; }
+  
+  uint32_t extra() const { 
+    return extra_;
+  }
+  
+  
 private:
   // from calorechit
   DetId id_;

@@ -3,7 +3,25 @@
 
 #include <Eigen/Dense>
 
-namespace ecal { namespace multifit {
+namespace ecal { 
+  namespace reconstruction {
+    
+    __device__
+    uint32_t hashedIndexEB(uint32_t id);
+    
+    __device__
+    uint32_t hashedIndexEE(uint32_t id);
+    
+    
+    __device__ 
+    int laser_monitoring_region_EB(uint32_t id);
+    
+    __device__ 
+    int laser_monitoring_region_EE(uint32_t id);
+    
+  }  
+  
+  namespace multifit {
 
 template<int NROWS, int NCOLS>
 using ColMajorMatrix = Eigen::Matrix<float, NROWS, NCOLS, Eigen::ColMajor>;
@@ -16,12 +34,6 @@ using ColumnVector = Eigen::Matrix<T, SIZE, 1>;
 
 template<int SIZE, typename T = float>
 using RowVector = Eigen::Matrix<T, 1, SIZE>;
-
-__device__
-uint32_t hashedIndexEB(uint32_t id);
-
-__device__
-uint32_t hashedIndexEE(uint32_t id);
 
 
 // FIXME: provide specialization for Row Major layout
