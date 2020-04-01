@@ -90,95 +90,41 @@ void EcalCPUUncalibRecHitProducer::acquire(
     recHitsEB_.resize(ebRecHits.size);
     recHitsEE_.resize(eeRecHits.size);
 
-    // enqeue transfers
-    cudaCheck( cudaMemcpyAsync(recHitsEB_.did.data(),
-                               ebRecHits.did,
-                               recHitsEB_.did.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream()) );
-    cudaCheck( cudaMemcpyAsync(recHitsEE_.did.data(),
-                               eeRecHits.did,
-                               recHitsEE_.did.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream()) );
+    auto lambdaToTransfer = [&ctx](auto& dest, auto* src) {
+        using vector_type = typename std::remove_reference<decltype(dest)>::type;
+        using type = typename vector_type::value_type;
+        cudaCheck(cudaMemcpyAsync(dest.data(),
+                                  src,
+                                  dest.size() * sizeof(type),
+                                  cudaMemcpyDeviceToHost,
+                                  ctx.stream()));
+    };
 
-    cudaCheck( cudaMemcpyAsync(recHitsEB_.amplitudesAll.data(),
-                               ebRecHits.amplitudesAll,
-                               recHitsEB_.amplitudesAll.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream()) );
-    cudaCheck( cudaMemcpyAsync(recHitsEE_.amplitudesAll.data(),
-                               eeRecHits.amplitudesAll,
-                               recHitsEE_.amplitudesAll.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream()) );
+    // enqeue transfers
+    lambdaToTransfer(recHitsEB_.did, ebRecHits.did);
+    lambdaToTransfer(recHitsEE_.did, eeRecHits.did);
     
-    cudaCheck( cudaMemcpyAsync(recHitsEB_.amplitude.data(),
-                               ebRecHits.amplitude,
-                               recHitsEB_.amplitude.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream()) );
-    cudaCheck( cudaMemcpyAsync(recHitsEE_.amplitude.data(),
-                               eeRecHits.amplitude,
-                               recHitsEE_.amplitude.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream()) );
+    lambdaToTransfer(recHitsEB_.amplitudesAll, ebRecHits.amplitudesAll);
+    lambdaToTransfer(recHitsEE_.amplitudesAll, eeRecHits.amplitudesAll);
     
-    cudaCheck( cudaMemcpyAsync(recHitsEB_.chi2.data(),
-                               ebRecHits.chi2,
-                               recHitsEB_.chi2.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream()) );
-    cudaCheck( cudaMemcpyAsync(recHitsEE_.chi2.data(),
-                               eeRecHits.chi2,
-                               recHitsEE_.chi2.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream()) );
+    lambdaToTransfer(recHitsEB_.amplitude, ebRecHits.amplitude);
+    lambdaToTransfer(recHitsEE_.amplitude, eeRecHits.amplitude);
+
+    lambdaToTransfer(recHitsEB_.chi2, ebRecHits.chi2);
+    lambdaToTransfer(recHitsEE_.chi2, eeRecHits.chi2);
     
-    cudaCheck( cudaMemcpyAsync(recHitsEB_.pedestal.data(),
-                               ebRecHits.pedestal,
-                               recHitsEB_.pedestal.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream()) );
-    cudaCheck( cudaMemcpyAsync(recHitsEE_.pedestal.data(),
-                               eeRecHits.pedestal,
-                               recHitsEE_.pedestal.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream()) );
-    
-    cudaCheck( cudaMemcpyAsync(recHitsEB_.flags.data(),
-                               ebRecHits.flags,
-                               recHitsEB_.flags.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream()) );
-    cudaCheck( cudaMemcpyAsync(recHitsEE_.flags.data(),
-                               eeRecHits.flags,
-                               recHitsEE_.flags.size() * sizeof(uint32_t),
-                               cudaMemcpyDeviceToHost,
-                               ctx.stream()) );
-    
+    lambdaToTransfer(recHitsEB_.pedestal, ebRecHits.pedestal);
+    lambdaToTransfer(recHitsEE_.pedestal, eeRecHits.pedestal);
+
+    lambdaToTransfer(recHitsEB_.flags, ebRecHits.flags);
+    lambdaToTransfer(recHitsEE_.flags, eeRecHits.flags);
+
     if (containsTimingInformation_) {
-        cudaCheck( cudaMemcpyAsync(recHitsEB_.jitter.data(),
-                                   ebRecHits.jitter,
-                                   recHitsEB_.jitter.size() * sizeof(uint32_t),
-                                   cudaMemcpyDeviceToHost,
-                                   ctx.stream()) );
-        cudaCheck( cudaMemcpyAsync(recHitsEE_.jitter.data(),
-                                   eeRecHits.jitter,
-                                   recHitsEE_.jitter.size() * sizeof(uint32_t),
-                                   cudaMemcpyDeviceToHost,
-                                   ctx.stream()) );
-        
-        cudaCheck( cudaMemcpyAsync(recHitsEB_.jitterError.data(),
-                                   ebRecHits.jitterError,
-                                   recHitsEB_.jitterError.size() * sizeof(uint32_t),
-                                   cudaMemcpyDeviceToHost,
-                                   ctx.stream()) );
-        cudaCheck( cudaMemcpyAsync(recHitsEE_.jitterError.data(),
-                                   eeRecHits.jitterError,
-                                   recHitsEE_.jitterError.size() * sizeof(uint32_t),
-                                   cudaMemcpyDeviceToHost,
-                                   ctx.stream()) );
+        lambdaToTransfer(recHitsEB_.jitter, ebRecHits.jitter);
+        lambdaToTransfer(recHitsEE_.jitter, eeRecHits.jitter);
+    
+        lambdaToTransfer(recHitsEB_.jitterError, ebRecHits.jitterError);
+        lambdaToTransfer(recHitsEE_.jitterError, eeRecHits.jitterError);
     }
 }
 
