@@ -45,6 +45,8 @@ int main(int argc, char *argv[]) {
     auto hSOIAmplitudesEEGPU = new TH1D("hSOIAmplitudesEEGPU", "hSOIAmplitudesEEGPU", nbins, 0, last);
     auto hSOIAmplitudesEBCPU = new TH1D("hSOIAmplitudesEBCPU", "hSOIAmplitudesEBCPU", nbins, 0, last);
     auto hSOIAmplitudesEECPU = new TH1D("hSOIAmplitudesEECPU", "hSOIAmplitudesEECPU", nbins, 0, last);
+    auto hSOIAmplitudesEBGPUCPUratio = new TH1D("SOIAmplitudesEBGPU/CPUratio", "SOIAmplitudesEBGPU/CPUratio; GPU/CPU", 200, 0.9, 1.1);
+    auto hSOIAmplitudesEEGPUCPUratio = new TH1D("SOIAmplitudesEEGPU/CPUratio", "SOIAmplitudesEEGPU/CPUratio; GPU/CPU", 200, 0.9, 1.1);
 
     auto hChi2EBGPU = new TH1D("hChi2EBGPU", "hChi2EBGPU", nbins_chi2, 0, last_chi2);
     auto hChi2EEGPU = new TH1D("hChi2EEGPU", "hChi2EEGPU", nbins_chi2, 0, last_chi2);
@@ -113,6 +115,7 @@ int main(int argc, char *argv[]) {
             hSOIAmplitudesEBCPU->Fill(soi_amp_cpu);
             hSOIAmplitudesEBGPUvsCPU->Fill(soi_amp_cpu, soi_amp_gpu);
             hSOIAmplitudesEBdeltavsCPU->Fill(soi_amp_cpu, soi_amp_gpu-soi_amp_cpu);
+            hSOIAmplitudesEBGPUCPUratio->Fill( (float) soi_amp_gpu/soi_amp_cpu);
             hChi2EBGPU->Fill(chi2_gpu);
             hChi2EBCPU->Fill(chi2_cpu);
             hChi2EBGPUvsCPU->Fill(chi2_cpu, chi2_gpu);
@@ -146,6 +149,7 @@ int main(int argc, char *argv[]) {
             hSOIAmplitudesEECPU->Fill(soi_amp_cpu);
             hSOIAmplitudesEEGPUvsCPU->Fill(soi_amp_cpu, soi_amp_gpu);
             hSOIAmplitudesEEdeltavsCPU->Fill(soi_amp_cpu, soi_amp_gpu-soi_amp_cpu);
+            hSOIAmplitudesEEGPUCPUratio->Fill( (float) soi_amp_gpu/soi_amp_cpu);
             hChi2EEGPU->Fill(chi2_gpu);
             hChi2EECPU->Fill(chi2_cpu);
             hChi2EEGPUvsCPU->Fill(chi2_cpu, chi2_gpu);
@@ -164,7 +168,7 @@ int main(int argc, char *argv[]) {
 
     {
       TCanvas c("plots", "plots", 4200, 6200);
-      c.Divide(2, 3);
+      c.Divide(2, 4);
 
       c.cd(1);
       {
@@ -206,8 +210,26 @@ int main(int argc, char *argv[]) {
       hSOIAmplitudesEBdeltavsCPU->Draw("COLZ");
       c.cd(6);
       hSOIAmplitudesEEdeltavsCPU->Draw("COLZ");
+      c.cd(7);
+      {
+          gPad->SetLogy();
+          hSOIAmplitudesEBGPUCPUratio->SetLineColor(kBlack);
+          hSOIAmplitudesEBGPUCPUratio->SetLineWidth(1.);
+          hSOIAmplitudesEBGPUCPUratio->Draw("");
+      }
+      c.cd(8);
+      {
+          gPad->SetLogy();
+          hSOIAmplitudesEEGPUCPUratio->SetLineColor(kBlack);
+          hSOIAmplitudesEEGPUCPUratio->SetLineWidth(1.);
+          hSOIAmplitudesEEGPUCPUratio->Draw("");
+      }
 
       c.SaveAs("ecal-amplitudes.pdf");
+    }
+    {
+      TCanvas c("plots", "plots", 4200, 6200);
+      c.Divide(2, 3);
 
       c.cd(1);
       {
