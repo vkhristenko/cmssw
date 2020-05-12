@@ -3,19 +3,19 @@
 
 #include "CondFormats/EcalObjects/interface/EcalChannelStatus.h"
 
-#ifndef __CUDACC__
-#include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
-#include "HeterogeneousCore/CUDACore/interface/ESProduct.h"
-#endif
+// #ifndef __CUDACC__
+// #include "HeterogeneousCore/CUDAUtilities/interface/CUDAHostAllocator.h"
+// #include "HeterogeneousCore/CUDACore/interface/ESProduct.h"
+// #endif
 
 class EcalChannelStatusGPU {
 public:
-  struct Product {
-    ~Product();
-    uint16_t *status = nullptr;
-  };
+//   struct Product {
+//     ~Product();
+//     uint16_t *status = nullptr;
+//   };
   
-  #ifndef __CUDACC__
+//   #ifndef __CUDACC__
   
   // 
   EcalChannelStatusGPU(EcalChannelStatus const&);
@@ -24,7 +24,7 @@ public:
   ~EcalChannelStatusGPU() = default;
   
   // get device pointers
-  Product const& getProduct(cudaStream_t) const;
+//   Product const& getProduct(cudaStream_t) const;
   
   // 
   static std::string name() { return std::string{"ecalChannelStatusGPU"}; }
@@ -32,11 +32,11 @@ public:
 private:
   // in the future, we need to arrange so to avoid this copy on the host
   // store eb first then ee
-  std::vector<uint16_t, CUDAHostAllocator<uint16_t>> status_;
+//   std::vector<uint16_t, CUDAHostAllocator<uint16_t>> status_;
   
-  cms::cuda::ESProduct<Product> product_;
+//   cms::cuda::ESProduct<Product> product_;
   
-  #endif
+//   #endif
 };
 
 
