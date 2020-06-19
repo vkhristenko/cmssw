@@ -7,6 +7,7 @@
 #include "HeterogeneousCore/CUDAUtilities/interface/HostAllocator.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/device_unique_ptr.h"
+#include "HeterogeneousCore/CUDAUtilities/interface/host_unique_ptr.h"
 
 #include "ElectronicsMappingGPU.h"
 
@@ -34,6 +35,11 @@ namespace hcal {
     };
 
     struct InputDataCPU {
+      cms::cuda::host::unique_ptr<unsigned char[]> data;
+      cms::cuda::host::unique_ptr<uint32_t[]> offsets;
+      cms::cuda::host::unique_ptr<int[]> feds;
+
+      /*
       std::vector<unsigned char, cms::cuda::HostAllocator<unsigned char>> data;
       std::vector<uint32_t, cms::cuda::HostAllocator<uint32_t>> offsets;
       std::vector<int, cms::cuda::HostAllocator<int>> feds;
@@ -42,7 +48,7 @@ namespace hcal {
         data.resize(utca_nfeds_max * sizeof(unsigned char) * nbytes_per_fed_max);
         offsets.resize(utca_nfeds_max, 0);
         feds.resize(utca_nfeds_max, 0);
-      }
+      }*/
     };
 
     struct OutputDataCPU {
@@ -55,18 +61,6 @@ namespace hcal {
       // depends on tHE number of output collections
       // that is a statically known predefined number!!!
       cms::cuda::device::unique_ptr<uint32_t[]> pChannelsCounters;
-
-      /*
-      void allocate(ConfigurationParameters const &) {
-        cudaCheck(cudaMalloc((void **)&pChannelsCounters, sizeof(uint32_t) * numOutputCollections));
-      }*/
-
-      /*
-      void deallocate(ConfigurationParameters const &) {
-        if (pChannelsCounters) {
-          cudaCheck(cudaFree(pChannelsCounters));
-        }
-      }*/
     };
 
     struct OutputDataGPU {

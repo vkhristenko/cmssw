@@ -43,7 +43,6 @@ private:
 
   hcal::raw::ConfigurationParameters config_;
   // FIXME move this to use raii
-  hcal::raw::InputDataCPU inputCPU_;
   hcal::raw::InputDataGPU inputGPU_;
   hcal::raw::OutputDataGPU outputGPU_;
   hcal::raw::OutputDataCPU outputCPU_;
@@ -88,7 +87,6 @@ HcalRawToDigiGPU::HcalRawToDigiGPU(const edm::ParameterSet& ps)
   // reserve memory and call CUDA API functions only if CUDA is available
   edm::Service<CUDAService> cs;
   if (cs and cs->enabled()) {
-    inputCPU_.allocate();
     outputCPU_.allocate();
 
     inputGPU_.allocate();
@@ -125,9 +123,22 @@ void HcalRawToDigiGPU::acquire(edm::Event const& event,
 
   // scratch
   hcal::raw::ScratchDataGPU scratchGPU = {
-      cms::cuda::make_device_unique<uint32_t[]>(
-        hcal::raw::numOutputCollections,
-        ctx.stream())
+    cms::cuda::make_device_unique<uint32_t[]>(
+      hcal::raw::numOutputCollections,
+      ctx.stream())
+  };
+
+  // input cpu data
+  hcal::raw::InputDataCPU inputCPU = {
+    cms::cuda::make_host_unique<unsigned char[]>(
+      hcal::raw::utca_nfeds_max * hcal::raw::nbytes_per_fed_max,
+      ctx.stream()),
+    cms::cuda::make_host_unique<uint32_t[]>(
+      hcal::raw::utca_nfeds_max,
+      ctx.stream()),
+    cms::cuda::make_host_unique<int[]>(
+      hcal::raw::utca_nfeds_max,
+      ctx.stream())
   };
 
   // iterate over feds
@@ -151,17 +162,17 @@ void HcalRawToDigiGPU::acquire(edm::Event const& event,
 #endif
 
     // copy raw data into plain buffer
-    std::memcpy(inputCPU_.data.data() + currentCummOffset, data.data(), nbytes);
+    std::memcpy(inputCPU.data.get() + currentCummOffset, data.data(), nbytes);
     // set the offset in bytes from the start
-    inputCPU_.offsets[counter] = currentCummOffset;
-    inputCPU_.feds[counter] = fed;
+    inputCPU.offsets[counter] = currentCummOffset;
+    inputCPU.feds[counter] = fed;
 
     // this is the current offset into the vector
     currentCummOffset += nbytes;
     ++counter;
   }
 
-  hcal::raw::entryPoint(inputCPU_,
+  hcal::raw::entryPoint(inputCPU,
                         inputGPU_,
                         outputGPU_,
                         scratchGPU,

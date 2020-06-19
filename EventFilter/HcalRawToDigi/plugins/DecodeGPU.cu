@@ -568,15 +568,15 @@ namespace hcal {
                     uint32_t const nbytesTotal) {
       // transfer
       cudaCheck(cudaMemcpyAsync(
-          inputGPU.data, inputCPU.data.data(), nbytesTotal * sizeof(unsigned char), cudaMemcpyHostToDevice, cudaStream));
+          inputGPU.data, inputCPU.data.get(), nbytesTotal * sizeof(unsigned char), cudaMemcpyHostToDevice, cudaStream));
       cudaCheck(cudaMemcpyAsync(inputGPU.offsets,
-                                inputCPU.offsets.data(),
+                                inputCPU.offsets.get(),
                                 nfedsWithData * sizeof(uint32_t),
                                 cudaMemcpyHostToDevice,
                                 cudaStream));
       cudaCheck(cudaMemsetAsync(scratchGPU.pChannelsCounters.get(), 0, sizeof(uint32_t) * numOutputCollections, cudaStream));
       cudaCheck(cudaMemcpyAsync(
-          inputGPU.feds, inputCPU.feds.data(), nfedsWithData * sizeof(int), cudaMemcpyHostToDevice, cudaStream));
+          inputGPU.feds, inputCPU.feds.get(), nfedsWithData * sizeof(int), cudaMemcpyHostToDevice, cudaStream));
 
       // 12 is the max number of modules per crate
       kernel_rawdecode_test<32><<<nfedsWithData, 12 * 32, 0, cudaStream>>>(inputGPU.data,
