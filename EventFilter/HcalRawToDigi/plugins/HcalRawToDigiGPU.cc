@@ -12,6 +12,7 @@
 #include "HeterogeneousCore/CUDACore/interface/ScopedContext.h"
 #include "HeterogeneousCore/CUDAServices/interface/CUDAService.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
+#include "HeterogeneousCore/CUDAUtilities/interface/device_unique_ptr.h"
 
 #include "DeclsForKernels.h"
 #include "DecodeGPU.h"
@@ -45,7 +46,6 @@ private:
   hcal::raw::InputDataCPU inputCPU_;
   hcal::raw::InputDataGPU inputGPU_;
   hcal::raw::OutputDataGPU outputGPU_;
-  hcal::raw::ScratchDataGPU scratchGPU_;
   hcal::raw::OutputDataCPU outputCPU_;
 };
 
@@ -93,7 +93,6 @@ HcalRawToDigiGPU::HcalRawToDigiGPU(const edm::ParameterSet& ps)
 
     inputGPU_.allocate();
     outputGPU_.allocate(config_);
-    scratchGPU_.allocate(config_);
   }
 }
 
@@ -103,7 +102,6 @@ HcalRawToDigiGPU::~HcalRawToDigiGPU() {
   if (cs and cs->enabled()) {
     inputGPU_.deallocate();
     outputGPU_.deallocate(config_);
-    scratchGPU_.deallocate(config_);
   }
 }
 
@@ -124,6 +122,13 @@ void HcalRawToDigiGPU::acquire(edm::Event const& event,
   // event data
   edm::Handle<FEDRawDataCollection> rawDataHandle;
   event.getByToken(rawDataToken_, rawDataHandle);
+
+  // scratch
+  hcal::raw::ScratchDataGPU scratchGPU = {
+      cms::cuda::make_device_unique<uint32_t[]>(
+        hcal::raw::numOutputCollections,
+        ctx.stream())
+  };
 
   // iterate over feds
   // TODO: another idea
@@ -159,7 +164,7 @@ void HcalRawToDigiGPU::acquire(edm::Event const& event,
   hcal::raw::entryPoint(inputCPU_,
                         inputGPU_,
                         outputGPU_,
-                        scratchGPU_,
+                        scratchGPU,
                         outputCPU_,
                         conditions,
                         config_,

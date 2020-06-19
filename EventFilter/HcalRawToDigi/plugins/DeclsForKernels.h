@@ -6,6 +6,7 @@
 #include "CUDADataFormats/HcalDigi/interface/DigiCollection.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/HostAllocator.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
+#include "HeterogeneousCore/CUDAUtilities/interface/device_unique_ptr.h"
 
 #include "ElectronicsMappingGPU.h"
 
@@ -53,17 +54,19 @@ namespace hcal {
     struct ScratchDataGPU {
       // depends on tHE number of output collections
       // that is a statically known predefined number!!!
-      uint32_t *pChannelsCounters = nullptr;
+      cms::cuda::device::unique_ptr<uint32_t[]> pChannelsCounters;
 
+      /*
       void allocate(ConfigurationParameters const &) {
         cudaCheck(cudaMalloc((void **)&pChannelsCounters, sizeof(uint32_t) * numOutputCollections));
-      }
+      }*/
 
+      /*
       void deallocate(ConfigurationParameters const &) {
         if (pChannelsCounters) {
           cudaCheck(cudaFree(pChannelsCounters));
         }
-      }
+      }*/
     };
 
     struct OutputDataGPU {

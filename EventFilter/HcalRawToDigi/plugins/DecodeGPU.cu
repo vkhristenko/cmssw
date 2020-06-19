@@ -574,7 +574,7 @@ namespace hcal {
                                 nfedsWithData * sizeof(uint32_t),
                                 cudaMemcpyHostToDevice,
                                 cudaStream));
-      cudaCheck(cudaMemsetAsync(scratchGPU.pChannelsCounters, 0, sizeof(uint32_t) * numOutputCollections, cudaStream));
+      cudaCheck(cudaMemsetAsync(scratchGPU.pChannelsCounters.get(), 0, sizeof(uint32_t) * numOutputCollections, cudaStream));
       cudaCheck(cudaMemcpyAsync(
           inputGPU.feds, inputCPU.feds.data(), nfedsWithData * sizeof(int), cudaMemcpyHostToDevice, cudaStream));
 
@@ -591,7 +591,7 @@ namespace hcal {
                                                                            outputGPU.digisF5HB.npresamples,
                                                                            outputGPU.digisF3HB.data,
                                                                            outputGPU.digisF3HB.ids,
-                                                                           scratchGPU.pChannelsCounters,
+                                                                           scratchGPU.pChannelsCounters.get(),
                                                                            config.nsamplesF01HE,
                                                                            config.nsamplesF5HB,
                                                                            config.nsamplesF3HB,
@@ -599,7 +599,7 @@ namespace hcal {
       cudaCheck(cudaGetLastError());
 
       cudaCheck(cudaMemcpyAsync(outputCPU.nchannels.data(),
-                                scratchGPU.pChannelsCounters,
+                                scratchGPU.pChannelsCounters.get(),
                                 sizeof(uint32_t) * numOutputCollections,
                                 cudaMemcpyDeviceToHost,
                                 cudaStream));
