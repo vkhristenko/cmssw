@@ -24,6 +24,7 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMCharacteristicsGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMParametersGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalTimeCorrsGPU.h"
+#include "RecoLocalCalo/HcalRecAlgos/interface/HcalMahiPulseOffsetsGPU.h"
 
 #include "HeterogeneousCore/CUDAUtilities/interface/device_unique_ptr.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/host_unique_ptr.h"
@@ -49,6 +50,8 @@ namespace hcal {
       HcalTopology const* topology;
       HcalDDDRecConstants const* recConstants;
       uint32_t offsetForHashes;
+      HcalMahiPulseOffsetsGPU::Product const& pulseOffsets;
+      std::vector<int, cms::cuda::HostAllocator<int>> const& pulseOffsetsHost;
     };
 
     struct ConfigParameters {
@@ -65,7 +68,8 @@ namespace hcal {
       float ts4Thresh;
 
       std::vector<int> pulseOffsets;
-      int* pulseOffsetsDevice = nullptr;
+      // FIXME remove pulseOffsets - they come from esproduce now
+      //int* pulseOffsetsDevice = nullptr;
 
       std::array<uint32_t, 3> kernelMinimizeThreads;
 
@@ -78,22 +82,19 @@ namespace hcal {
     };
 
     struct OutputDataGPU {
-      RecHitCollection<common::ViewStoragePolicy> recHits;
+      RecHitCollection<common::DevStoragePolicy> recHits;
 
-      void allocate(ConfigParameters const& config) {
-        cudaCheck(cudaMalloc((void**)&recHits.energy, config.maxChannels * sizeof(float)));
-        cudaCheck(cudaMalloc((void**)&recHits.chi2, config.maxChannels * sizeof(float)));
-        cudaCheck(cudaMalloc((void**)&recHits.energyM0, config.maxChannels * sizeof(float)));
-        cudaCheck(cudaMalloc((void**)&recHits.timeM0, config.maxChannels * sizeof(float)));
-        cudaCheck(cudaMalloc((void**)&recHits.did, config.maxChannels * sizeof(uint32_t)));
-      }
-
-      void deallocate(ConfigParameters const& config) {
-        cudaCheck(cudaFree(recHits.energy));
-        cudaCheck(cudaFree(recHits.chi2));
-        cudaCheck(cudaFree(recHits.energyM0));
-        cudaCheck(cudaFree(recHits.timeM0));
-        cudaCheck(cudaFree(recHits.did));
+      void allocate(ConfigParameters const& config, cudaStream_t cudaStream) {
+        recHits.energy = cms::cuda::make_device_unique<float[]>(
+          config.maxChannels, cudaStream);
+        recHits.chi2 = cms::cuda::make_device_unique<float[]>(
+          config.maxChannels, cudaStream);
+        recHits.energyM0 = cms::cuda::make_device_unique<float[]>(
+          config.maxChannels, cudaStream);
+        recHits.timeM0 = cms::cuda::make_device_unique<float[]>(
+          config.maxChannels, cudaStream);
+        recHits.did = cms::cuda::make_device_unique<uint32_t[]>(
+          config.maxChannels, cudaStream);
       }
     };
 

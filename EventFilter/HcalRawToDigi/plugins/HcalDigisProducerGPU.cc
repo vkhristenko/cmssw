@@ -208,6 +208,8 @@ void HcalDigisProducerGPU::acquire(edm::Event const& event,
   auto lambdaToTransfer = [&ctx](auto* dest, auto const& src) {
     using vector_type = typename std::remove_reference<decltype(src)>::type;
     using type = typename vector_type::value_type;
+    using dest_data_type = typename std::remove_pointer<decltype(dest)>::type;
+    static_assert(std::is_same<dest_data_type, type>::value && "Dest and Src data typesdo not match");
     cudaCheck(cudaMemcpyAsync(dest, src.data(), src.size() * sizeof(type), cudaMemcpyHostToDevice, ctx.stream()));
   };
 
