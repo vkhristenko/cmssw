@@ -25,6 +25,9 @@
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalSiPMParametersGPU.h"
 #include "RecoLocalCalo/HcalRecAlgos/interface/HcalTimeCorrsGPU.h"
 
+#include "HeterogeneousCore/CUDAUtilities/interface/device_unique_ptr.h"
+#include "HeterogeneousCore/CUDAUtilities/interface/host_unique_ptr.h"
+
 namespace hcal {
   namespace mahi {
 
@@ -95,6 +98,11 @@ namespace hcal {
     };
 
     struct ScratchDataGPU {
+      cms::cuda::device::unique_ptr<float[]> amplitudes, noiseTerms,
+          pulseMatrices, pulseMatricesM, pulseMatricesP;
+      cms::cuda::device::unique_ptr<int8_t[]> soiSamples;
+
+      /*
       float *amplitudes = nullptr, *noiseTerms = nullptr;
       float *pulseMatrices = nullptr, *pulseMatricesM = nullptr, *pulseMatricesP = nullptr;
       int8_t* soiSamples = nullptr;
@@ -121,13 +129,13 @@ namespace hcal {
           cudaCheck(cudaFree(pulseMatricesP));
           cudaCheck(cudaFree(soiSamples));
         }
-      }
+      }*/
     };
 
     struct InputDataGPU {
-      DigiCollection<Flavor01, common::ViewStoragePolicy> const& f01HEDigis;
-      DigiCollection<Flavor5, common::ViewStoragePolicy> const& f5HBDigis;
-      DigiCollection<Flavor3, common::ViewStoragePolicy> const& f3HBDigis;
+      DigiCollection<Flavor01, common::DevStoragePolicy> const& f01HEDigis;
+      DigiCollection<Flavor5, common::DevStoragePolicy> const& f5HBDigis;
+      DigiCollection<Flavor3, common::DevStoragePolicy> const& f3HBDigis;
     };
 
   }  // namespace mahi

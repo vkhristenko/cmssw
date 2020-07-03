@@ -49,13 +49,13 @@ private:
   void acquire(edm::Event const&, edm::EventSetup const&, edm::WaitingTaskWithArenaHolder) override;
   void produce(edm::Event&, edm::EventSetup const&) override;
 
-  using IProductTypef01 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor01, hcal::common::ViewStoragePolicy>>;
+  using IProductTypef01 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor01, hcal::common::DevStoragePolicy>>;
   edm::EDGetTokenT<IProductTypef01> digisTokenF01HE_;
 
-  using IProductTypef5 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor5, hcal::common::ViewStoragePolicy>>;
+  using IProductTypef5 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor5, hcal::common::DevStoragePolicy>>;
   edm::EDGetTokenT<IProductTypef5> digisTokenF5HB_;
 
-  using IProductTypef3 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor3, hcal::common::ViewStoragePolicy>>;
+  using IProductTypef3 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor3, hcal::common::DevStoragePolicy>>;
   edm::EDGetTokenT<IProductTypef3> digisTokenF3HB_;
 
   using RecHitType = hcal::RecHitCollection<hcal::common::ViewStoragePolicy>;
@@ -64,7 +64,6 @@ private:
 
   hcal::mahi::ConfigParameters configParameters_;
   hcal::mahi::OutputDataGPU outputGPU_;
-  hcal::mahi::ScratchDataGPU scratchGPU_;
   cms::cuda::ContextState cudaState_;
 };
 
@@ -105,7 +104,6 @@ HBHERecHitProducerGPU::HBHERecHitProducerGPU(edm::ParameterSet const& ps)
   edm::Service<CUDAService> cs;
   if (cs and cs->enabled()) {
     outputGPU_.allocate(configParameters_);
-    scratchGPU_.allocate(configParameters_);
 
     // FIXME: use default device and default stream
     cudaCheck(
@@ -122,7 +120,6 @@ HBHERecHitProducerGPU::~HBHERecHitProducerGPU() {
   edm::Service<CUDAService> cs;
   if (cs and cs->enabled()) {
     outputGPU_.deallocate(configParameters_);
-    scratchGPU_.deallocate(configParameters_);
 
     cudaCheck(cudaFree(configParameters_.pulseOffsetsDevice));
   }
@@ -258,7 +255,27 @@ void HBHERecHitProducerGPU::acquire(edm::Event const& event,
                                             recConstantsHandle.product(),
                                             pedestalsHandle->offsetForHashes()};
 
-  hcal::mahi::entryPoint(inputGPU, outputGPU_, conditions, scratchGPU_, configParameters_, ctx.stream());
+  hcal::mahi::ScratchDataGPU scratchGPU = {
+    cms::cuda::make_device_unique<float[]>(
+      configParameters_.maxChannels * configParameters_.maxTimeSamples,
+      ctx.stream()
+    ),
+    cms::cuda::make_device_unique<float[]>(
+      configParameters_.maxChannels * configParameters_.maxTimeSamples, ctx.stream()),
+    cms::cuda::make_device_unique<float[]>(
+      configParameters_.maxChannels*configParameters_.maxTimeSamples*configParameters_.maxTimeSamples, 
+      ctx.stream()),
+    cms::cuda::make_device_unique<float[]>(
+      configParameters_.maxChannels*configParameters_.maxTimeSamples*configParameters_.maxTimeSamples, 
+      ctx.stream()),
+    cms::cuda::make_device_unique<float[]>(
+      configParameters_.maxChannels*configParameters_.maxTimeSamples*configParameters_.maxTimeSamples, 
+      ctx.stream()),
+    cms::cuda::make_device_unique<int8_t[]>(
+      configParameters_.maxChannels, ctx.stream()),
+  };
+
+  hcal::mahi::entryPoint(inputGPU, outputGPU_, conditions, scratchGPU, configParameters_, ctx.stream());
 
 #ifdef HCAL_MAHI_CPUDEBUG
   auto end = std::chrono::high_resolution_clock::now();
