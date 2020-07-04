@@ -67,10 +67,6 @@ namespace hcal {
       float timeSigmaSiPM, timeSigmaHPD;
       float ts4Thresh;
 
-      std::vector<int> pulseOffsets;
-      // FIXME remove pulseOffsets - they come from esproduce now
-      //int* pulseOffsetsDevice = nullptr;
-
       std::array<uint32_t, 3> kernelMinimizeThreads;
 
       // FIXME:
