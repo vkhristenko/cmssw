@@ -29,14 +29,14 @@ private:
 
   // type aliases
   using HostCollectionf01 =
-      hcal::DigiCollection<hcal::Flavor01, hcal::common::VecStoragePolicy<hcal::CUDAHostAllocatorAlias>>;
-  using DeviceCollectionf01 = hcal::DigiCollection<hcal::Flavor01, hcal::common::DevStoragePolicy>;
+      hcal::DigiCollection<hcal::Flavor01, calo::common::VecStoragePolicy<calo::common::CUDAHostAllocatorAlias>>;
+  using DeviceCollectionf01 = hcal::DigiCollection<hcal::Flavor01, calo::common::DevStoragePolicy>;
   using HostCollectionf5 =
-      hcal::DigiCollection<hcal::Flavor5, hcal::common::VecStoragePolicy<hcal::CUDAHostAllocatorAlias>>;
-  using DeviceCollectionf5 = hcal::DigiCollection<hcal::Flavor5, hcal::common::DevStoragePolicy>;
+      hcal::DigiCollection<hcal::Flavor5, calo::common::VecStoragePolicy<calo::common::CUDAHostAllocatorAlias>>;
+  using DeviceCollectionf5 = hcal::DigiCollection<hcal::Flavor5, calo::common::DevStoragePolicy>;
   using HostCollectionf3 =
-      hcal::DigiCollection<hcal::Flavor3, hcal::common::VecStoragePolicy<hcal::CUDAHostAllocatorAlias>>;
-  using DeviceCollectionf3 = hcal::DigiCollection<hcal::Flavor3, hcal::common::DevStoragePolicy>;
+      hcal::DigiCollection<hcal::Flavor3, calo::common::VecStoragePolicy<calo::common::CUDAHostAllocatorAlias>>;
+  using DeviceCollectionf3 = hcal::DigiCollection<hcal::Flavor3, calo::common::DevStoragePolicy>;
 
   // output product tokens
   using ProductTypef01 = cms::cuda::Product<DeviceCollectionf01>;

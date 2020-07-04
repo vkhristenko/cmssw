@@ -51,9 +51,9 @@ namespace hcal {
     };
 
     struct OutputDataGPU {
-      DigiCollection<Flavor01, common::DevStoragePolicy> digisF01HE;
-      DigiCollection<Flavor5, common::DevStoragePolicy> digisF5HB;
-      DigiCollection<Flavor3, common::DevStoragePolicy> digisF3HB;
+      DigiCollection<Flavor01, ::calo::common::DevStoragePolicy> digisF01HE;
+      DigiCollection<Flavor5, ::calo::common::DevStoragePolicy> digisF5HB;
+      DigiCollection<Flavor3, ::calo::common::DevStoragePolicy> digisF3HB;
 
       void allocate(ConfigurationParameters const &config, cudaStream_t cudaStream) {
         digisF01HE.data = cms::cuda::make_device_unique<uint16_t[]>(

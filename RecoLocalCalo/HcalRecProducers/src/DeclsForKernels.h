@@ -82,7 +82,7 @@ namespace hcal {
     };
 
     struct OutputDataGPU {
-      RecHitCollection<common::DevStoragePolicy> recHits;
+      RecHitCollection<::calo::common::DevStoragePolicy> recHits;
 
       void allocate(ConfigParameters const& config, cudaStream_t cudaStream) {
         recHits.energy = cms::cuda::make_device_unique<float[]>(
@@ -134,9 +134,9 @@ namespace hcal {
     };
 
     struct InputDataGPU {
-      DigiCollection<Flavor01, common::DevStoragePolicy> const& f01HEDigis;
-      DigiCollection<Flavor5, common::DevStoragePolicy> const& f5HBDigis;
-      DigiCollection<Flavor3, common::DevStoragePolicy> const& f3HBDigis;
+      DigiCollection<Flavor01, ::calo::common::DevStoragePolicy> const& f01HEDigis;
+      DigiCollection<Flavor5, ::calo::common::DevStoragePolicy> const& f5HBDigis;
+      DigiCollection<Flavor3, ::calo::common::DevStoragePolicy> const& f3HBDigis;
     };
 
   }  // namespace mahi

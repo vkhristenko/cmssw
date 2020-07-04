@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
   // branches to use
   edm::Wrapper<HBHERecHitCollection>* wcpu = nullptr;
   edm::Wrapper<HBHERecHitCollection>* wgpu = nullptr;
-  //    edm::Wrapper<hcal::RecHitCollection<hcal::common::VecStoragePolicy<hcal::CUDAHostAllocatorAlias>>> *wgpu=nullptr;
+  //    edm::Wrapper<hcal::RecHitCollection<calo::common::VecStoragePolicy<calo::common::CUDAHostAllocatorAlias>>> *wgpu=nullptr;
 
   // prep output
   TFile rfout{outFileName.c_str(), "recreate"};

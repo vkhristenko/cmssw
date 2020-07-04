@@ -23,9 +23,9 @@ private:
   void produce(edm::Event&, edm::EventSetup const&) override;
 
 private:
-  using IProductType = cms::cuda::Product<hcal::RecHitCollection<hcal::common::DevStoragePolicy>>;
+  using IProductType = cms::cuda::Product<hcal::RecHitCollection<calo::common::DevStoragePolicy>>;
   edm::EDGetTokenT<IProductType> recHitsM0TokenIn_;
-  using OProductType = hcal::RecHitCollection<hcal::common::VecStoragePolicy<hcal::CUDAHostAllocatorAlias>>;
+  using OProductType = hcal::RecHitCollection<calo::common::VecStoragePolicy<calo::common::CUDAHostAllocatorAlias>>;
   edm::EDPutTokenT<OProductType> recHitsM0TokenOut_;
   edm::EDPutTokenT<HBHERecHitCollection> recHitsLegacyTokenOut_;
 

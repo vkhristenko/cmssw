@@ -30,11 +30,11 @@ private:
 
 private:
   edm::EDGetTokenT<FEDRawDataCollection> rawDataToken_;
-  using ProductTypef01 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor01, hcal::common::DevStoragePolicy>>;
+  using ProductTypef01 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor01, calo::common::DevStoragePolicy>>;
   edm::EDPutTokenT<ProductTypef01> digisF01HEToken_;
-  using ProductTypef5 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor5, hcal::common::DevStoragePolicy>>;
+  using ProductTypef5 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor5, calo::common::DevStoragePolicy>>;
   edm::EDPutTokenT<ProductTypef5> digisF5HBToken_;
-  using ProductTypef3 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor3, hcal::common::DevStoragePolicy>>;
+  using ProductTypef3 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor3, calo::common::DevStoragePolicy>>;
   edm::EDPutTokenT<ProductTypef3> digisF3HBToken_;
 
   cms::cuda::ContextState cudaState_;

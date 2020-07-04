@@ -52,16 +52,16 @@ private:
   void acquire(edm::Event const&, edm::EventSetup const&, edm::WaitingTaskWithArenaHolder) override;
   void produce(edm::Event&, edm::EventSetup const&) override;
 
-  using IProductTypef01 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor01, hcal::common::DevStoragePolicy>>;
+  using IProductTypef01 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor01, calo::common::DevStoragePolicy>>;
   edm::EDGetTokenT<IProductTypef01> digisTokenF01HE_;
 
-  using IProductTypef5 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor5, hcal::common::DevStoragePolicy>>;
+  using IProductTypef5 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor5, calo::common::DevStoragePolicy>>;
   edm::EDGetTokenT<IProductTypef5> digisTokenF5HB_;
 
-  using IProductTypef3 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor3, hcal::common::DevStoragePolicy>>;
+  using IProductTypef3 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor3, calo::common::DevStoragePolicy>>;
   edm::EDGetTokenT<IProductTypef3> digisTokenF3HB_;
 
-  using RecHitType = hcal::RecHitCollection<hcal::common::DevStoragePolicy>;
+  using RecHitType = hcal::RecHitCollection<calo::common::DevStoragePolicy>;
   using OProductType = cms::cuda::Product<RecHitType>;
   edm::EDPutTokenT<OProductType> rechitsM0Token_;
 

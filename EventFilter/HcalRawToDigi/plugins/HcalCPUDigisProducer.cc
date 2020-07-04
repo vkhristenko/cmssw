@@ -23,21 +23,21 @@ private:
   void produce(edm::Event&, edm::EventSetup const&) override;
 
 private:
-  using IProductTypef01 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor01, hcal::common::DevStoragePolicy>>;
+  using IProductTypef01 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor01, calo::common::DevStoragePolicy>>;
   edm::EDGetTokenT<IProductTypef01> digisF01HETokenIn_;
-  using IProductTypef5 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor5, hcal::common::DevStoragePolicy>>;
+  using IProductTypef5 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor5, calo::common::DevStoragePolicy>>;
   edm::EDGetTokenT<IProductTypef5> digisF5HBTokenIn_;
-  using IProductTypef3 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor3, hcal::common::DevStoragePolicy>>;
+  using IProductTypef3 = cms::cuda::Product<hcal::DigiCollection<hcal::Flavor3, calo::common::DevStoragePolicy>>;
   edm::EDGetTokenT<IProductTypef3> digisF3HBTokenIn_;
 
   using OProductTypef01 =
-      hcal::DigiCollection<hcal::Flavor01, hcal::common::VecStoragePolicy<hcal::CUDAHostAllocatorAlias>>;
+      hcal::DigiCollection<hcal::Flavor01, calo::common::VecStoragePolicy<calo::common::CUDAHostAllocatorAlias>>;
   edm::EDPutTokenT<OProductTypef01> digisF01HETokenOut_;
   using OProductTypef5 =
-      hcal::DigiCollection<hcal::Flavor5, hcal::common::VecStoragePolicy<hcal::CUDAHostAllocatorAlias>>;
+      hcal::DigiCollection<hcal::Flavor5, calo::common::VecStoragePolicy<calo::common::CUDAHostAllocatorAlias>>;
   edm::EDPutTokenT<OProductTypef5> digisF5HBTokenOut_;
   using OProductTypef3 =
-      hcal::DigiCollection<hcal::Flavor3, hcal::common::VecStoragePolicy<hcal::CUDAHostAllocatorAlias>>;
+      hcal::DigiCollection<hcal::Flavor3, calo::common::VecStoragePolicy<calo::common::CUDAHostAllocatorAlias>>;
   edm::EDPutTokenT<OProductTypef3> digisF3HBTokenOut_;
 
   // needed to pass data from acquire to produce
