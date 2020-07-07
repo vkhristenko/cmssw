@@ -32,6 +32,7 @@
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalSamplesCorrelationGPU.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalTimeBiasCorrectionsGPU.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalTimeCalibConstantsGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalMultifitParametersGPU.h"
 
 #include "EigenMatrixTypes_gpu.h"
 
@@ -240,6 +241,7 @@ namespace ecal {
       EcalSampleMask const& sampleMask;
       EcalTimeOffsetConstant const& timeOffsetConstant;
       uint32_t offsetForHashes;
+      EcalMultifitParametersGPU::Product const& multifitParameters;
     };
 
     //*/

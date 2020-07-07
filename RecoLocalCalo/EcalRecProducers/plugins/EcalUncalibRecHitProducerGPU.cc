@@ -26,10 +26,12 @@
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalSamplesCorrelationGPU.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalTimeBiasCorrectionsGPU.h"
 #include "RecoLocalCalo/EcalRecAlgos/interface/EcalTimeCalibConstantsGPU.h"
+#include "RecoLocalCalo/EcalRecAlgos/interface/EcalMultifitParametersGPU.h"
 
 #include "Common.h"
 #include "DeclsForKernels.h"
 #include "EcalUncalibRecHitMultiFitAlgo_gpu_new.h"
+#include "EcalMultifitParametersGPURecord.h"
 
 class EcalUncalibRecHitProducerGPU : public edm::stream::EDProducer<edm::ExternalWork> {
 public:
@@ -57,6 +59,7 @@ private:
   edm::ESHandle<EcalTimeCalibConstantsGPU> timeCalibConstantsHandle_;
   edm::ESHandle<EcalSampleMask> sampleMaskHandle_;
   edm::ESHandle<EcalTimeOffsetConstant> timeOffsetConstantHandle_;
+  edm::ESHandle<EcalMultifitParametersGPU> multifitParametersHandle_;
 
   // configuration parameters
   ecal::multifit::ConfigurationParameters configParameters_;
@@ -279,6 +282,7 @@ void EcalUncalibRecHitProducerGPU::acquire(edm::Event const& event,
   setup.get<EcalTimeCalibConstantsRcd>().get(timeCalibConstantsHandle_);
   setup.get<EcalSampleMaskRcd>().get(sampleMaskHandle_);
   setup.get<EcalTimeOffsetConstantRcd>().get(timeOffsetConstantHandle_);
+  setup.get<EcalMultifitParametersGPURecord>().get(multifitParametersHandle_);
 
   auto const& pedProduct = pedestalsHandle_->getProduct(ctx.stream());
   auto const& gainsProduct = gainRatiosHandle_->getProduct(ctx.stream());
@@ -287,6 +291,7 @@ void EcalUncalibRecHitProducerGPU::acquire(edm::Event const& event,
   auto const& samplesCorrelationProduct = samplesCorrelationHandle_->getProduct(ctx.stream());
   auto const& timeBiasCorrectionsProduct = timeBiasCorrectionsHandle_->getProduct(ctx.stream());
   auto const& timeCalibConstantsProduct = timeCalibConstantsHandle_->getProduct(ctx.stream());
+  auto const& multifitParametersProduct = multifitParametersHandle_->getProduct(ctx.stream());
 
   // bundle up conditions
   ecal::multifit::ConditionsProducts conditions{pedProduct,
@@ -298,7 +303,8 @@ void EcalUncalibRecHitProducerGPU::acquire(edm::Event const& event,
                                                 timeCalibConstantsProduct,
                                                 *sampleMaskHandle_,
                                                 *timeOffsetConstantHandle_,
-                                                timeCalibConstantsHandle_->getOffset()};
+                                                timeCalibConstantsHandle_->getOffset(),
+                                                multifitParametersProduct};
   
   // dev mem
   eventOutputDataGPU_.allocate(configParameters_, ctx.stream());
