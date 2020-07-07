@@ -152,9 +152,9 @@ int main(int argc, char *argv[]) {
   std::cout << "validating file " << fileName << std::endl;
   TFile rf{fileName.c_str()};
   TTree *rt = (TTree *)rf.Get("Events");
-  rt->SetBranchAddress("ecalTagsoaecalUncalibratedRecHit_ecalCPUUncalibRecHitProducer_EcalUncalibRecHitsEB_RECO.",
+  rt->SetBranchAddress("calocommonCUDAHostAllocatorAliascalocommonVecStoragePolicyecalUncalibratedRecHit_ecalCPUUncalibRecHitProducer_EcalUncalibRecHitsEB_RECO.",
                        &wgpuEB);
-  rt->SetBranchAddress("ecalTagsoaecalUncalibratedRecHit_ecalCPUUncalibRecHitProducer_EcalUncalibRecHitsEE_RECO.",
+  rt->SetBranchAddress("calocommonCUDAHostAllocatorAliascalocommonVecStoragePolicyecalUncalibratedRecHit_ecalCPUUncalibRecHitProducer_EcalUncalibRecHitsEE_RECO.",
                        &wgpuEE);
   rt->SetBranchAddress("EcalUncalibratedRecHitsSorted_ecalMultiFitUncalibRecHit_EcalUncalibRecHitsEB_RECO.", &wcpuEB);
   rt->SetBranchAddress("EcalUncalibratedRecHitsSorted_ecalMultiFitUncalibRecHit_EcalUncalibRecHitsEE_RECO.", &wcpuEE);

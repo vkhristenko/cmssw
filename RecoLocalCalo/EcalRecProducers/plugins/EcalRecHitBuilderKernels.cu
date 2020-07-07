@@ -153,7 +153,6 @@ namespace ecal {
 #define ARRANGE(var) auto *var = isEndcap ? var##EE : var##EB
         ARRANGE(did);
         ARRANGE(energy);
-        ARRANGE(time);
         ARRANGE(chi2);
         ARRANGE(flagBits);
         ARRANGE(extra);
