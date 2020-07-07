@@ -31,9 +31,9 @@ private:
 
 private:
   // input digi collections in GPU-friendly format
-  using OutputProduct = cms::cuda::Product<ecal::DigisCollection<calo::common::DevStoragePolicy>>;
-  edm::EDGetTokenT<OutputProduct> digisInEBToken_;
-  edm::EDGetTokenT<OutputProduct> digisInEEToken_;
+  using InputProduct = cms::cuda::Product<ecal::DigisCollection<calo::common::DevStoragePolicy>>;
+  edm::EDGetTokenT<InputProduct> digisInEBToken_;
+  edm::EDGetTokenT<InputProduct> digisInEEToken_;
 
   // output digi collections in legacy format
   edm::EDPutTokenT<EBDigiCollection> digisOutEBToken_;
@@ -82,9 +82,9 @@ void EcalCPUDigisProducer::fillDescriptions(edm::ConfigurationDescriptions& conf
 EcalCPUDigisProducer::EcalCPUDigisProducer(const edm::ParameterSet& ps)
     :  // input digi collections in GPU-friendly format
       digisInEBToken_{
-          consumes<OutputProduct>(ps.getParameter<edm::InputTag>("digisInLabelEB"))},
+          consumes<InputProduct>(ps.getParameter<edm::InputTag>("digisInLabelEB"))},
       digisInEEToken_{
-          consumes<OutputProduct>(ps.getParameter<edm::InputTag>("digisInLabelEE"))},
+          consumes<InputProduct>(ps.getParameter<edm::InputTag>("digisInLabelEE"))},
       // output digi collections in legacy format
       digisOutEBToken_{produces<EBDigiCollection>(ps.getParameter<std::string>("digisOutLabelEB"))},
       digisOutEEToken_{produces<EEDigiCollection>(ps.getParameter<std::string>("digisOutLabelEE"))},

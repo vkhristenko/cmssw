@@ -7,8 +7,8 @@
 #include <cuda_runtime.h>
 
 #include "CUDADataFormats/EcalDigi/interface/DigisCollection.h"
-#include "CUDADataFormats/EcalRecHitSoA/interface/EcalRecHit_soa.h"
-#include "CUDADataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
+#include "CUDADataFormats/EcalRecHitSoA/interface/EcalRecHit.h"
+#include "CUDADataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit.h"
 #include "CUDADataFormats/EcalRecHitSoA/interface/RecoTypes.h"
 #include "CondFormats/EcalObjects/interface/EcalChannelStatus.h"
 #include "CondFormats/EcalObjects/interface/EcalChannelStatusCode.h"
@@ -57,8 +57,8 @@ namespace ecal {
 
     //
     struct EventInputDataGPU {
-      ecal::DigisCollection const& ebDigis;
-      ecal::DigisCollection const& eeDigis;
+      ecal::DigisCollection<calo::common::DevStoragePolicy> const& ebDigis;
+      ecal::DigisCollection<calo::common::DevStoragePolicy> const& eeDigis;
     };
 
     // parameters have a fixed type
@@ -89,35 +89,40 @@ namespace ecal {
       std::array<uint32_t, 3> kernelMinimizeThreads;
 
       bool shouldRunTimingComputation;
+
+      uint32_t maxNumberHits;
     };
 
-    struct EventOutputDataGPU final : public ::ecal::UncalibratedRecHit<::ecal::Tag::ptr> {
-      void allocate(ConfigurationParameters const& configParameters, uint32_t size) {
-        cudaCheck(cudaMalloc((void**)&amplitudesAll, size * sizeof(SampleVector)));
-        cudaCheck(cudaMalloc((void**)&amplitude, size * sizeof(::ecal::reco::StorageScalarType)));
-        cudaCheck(cudaMalloc((void**)&chi2, size * sizeof(::ecal::reco::StorageScalarType)));
-        cudaCheck(cudaMalloc((void**)&pedestal, size * sizeof(::ecal::reco::StorageScalarType)));
+    struct EventOutputDataGPU {
+      UncalibratedRecHit<::calo::common::DevStoragePolicy> recHitsEB, recHitsEE;
+
+      void allocate(ConfigurationParameters const& configParameters, cudaStream_t cudaStream) {
+        auto const size = configParameters.maxNumberHits;
+        recHitsEB.amplitudesAll = cms::cuda::make_device_unique<reco::ComputationScalarType[]>(size * EcalDataFrame::MAXSAMPLES, cudaStream);
+        recHitsEB.amplitude = cms::cuda::make_device_unique<reco::StorageScalarType[]>(size, cudaStream);
+        recHitsEB.chi2 = cms::cuda::make_device_unique<reco::StorageScalarType[]>(size, cudaStream);
+        recHitsEB.pedestal = cms::cuda::make_device_unique<reco::StorageScalarType[]>(size, cudaStream);
 
         if (configParameters.shouldRunTimingComputation) {
-          cudaCheck(cudaMalloc((void**)&jitter, size * sizeof(::ecal::reco::StorageScalarType)));
-          cudaCheck(cudaMalloc((void**)&jitterError, size * sizeof(::ecal::reco::StorageScalarType)));
+          recHitsEB.jitter = cms::cuda::make_device_unique<reco::StorageScalarType[]>(size, cudaStream);
+          recHitsEB.jitterError = cms::cuda::make_device_unique<reco::StorageScalarType[]>(size, cudaStream);
         }
 
-        cudaCheck(cudaMalloc((void**)&did, size * sizeof(uint32_t)));
-        cudaCheck(cudaMalloc((void**)&flags, size * sizeof(uint32_t)));
-      }
+        recHitsEB.did = cms::cuda::make_device_unique<uint32_t[]>(size, cudaStream);
+        recHitsEB.flags = cms::cuda::make_device_unique<uint32_t[]>(size, cudaStream);
+        
+        recHitsEE.amplitudesAll = cms::cuda::make_device_unique<reco::ComputationScalarType[]>(size * EcalDataFrame::MAXSAMPLES, cudaStream);
+        recHitsEE.amplitude = cms::cuda::make_device_unique<reco::StorageScalarType[]>(size, cudaStream);
+        recHitsEE.chi2 = cms::cuda::make_device_unique<reco::StorageScalarType[]>(size, cudaStream);
+        recHitsEE.pedestal = cms::cuda::make_device_unique<reco::StorageScalarType[]>(size, cudaStream);
 
-      void deallocate(ConfigurationParameters const& configParameters) {
-        cudaCheck(cudaFree(amplitudesAll));
-        cudaCheck(cudaFree(amplitude));
-        cudaCheck(cudaFree(chi2));
-        cudaCheck(cudaFree(pedestal));
         if (configParameters.shouldRunTimingComputation) {
-          cudaCheck(cudaFree(jitter));
-          cudaCheck(cudaFree(jitterError));
+          recHitsEE.jitter = cms::cuda::make_device_unique<reco::StorageScalarType[]>(size, cudaStream);
+          recHitsEE.jitterError = cms::cuda::make_device_unique<reco::StorageScalarType[]>(size, cudaStream);
         }
-        cudaCheck(cudaFree(did));
-        cudaCheck(cudaFree(flags));
+
+        recHitsEE.did = cms::cuda::make_device_unique<uint32_t[]>(size, cudaStream);
+        recHitsEE.flags = cms::cuda::make_device_unique<uint32_t[]>(size, cudaStream);
       }
     };
 
@@ -276,40 +281,38 @@ namespace ecal {
       uint32_t expanded_v_DB_reco_flagsSize;
 
       uint32_t flagmask;
+      uint32_t maxNumberHits;
 
       //
       //       bool shouldRunTimingComputation;
     };
 
-    struct EventOutputDataGPU final : public ::ecal::RecHit<::ecal::Tag::ptr> {
-      void allocate(ConfigurationParameters const& configParameters, uint32_t size) {
+    struct EventOutputDataGPU {
+      RecHit<::calo::common::DevStoragePolicy> recHitsEB, recHitsEE;
+
+      void allocate(ConfigurationParameters const& configParameters, cudaStream_t cudaStream) {
         //      void allocate(uint32_t size) {
         //---- configParameters -> needed only to decide if to save the timing information or not
+        auto const size = configParameters.maxNumberHits;
+        recHitsEB.energy = cms::cuda::make_device_unique<::ecal::reco::StorageScalarType[]>(size, cudaStream);
+        recHitsEB.time = cms::cuda::make_device_unique<::ecal::reco::StorageScalarType[]>(size, cudaStream);
+        recHitsEB.chi2 = cms::cuda::make_device_unique<::ecal::reco::StorageScalarType[]>(size, cudaStream);
+        recHitsEB.flagBits = cms::cuda::make_device_unique<uint32_t[]>(size, cudaStream);
+        recHitsEB.extra = cms::cuda::make_device_unique<uint32_t[]>(size, cudaStream);
+        recHitsEB.did = cms::cuda::make_device_unique<uint32_t[]>(size, cudaStream);
 
-        cudaCheck(cudaMalloc((void**)&energy, size * sizeof(::ecal::reco::StorageScalarType)));
-        cudaCheck(cudaMalloc((void**)&time, size * sizeof(::ecal::reco::StorageScalarType)));
-        cudaCheck(cudaMalloc((void**)&chi2, size * sizeof(::ecal::reco::StorageScalarType)));
-        cudaCheck(cudaMalloc((void**)&flagBits, size * sizeof(uint32_t)));
-        cudaCheck(cudaMalloc((void**)&extra, size * sizeof(uint32_t)));
-        cudaCheck(cudaMalloc((void**)&did, size * sizeof(uint32_t)));
-      }
-
-      void deallocate(ConfigurationParameters const& configParameters) {
-        //     void deallocate() {
-        //---- configParameters -> needed only to decide if to save the timing information or not
-
-        cudaCheck(cudaFree(energy));
-        cudaCheck(cudaFree(time));
-        cudaCheck(cudaFree(chi2));
-        cudaCheck(cudaFree(flagBits));
-        cudaCheck(cudaFree(extra));
-        cudaCheck(cudaFree(did));
+        recHitsEE.energy = cms::cuda::make_device_unique<::ecal::reco::StorageScalarType[]>(size, cudaStream);
+        recHitsEE.time = cms::cuda::make_device_unique<::ecal::reco::StorageScalarType[]>(size, cudaStream);
+        recHitsEE.chi2 = cms::cuda::make_device_unique<::ecal::reco::StorageScalarType[]>(size, cudaStream);
+        recHitsEE.flagBits = cms::cuda::make_device_unique<uint32_t[]>(size, cudaStream);
+        recHitsEE.extra = cms::cuda::make_device_unique<uint32_t[]>(size, cudaStream);
+        recHitsEE.did = cms::cuda::make_device_unique<uint32_t[]>(size, cudaStream);
       }
     };
 
     struct EventInputDataGPU {
-      ecal::UncalibratedRecHit<ecal::Tag::ptr> const& ebUncalibRecHits;
-      ecal::UncalibratedRecHit<ecal::Tag::ptr> const& eeUncalibRecHits;
+      ecal::UncalibratedRecHit<calo::common::DevStoragePolicy> const& ebUncalibRecHits;
+      ecal::UncalibratedRecHit<calo::common::DevStoragePolicy> const& eeUncalibRecHits;
     };
 
     // const refs products to conditions

@@ -121,10 +121,13 @@ namespace ecal {
                                     EcalPulseCovariance const* __restrict__ pulse_covariance,
                                     BXVectorType* bxs,
                                     SampleVector const* __restrict__ samples,
-                                    SampleVector* amplitudes,
+                                    SampleVector* amplitudesEB,
+                                    SampleVector* amplitudesEE,
                                     PulseMatrixType const* __restrict__ pulse_matrix,
-                                    ::ecal::reco::StorageScalarType* chi2s,
-                                    ::ecal::reco::StorageScalarType* energies,
+                                    ::ecal::reco::StorageScalarType* chi2sEB,
+                                    ::ecal::reco::StorageScalarType* chi2sEE,
+                                    ::ecal::reco::StorageScalarType* energiesEB,
+                                    ::ecal::reco::StorageScalarType* energiesEE,
                                     char* acState,
                                     int nchannels,
                                     int max_iterations,
@@ -146,6 +149,13 @@ namespace ecal {
 
       // FIXME: remove eitehr idx or ch -> they are teh same thing
       int idx = threadIdx.x + blockDim.x * blockIdx.x;
+      
+      // ref the right ptr
+      #define ARRANGE(var) auto *var = idx >= offsetForInputs ? var##EE : var##EB
+      ARRANGE(amplitudes);
+      ARRANGE(chi2s);
+      ARRANGE(energies);
+
       auto const ch = idx;
       if (idx < nchannels) {
         if (static_cast<MinimizationState>(acState[idx]) == MinimizationState::Precomputed)
@@ -348,12 +358,12 @@ namespace ecal {
 
         // store to global output values
         // FIXME: amplitudes are used in global directly
-        chi2s[idx] = chi2;
-        energies[idx] = resultAmplitudes(5);
+        chi2s[inputCh] = chi2;
+        energies[inputCh] = resultAmplitudes(5);
 
 #pragma unroll
         for (int counter = 0; counter < NPULSES; counter++)
-          amplitudes[idx](counter) = resultAmplitudes(counter);
+          amplitudes[inputCh](counter) = resultAmplitudes(counter);
       }
     }
 
@@ -366,26 +376,29 @@ namespace ecal {
                                   ConfigurationParameters const& configParameters,
                                   cudaStream_t cudaStream) {
         using DataType = SampleVector::Scalar;
-        unsigned int totalChannels = eventInputGPU.ebDigis.ndigis + eventInputGPU.eeDigis.ndigis;
+        unsigned int totalChannels = eventInputGPU.ebDigis.size + eventInputGPU.eeDigis.size;
         //    unsigned int threads_min = conf.threads.x;
         // TODO: configure from python
         unsigned int threads_min = configParameters.kernelMinimizeThreads[0];
         unsigned int blocks_min = threads_min > totalChannels ? 1 : (totalChannels + threads_min - 1) / threads_min;
         uint32_t const offsetForHashes = conditions.offsetForHashes;
-        uint32_t const offsetForInputs = eventInputGPU.ebDigis.ndigis;
+        uint32_t const offsetForInputs = eventInputGPU.ebDigis.size;
         auto const nbytesShared =
             2 * threads_min * MapSymM<DataType, SampleVector::RowsAtCompileTime>::total * sizeof(DataType);
         kernel_minimize<<<blocks_min, threads_min, nbytesShared, cudaStream>>>(
-            eventInputGPU.ebDigis.ids,
-            eventInputGPU.eeDigis.ids,
+            eventInputGPU.ebDigis.ids.get(),
+            eventInputGPU.eeDigis.ids.get(),
             scratch.noisecov,
             conditions.pulseCovariances.values,
             scratch.activeBXs,
             scratch.samples,
-            (SampleVector*)eventOutputGPU.amplitudesAll,
+            (SampleVector*)eventOutputGPU.recHitsEB.amplitudesAll.get(),
+            (SampleVector*)eventOutputGPU.recHitsEE.amplitudesAll.get(),
             scratch.pulse_matrix,
-            eventOutputGPU.chi2,
-            eventOutputGPU.amplitude,
+            eventOutputGPU.recHitsEB.chi2.get(),
+            eventOutputGPU.recHitsEE.chi2.get(),
+            eventOutputGPU.recHitsEB.amplitude.get(),
+            eventOutputGPU.recHitsEE.amplitude.get(),
             scratch.acState,
             totalChannels,
             50,

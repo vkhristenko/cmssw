@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "CUDADataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
+#include "CUDADataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit.h"
 #include "CondFormats/DataRecord/interface/EcalGainRatiosRcd.h"
 #include "CondFormats/DataRecord/interface/EcalPedestalsRcd.h"
 #include "CondFormats/DataRecord/interface/EcalPulseCovariancesRcd.h"
@@ -38,13 +38,14 @@ public:
   static void fillDescriptions(edm::ConfigurationDescriptions&);
 
 private:
-  using RecHitType = ecal::UncalibratedRecHit<ecal::Tag::soa>;
   void acquire(edm::Event const&, edm::EventSetup const&, edm::WaitingTaskWithArenaHolder) override;
   void produce(edm::Event&, edm::EventSetup const&) override;
 
 private:
-  edm::EDGetTokenT<cms::cuda::Product<ecal::DigisCollection>> digisTokenEB_, digisTokenEE_;
-  edm::EDPutTokenT<cms::cuda::Product<ecal::UncalibratedRecHit<ecal::Tag::ptr>>> recHitsTokenEB_, recHitsTokenEE_;
+  using InputProduct = cms::cuda::Product<ecal::DigisCollection<calo::common::DevStoragePolicy>>;
+  edm::EDGetTokenT<InputProduct> digisTokenEB_, digisTokenEE_;
+  using OutputProduct = cms::cuda::Product<ecal::UncalibratedRecHit<calo::common::DevStoragePolicy>>;
+  edm::EDPutTokenT<OutputProduct> recHitsTokenEB_, recHitsTokenEE_;
 
   // conditions handles
   edm::ESHandle<EcalPedestalsGPU> pedestalsHandle_;
@@ -66,7 +67,6 @@ private:
 
   cms::cuda::ContextState cudaState_;
 
-  uint32_t maxNumberHits_;
   uint32_t neb_, nee_;
 };
 
@@ -126,13 +126,13 @@ void EcalUncalibRecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptio
 }
 
 EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(const edm::ParameterSet& ps)
-    : digisTokenEB_{consumes<cms::cuda::Product<ecal::DigisCollection>>(
+    : digisTokenEB_{consumes<InputProduct>(
           ps.getParameter<edm::InputTag>("digisLabelEB"))},
       digisTokenEE_{
-          consumes<cms::cuda::Product<ecal::DigisCollection>>(ps.getParameter<edm::InputTag>("digisLabelEE"))},
-      recHitsTokenEB_{produces<cms::cuda::Product<ecal::UncalibratedRecHit<ecal::Tag::ptr>>>(
+          consumes<InputProduct>(ps.getParameter<edm::InputTag>("digisLabelEE"))},
+      recHitsTokenEB_{produces<OutputProduct>(
           ps.getParameter<std::string>("recHitsLabelEB"))},
-      recHitsTokenEE_{produces<cms::cuda::Product<ecal::UncalibratedRecHit<ecal::Tag::ptr>>>(
+      recHitsTokenEE_{produces<OutputProduct>(
           ps.getParameter<std::string>("recHitsLabelEE"))} {
   auto EBamplitudeFitParameters = ps.getParameter<std::vector<double>>("EBamplitudeFitParameters");
   auto EEamplitudeFitParameters = ps.getParameter<std::vector<double>>("EEamplitudeFitParameters");
@@ -161,7 +161,7 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(const edm::ParameterS
   auto amplitudeThreshEE = ps.getParameter<double>("amplitudeThresholdEE");
 
   // max number of digis to allocate for
-  maxNumberHits_ = ps.getParameter<uint32_t>("maxNumberHits");
+  configParameters_.maxNumberHits = ps.getParameter<uint32_t>("maxNumberHits");
 
   // switch to run timing computation kernels
   configParameters_.shouldRunTimingComputation = ps.getParameter<bool>("shouldRunTimingComputation");
@@ -234,11 +234,8 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(const edm::ParameterS
   configParameters_.outOfTimeThreshG61mEB = outOfTimeThreshG61mEB;
   configParameters_.outOfTimeThreshG61mEE = outOfTimeThreshG61mEE;
 
-  // allocate event output data
-  eventOutputDataGPU_.allocate(configParameters_, maxNumberHits_);
-
   // allocate scratch data for gpu
-  eventDataForScratchGPU_.allocate(configParameters_, maxNumberHits_);
+  eventDataForScratchGPU_.allocate(configParameters_, configParameters_.maxNumberHits);
 }
 
 EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
@@ -252,9 +249,6 @@ EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
     cudaCheck(cudaFree(configParameters_.amplitudeFitParametersEE));
     cudaCheck(cudaFree(configParameters_.timeFitParametersEB));
     cudaCheck(cudaFree(configParameters_.timeFitParametersEE));
-
-    // free event ouput data
-    eventOutputDataGPU_.deallocate(configParameters_);
 
     // free event scratch data
     eventDataForScratchGPU_.deallocate(configParameters_);
@@ -275,10 +269,10 @@ void EcalUncalibRecHitProducerGPU::acquire(edm::Event const& event,
   auto const& ebDigis = ctx.get(ebDigisProduct);
   auto const& eeDigis = ctx.get(eeDigisProduct);
   ecal::multifit::EventInputDataGPU inputDataGPU{ebDigis, eeDigis};
-  neb_ = ebDigis.ndigis;
-  nee_ = eeDigis.ndigis;
+  neb_ = ebDigis.size;
+  nee_ = eeDigis.size;
 
-  if ((neb_ + nee_) > maxNumberHits_) {
+  if ((neb_ + nee_) > configParameters_.maxNumberHits) {
     edm::LogError("EcalUncalibRecHitProducerGPU") << "max number of channels exceeded. See options 'maxNumberHits' ";
   }
 
@@ -312,6 +306,9 @@ void EcalUncalibRecHitProducerGPU::acquire(edm::Event const& event,
                                                 *sampleMaskHandle_,
                                                 *timeOffsetConstantHandle_,
                                                 timeCalibConstantsHandle_->getOffset()};
+  
+  // dev mem
+  eventOutputDataGPU_.allocate(configParameters_, ctx.stream());
 
   //
   // schedule algorithms
@@ -324,29 +321,13 @@ void EcalUncalibRecHitProducerGPU::produce(edm::Event& event, edm::EventSetup co
   //DurationMeasurer<std::chrono::milliseconds> timer{std::string{"produce duration"}};
   cms::cuda::ScopedContextProduce ctx{cudaState_};
 
-  // copy construct output collections
-  // note, output collections do not own device memory!
-  ecal::UncalibratedRecHit<ecal::Tag::ptr> ebRecHits{eventOutputDataGPU_}, eeRecHits{eventOutputDataGPU_};
-
   // set the size of eb and ee
-  ebRecHits.size = neb_;
-  eeRecHits.size = nee_;
-
-  // shift ptrs for ee
-  eeRecHits.amplitudesAll += neb_ * EcalDataFrame::MAXSAMPLES;
-  eeRecHits.amplitude += neb_;
-  eeRecHits.chi2 += neb_;
-  eeRecHits.pedestal += neb_;
-  eeRecHits.did += neb_;
-  eeRecHits.flags += neb_;
-  if (configParameters_.shouldRunTimingComputation) {
-    eeRecHits.jitter += neb_;
-    eeRecHits.jitterError += neb_;
-  }
+  eventOutputDataGPU_.recHitsEB.size = neb_;
+  eventOutputDataGPU_.recHitsEE.size = nee_;
 
   // put into the event
-  ctx.emplace(event, recHitsTokenEB_, std::move(ebRecHits));
-  ctx.emplace(event, recHitsTokenEE_, std::move(eeRecHits));
+  ctx.emplace(event, recHitsTokenEB_, std::move(eventOutputDataGPU_.recHitsEB));
+  ctx.emplace(event, recHitsTokenEE_, std::move(eventOutputDataGPU_.recHitsEE));
 }
 
 DEFINE_FWK_MODULE(EcalUncalibRecHitProducerGPU);

@@ -13,7 +13,7 @@
 #include "DataFormats/Common/interface/Wrapper.h"
 #include "DataFormats/EcalRecHit/interface/EcalUncalibratedRecHit.h"
 #include "DataFormats/EcalRecHit/interface/EcalRecHitCollections.h"
-#include "CUDADataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit_soa.h"
+#include "CUDADataFormats/EcalRecHitSoA/interface/EcalUncalibratedRecHit.h"
 
 #include "TStyle.h"
 
@@ -35,8 +35,8 @@ int main(int argc, char *argv[]) {
 
   gStyle->SetOptStat("ourme");
 
-  edm::Wrapper<ecal::UncalibratedRecHit<ecal::Tag::soa>> *wgpuEB = nullptr;
-  edm::Wrapper<ecal::UncalibratedRecHit<ecal::Tag::soa>> *wgpuEE = nullptr;
+  edm::Wrapper<ecal::UncalibratedRecHit<calo::common::VecStoragePolicy<calo::common::CUDAHostAllocatorAlias>>> *wgpuEB = nullptr;
+  edm::Wrapper<ecal::UncalibratedRecHit<calo::common::VecStoragePolicy<calo::common::CUDAHostAllocatorAlias>>> *wgpuEE = nullptr;
   edm::Wrapper<EBUncalibratedRecHitCollection> *wcpuEB = nullptr;
   edm::Wrapper<EEUncalibratedRecHitCollection> *wcpuEE = nullptr;
 
