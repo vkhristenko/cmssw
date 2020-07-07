@@ -136,7 +136,7 @@ namespace ecal {
       // FIXME: ecal has 10 samples and 10 pulses....
       // but this needs to be properly treated and renamed everywhere
       constexpr auto NSAMPLES = SampleMatrix::RowsAtCompileTime;
-      constexpr auto NPULSES = SampleMatrix::RowsAtCompileTime;
+      constexpr auto NPULSES = SampleMatrix::ColsAtCompileTime;
       static_assert(NSAMPLES == NPULSES);
 
       using DataType = SampleVector::Scalar;
@@ -388,18 +388,18 @@ namespace ecal {
         kernel_minimize<<<blocks_min, threads_min, nbytesShared, cudaStream>>>(
             eventInputGPU.ebDigis.ids.get(),
             eventInputGPU.eeDigis.ids.get(),
-            scratch.noisecov,
+            (SampleMatrix*)scratch.noisecov.get(),
             conditions.pulseCovariances.values,
-            scratch.activeBXs,
-            scratch.samples,
+            (BXVectorType*)scratch.activeBXs.get(),
+            (SampleVector*)scratch.samples.get(),
             (SampleVector*)eventOutputGPU.recHitsEB.amplitudesAll.get(),
             (SampleVector*)eventOutputGPU.recHitsEE.amplitudesAll.get(),
-            scratch.pulse_matrix,
+            (PulseMatrixType*)scratch.pulse_matrix.get(),
             eventOutputGPU.recHitsEB.chi2.get(),
             eventOutputGPU.recHitsEE.chi2.get(),
             eventOutputGPU.recHitsEB.amplitude.get(),
             eventOutputGPU.recHitsEE.amplitude.get(),
-            scratch.acState,
+            scratch.acState.get(),
             totalChannels,
             50,
             offsetForHashes,

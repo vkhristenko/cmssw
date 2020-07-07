@@ -125,95 +125,105 @@ namespace ecal {
         recHitsEE.flags = cms::cuda::make_device_unique<uint32_t[]>(size, cudaStream);
       }
     };
+    
+    template<typename EigenM>
+    constexpr auto getLength() -> uint32_t {
+      return EigenM::RowsAtCompileTime * EigenM::ColsAtCompileTime;
+    }
 
     struct EventDataForScratchGPU {
-      SampleVector* samples = nullptr;
-      SampleGainVector* gainsNoise = nullptr;
+      using SVT = SampleVector::Scalar;
+      using SGVT = SampleGainVector::Scalar;
+      using SMT = SampleMatrix::Scalar;
+      using PMT = PulseMatrixType::Scalar;
+      using BXVT = BXVectorType::Scalar;
 
-      SampleMatrix* noisecov = nullptr;
-      PulseMatrixType* pulse_matrix = nullptr;
-      BXVectorType* activeBXs = nullptr;
-      char* acState = nullptr;
+      cms::cuda::device::unique_ptr<SVT[]> samples;
+      cms::cuda::device::unique_ptr<SGVT[]> gainsNoise;
 
-      bool *hasSwitchToGain6 = nullptr, *hasSwitchToGain1 = nullptr, *isSaturated = nullptr;
+      cms::cuda::device::unique_ptr<SMT[]> noisecov;
+      cms::cuda::device::unique_ptr<PMT[]> pulse_matrix;
+      cms::cuda::device::unique_ptr<BXVT[]> activeBXs;
+      cms::cuda::device::unique_ptr<char[]> acState;
 
-      SampleVector::Scalar *sample_values, *sample_value_errors;
-      bool* useless_sample_values;
-      SampleVector::Scalar* chi2sNullHypot;
-      SampleVector::Scalar* sum0sNullHypot;
-      SampleVector::Scalar* sumAAsNullHypot;
-      char* pedestal_nums;
-      SampleVector::Scalar *tMaxAlphaBetas, *tMaxErrorAlphaBetas;
-      SampleVector::Scalar *accTimeMax, *accTimeWgt;
-      SampleVector::Scalar *ampMaxAlphaBeta, *ampMaxError;
-      SampleVector::Scalar *timeMax, *timeError;
-      TimeComputationState* tcState;
+      cms::cuda::device::unique_ptr<bool[]> hasSwitchToGain6, hasSwitchToGain1, isSaturated;
 
-      void allocate(ConfigurationParameters const& configParameters, uint32_t size) {
-        cudaCheck(cudaMalloc((void**)&samples, size * sizeof(SampleVector)));
-        cudaCheck(cudaMalloc((void**)&gainsNoise, size * sizeof(SampleGainVector)));
+      cms::cuda::device::unique_ptr<SVT[]> sample_values, sample_value_errors;
+      cms::cuda::device::unique_ptr<bool[]> useless_sample_values;
+      cms::cuda::device::unique_ptr<SVT[]> chi2sNullHypot;
+      cms::cuda::device::unique_ptr<SVT[]> sum0sNullHypot;
+      cms::cuda::device::unique_ptr<SVT[]> sumAAsNullHypot;
+      cms::cuda::device::unique_ptr<char[]> pedestal_nums;
+      cms::cuda::device::unique_ptr<SVT[]> tMaxAlphaBetas, tMaxErrorAlphaBetas;
+      cms::cuda::device::unique_ptr<SVT[]> accTimeMax, accTimeWgt;
+      cms::cuda::device::unique_ptr<SVT[]> ampMaxAlphaBeta, ampMaxError;
+      cms::cuda::device::unique_ptr<SVT[]> timeMax, timeError;
+      cms::cuda::device::unique_ptr<TimeComputationState[]> tcState;
 
-        cudaCheck(cudaMalloc((void**)&noisecov, size * sizeof(SampleMatrix)));
-        cudaCheck(cudaMalloc((void**)&pulse_matrix, size * sizeof(PulseMatrixType)));
-        cudaCheck(cudaMalloc((void**)&activeBXs, size * sizeof(BXVectorType)));
-        cudaCheck(cudaMalloc((void**)&acState, size * sizeof(char)));
+      void allocate(ConfigurationParameters const& configParameters, cudaStream_t cudaStream) {
+        constexpr auto svlength = getLength<SampleVector>();
+        constexpr auto sgvlength = getLength<SampleGainVector>();
+        constexpr auto smlength = getLength<SampleMatrix>();
+        constexpr auto pmlength = getLength<PulseMatrixType>();
+        constexpr auto bxvlength = getLength<BXVectorType>();
+        auto const size = configParameters.maxNumberHits;
 
-        cudaCheck(cudaMalloc((void**)&hasSwitchToGain6, size * sizeof(bool)));
-        cudaCheck(cudaMalloc((void**)&hasSwitchToGain1, size * sizeof(bool)));
-        cudaCheck(cudaMalloc((void**)&isSaturated, size * sizeof(bool)));
+#define MYMALLOC(var, size) var = cms::cuda::make_device_unique<decltype(var)::element_type[]>(size, cudaStream)
+        MYMALLOC(samples, size*svlength);
+        //cudaCheck(cudaMalloc((void**)&samples, size * sizeof(SampleVector)));
+        MYMALLOC(gainsNoise, size*sgvlength);
+        //cudaCheck(cudaMalloc((void**)&gainsNoise, size * sizeof(SampleGainVector)));
 
-        if (configParameters.shouldRunTimingComputation) {
-          cudaCheck(cudaMalloc((void**)&sample_values, size * sizeof(SampleVector)));
-          cudaCheck(cudaMalloc((void**)&sample_value_errors, size * sizeof(SampleVector)));
-          cudaCheck(cudaMalloc((void**)&useless_sample_values, size * sizeof(bool) * EcalDataFrame::MAXSAMPLES));
-          cudaCheck(cudaMalloc((void**)&chi2sNullHypot, size * sizeof(SampleVector::Scalar)));
-          cudaCheck(cudaMalloc((void**)&sum0sNullHypot, size * sizeof(SampleVector::Scalar)));
-          cudaCheck(cudaMalloc((void**)&sumAAsNullHypot, size * sizeof(SampleVector::Scalar)));
-          cudaCheck(cudaMalloc((void**)&pedestal_nums, size * sizeof(char)));
+        MYMALLOC(noisecov, size * smlength);
+        //cudaCheck(cudaMalloc((void**)&noisecov, size * sizeof(SampleMatrix)));
+        MYMALLOC(pulse_matrix, size * pmlength);
+        //cudaCheck(cudaMalloc((void**)&pulse_matrix, size * sizeof(PulseMatrixType)));
+        MYMALLOC(activeBXs, size*bxvlength);
+        //cudaCheck(cudaMalloc((void**)&activeBXs, size * sizeof(BXVectorType)));
+        MYMALLOC(acState, size);
+        //cudaCheck(cudaMalloc((void**)&acState, size * sizeof(char)));
 
-          cudaCheck(cudaMalloc((void**)&tMaxAlphaBetas, size * sizeof(SampleVector::Scalar)));
-          cudaCheck(cudaMalloc((void**)&tMaxErrorAlphaBetas, size * sizeof(SampleVector::Scalar)));
-          cudaCheck(cudaMalloc((void**)&accTimeMax, size * sizeof(SampleVector::Scalar)));
-          cudaCheck(cudaMalloc((void**)&accTimeWgt, size * sizeof(SampleVector::Scalar)));
-          cudaCheck(cudaMalloc((void**)&ampMaxAlphaBeta, size * sizeof(SampleVector::Scalar)));
-          cudaCheck(cudaMalloc((void**)&ampMaxError, size * sizeof(SampleVector::Scalar)));
-          cudaCheck(cudaMalloc((void**)&timeMax, size * sizeof(SampleVector::Scalar)));
-          cudaCheck(cudaMalloc((void**)&timeError, size * sizeof(SampleVector::Scalar)));
-          cudaCheck(cudaMalloc((void**)&tcState, size * sizeof(TimeComputationState)));
-        }
-      }
-
-      void deallocate(ConfigurationParameters const& configParameters) {
-        cudaCheck(cudaFree(samples));
-        cudaCheck(cudaFree(gainsNoise));
-
-        cudaCheck(cudaFree(noisecov));
-        cudaCheck(cudaFree(pulse_matrix));
-        cudaCheck(cudaFree(activeBXs));
-        cudaCheck(cudaFree(acState));
-
-        cudaCheck(cudaFree(hasSwitchToGain6));
-        cudaCheck(cudaFree(hasSwitchToGain1));
-        cudaCheck(cudaFree(isSaturated));
+        MYMALLOC(hasSwitchToGain6, size);
+        //cudaCheck(cudaMalloc((void**)&hasSwitchToGain6, size * sizeof(bool)));
+        MYMALLOC(hasSwitchToGain1, size);
+        //cudaCheck(cudaMalloc((void**)&hasSwitchToGain1, size * sizeof(bool)));
+        MYMALLOC(isSaturated, size);
+        //cudaCheck(cudaMalloc((void**)&isSaturated, size * sizeof(bool)));
 
         if (configParameters.shouldRunTimingComputation) {
-          cudaCheck(cudaFree(sample_values));
-          cudaCheck(cudaFree(sample_value_errors));
-          cudaCheck(cudaFree(useless_sample_values));
-          cudaCheck(cudaFree(chi2sNullHypot));
-          cudaCheck(cudaFree(sum0sNullHypot));
-          cudaCheck(cudaFree(sumAAsNullHypot));
-          cudaCheck(cudaFree(pedestal_nums));
+          MYMALLOC(sample_values, size*svlength);
+          //cudaCheck(cudaMalloc((void**)&sample_values, size * sizeof(SampleVector)));
+          MYMALLOC(sample_value_errors, size*svlength);
+          //cudaCheck(cudaMalloc((void**)&sample_value_errors, size * sizeof(SampleVector)));
+          MYMALLOC(useless_sample_values, size*EcalDataFrame::MAXSAMPLES);
+          //cudaCheck(cudaMalloc((void**)&useless_sample_values, size * sizeof(bool) * EcalDataFrame::MAXSAMPLES));
+          MYMALLOC(chi2sNullHypot, size);
+          //cudaCheck(cudaMalloc((void**)&chi2sNullHypot, size * sizeof(SampleVector::Scalar)));
+          MYMALLOC(sum0sNullHypot, size);
+          //cudaCheck(cudaMalloc((void**)&sum0sNullHypot, size * sizeof(SampleVector::Scalar)));
+          MYMALLOC(sumAAsNullHypot, size);
+          //cudaCheck(cudaMalloc((void**)&sumAAsNullHypot, size * sizeof(SampleVector::Scalar)));
+          MYMALLOC(pedestal_nums, size);
+          //cudaCheck(cudaMalloc((void**)&pedestal_nums, size * sizeof(char)));
 
-          cudaCheck(cudaFree(tMaxAlphaBetas));
-          cudaCheck(cudaFree(tMaxErrorAlphaBetas));
-          cudaCheck(cudaFree(accTimeMax));
-          cudaCheck(cudaFree(accTimeWgt));
-          cudaCheck(cudaFree(ampMaxAlphaBeta));
-          cudaCheck(cudaFree(ampMaxError));
-          cudaCheck(cudaFree(timeMax));
-          cudaCheck(cudaFree(timeError));
-          cudaCheck(cudaFree(tcState));
+          MYMALLOC(tMaxAlphaBetas, size);
+          //cudaCheck(cudaMalloc((void**)&tMaxAlphaBetas, size * sizeof(SampleVector::Scalar)));
+          MYMALLOC(tMaxErrorAlphaBetas, size);
+          //cudaCheck(cudaMalloc((void**)&tMaxErrorAlphaBetas, size * sizeof(SampleVector::Scalar)));
+          MYMALLOC(accTimeMax, size);
+          //cudaCheck(cudaMalloc((void**)&accTimeMax, size * sizeof(SampleVector::Scalar)));
+          MYMALLOC(accTimeWgt, size);
+          //cudaCheck(cudaMalloc((void**)&accTimeWgt, size * sizeof(SampleVector::Scalar)));
+          MYMALLOC(ampMaxAlphaBeta, size);
+          //cudaCheck(cudaMalloc((void**)&ampMaxAlphaBeta, size * sizeof(SampleVector::Scalar)));
+          MYMALLOC(ampMaxError, size);
+          //cudaCheck(cudaMalloc((void**)&ampMaxError, size * sizeof(SampleVector::Scalar)));
+          MYMALLOC(timeMax, size);
+          //cudaCheck(cudaMalloc((void**)&timeMax, size * sizeof(SampleVector::Scalar)));
+          MYMALLOC(timeError, size);
+          //cudaCheck(cudaMalloc((void**)&timeError, size * sizeof(SampleVector::Scalar)));
+          MYMALLOC(tcState, size);
+          //cudaCheck(cudaMalloc((void**)&tcState, size * sizeof(TimeComputationState)));
         }
       }
     };

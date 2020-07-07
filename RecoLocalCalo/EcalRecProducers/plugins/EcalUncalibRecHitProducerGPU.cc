@@ -63,7 +63,6 @@ private:
 
   // event data
   ecal::multifit::EventOutputDataGPU eventOutputDataGPU_;
-  ecal::multifit::EventDataForScratchGPU eventDataForScratchGPU_;
 
   cms::cuda::ContextState cudaState_;
 
@@ -233,9 +232,6 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(const edm::ParameterS
   configParameters_.outOfTimeThreshG12mEE = outOfTimeThreshG12mEE;
   configParameters_.outOfTimeThreshG61mEB = outOfTimeThreshG61mEB;
   configParameters_.outOfTimeThreshG61mEE = outOfTimeThreshG61mEE;
-
-  // allocate scratch data for gpu
-  eventDataForScratchGPU_.allocate(configParameters_, configParameters_.maxNumberHits);
 }
 
 EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
@@ -249,9 +245,6 @@ EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
     cudaCheck(cudaFree(configParameters_.amplitudeFitParametersEE));
     cudaCheck(cudaFree(configParameters_.timeFitParametersEB));
     cudaCheck(cudaFree(configParameters_.timeFitParametersEE));
-
-    // free event scratch data
-    eventDataForScratchGPU_.deallocate(configParameters_);
   }
 }
 
@@ -309,12 +302,16 @@ void EcalUncalibRecHitProducerGPU::acquire(edm::Event const& event,
   
   // dev mem
   eventOutputDataGPU_.allocate(configParameters_, ctx.stream());
+  
+  // scratch mem
+  ecal::multifit::EventDataForScratchGPU eventDataForScratchGPU;
+  eventDataForScratchGPU.allocate(configParameters_, ctx.stream());
 
   //
   // schedule algorithms
   //
   ecal::multifit::entryPoint(
-      inputDataGPU, eventOutputDataGPU_, eventDataForScratchGPU_, conditions, configParameters_, ctx.stream());
+      inputDataGPU, eventOutputDataGPU_, eventDataForScratchGPU, conditions, configParameters_, ctx.stream());
 }
 
 void EcalUncalibRecHitProducerGPU::produce(edm::Event& event, edm::EventSetup const& setup) {
