@@ -102,35 +102,6 @@ namespace hcal {
       cms::cuda::device::unique_ptr<float[]> amplitudes, noiseTerms,
           pulseMatrices, pulseMatricesM, pulseMatricesP;
       cms::cuda::device::unique_ptr<int8_t[]> soiSamples;
-
-      /*
-      float *amplitudes = nullptr, *noiseTerms = nullptr;
-      float *pulseMatrices = nullptr, *pulseMatricesM = nullptr, *pulseMatricesP = nullptr;
-      int8_t* soiSamples = nullptr;
-
-      // TODO: properly allocate for NSAMPLES VS NPULSES
-      void allocate(ConfigParameters const& config) {
-        cudaCheck(cudaMalloc((void**)&amplitudes, sizeof(float) * config.maxChannels * config.maxTimeSamples));
-        cudaCheck(cudaMalloc((void**)&noiseTerms, sizeof(float) * config.maxChannels * config.maxTimeSamples));
-        cudaCheck(cudaMalloc((void**)&pulseMatrices,
-                             sizeof(float) * config.maxChannels * config.maxTimeSamples * config.maxTimeSamples));
-        cudaCheck(cudaMalloc((void**)&pulseMatricesM,
-                             sizeof(float) * config.maxChannels * config.maxTimeSamples * config.maxTimeSamples));
-        cudaCheck(cudaMalloc((void**)&pulseMatricesP,
-                             sizeof(float) * config.maxChannels * config.maxTimeSamples * config.maxTimeSamples));
-        cudaCheck(cudaMalloc((void**)&soiSamples, sizeof(int8_t) * config.maxChannels));
-      }
-
-      void deallocate(ConfigParameters const& config) {
-        if (amplitudes) {
-          cudaCheck(cudaFree(amplitudes));
-          cudaCheck(cudaFree(noiseTerms));
-          cudaCheck(cudaFree(pulseMatrices));
-          cudaCheck(cudaFree(pulseMatricesM));
-          cudaCheck(cudaFree(pulseMatricesP));
-          cudaCheck(cudaFree(soiSamples));
-        }
-      }*/
     };
 
     struct InputDataGPU {
