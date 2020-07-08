@@ -1049,6 +1049,7 @@ namespace ecal {
       ARRANGE(g_jitter);
       ARRANGE(g_jitterError);
       ARRANGE(flags);
+#undef ARRANGE
 
       const auto did = DetId{dids[inputGtx]};
       const auto isBarrel = did.subdetId() == EcalBarrel;

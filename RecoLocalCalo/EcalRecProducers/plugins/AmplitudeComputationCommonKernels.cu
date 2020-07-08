@@ -80,6 +80,7 @@ namespace ecal {
       ARRANGE(g_pedestal);
       ARRANGE(dids_out);
       ARRANGE(flags);
+#undef ARRANGE
 
       if (ch < nchannels) {
         // array of 10 x channels per block

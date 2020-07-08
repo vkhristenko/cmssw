@@ -155,6 +155,7 @@ namespace ecal {
       ARRANGE(amplitudes);
       ARRANGE(chi2s);
       ARRANGE(energies);
+      #undef ARRANGE
 
       auto const ch = idx;
       if (idx < nchannels) {

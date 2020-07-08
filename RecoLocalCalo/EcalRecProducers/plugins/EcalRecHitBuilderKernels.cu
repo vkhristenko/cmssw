@@ -156,6 +156,7 @@ namespace ecal {
         ARRANGE(chi2);
         ARRANGE(flagBits);
         ARRANGE(extra);
+#undef ARRANGE
 
         // only two values, EB or EE
         // AM : FIXME : why not using "isBarrel" ?    isBarrel ? adc2gev[0] : adc2gev[1]
