@@ -1,6 +1,8 @@
 #ifndef RecoLocalCalo_EcalRecAlgos_interfaceEcalMultifitParametersGPU_h
 #define RecoLocalCalo_EcalRecAlgos_interfaceEcalMultifitParametersGPU_h
 
+#include <array>
+
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
 
 #ifndef __CUDACC__
@@ -22,6 +24,10 @@ public:
     ~EcalMultifitParametersGPU() = default;
 
     Product const& getProduct(cudaStream_t) const;
+
+    std::array<std::reference_wrapper<std::vector<double, cms::cuda::HostAllocator<double>> const>, 4> getValues() const {
+        return {{amplitudeFitParametersEB_, amplitudeFitParametersEE_, timeFitParametersEB_, timeFitParametersEE_}};
+    }
 
 private:
     std::vector<double, cms::cuda::HostAllocator<double>> amplitudeFitParametersEB_, amplitudeFitParametersEE_, timeFitParametersEB_, timeFitParametersEE_;

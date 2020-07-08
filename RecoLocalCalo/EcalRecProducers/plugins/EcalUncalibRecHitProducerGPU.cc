@@ -81,26 +81,6 @@ void EcalUncalibRecHitProducerGPU::fillDescriptions(edm::ConfigurationDescriptio
   desc.add<std::string>("recHitsLabelEB", "EcalUncalibRecHitsEB");
   desc.add<std::string>("recHitsLabelEE", "EcalUncalibRecHitsEE");
 
-  desc.add<std::vector<double>>("EBtimeFitParameters",
-                                {-2.015452e+00,
-                                 3.130702e+00,
-                                 -1.234730e+01,
-                                 4.188921e+01,
-                                 -8.283944e+01,
-                                 9.101147e+01,
-                                 -5.035761e+01,
-                                 1.105621e+01});
-  desc.add<std::vector<double>>("EEtimeFitParameters",
-                                {-2.390548e+00,
-                                 3.553628e+00,
-                                 -1.762341e+01,
-                                 6.767538e+01,
-                                 -1.332130e+02,
-                                 1.407432e+02,
-                                 -7.541106e+01,
-                                 1.620277e+01});
-  desc.add<std::vector<double>>("EBamplitudeFitParameters", {1.138, 1.652});
-  desc.add<std::vector<double>>("EEamplitudeFitParameters", {1.890, 1.400});
   desc.add<double>("EBtimeFitLimits_Lower", 0.2);
   desc.add<double>("EBtimeFitLimits_Upper", 1.4);
   desc.add<double>("EEtimeFitLimits_Lower", 0.2);
@@ -136,10 +116,6 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(const edm::ParameterS
           ps.getParameter<std::string>("recHitsLabelEB"))},
       recHitsTokenEE_{produces<OutputProduct>(
           ps.getParameter<std::string>("recHitsLabelEE"))} {
-  auto EBamplitudeFitParameters = ps.getParameter<std::vector<double>>("EBamplitudeFitParameters");
-  auto EEamplitudeFitParameters = ps.getParameter<std::vector<double>>("EEamplitudeFitParameters");
-  auto EBtimeFitParameters = ps.getParameter<std::vector<double>>("EBtimeFitParameters");
-  auto EEtimeFitParameters = ps.getParameter<std::vector<double>>("EEtimeFitParameters");
   std::pair<double, double> EBtimeFitLimits, EEtimeFitLimits;
   EBtimeFitLimits.first = ps.getParameter<double>("EBtimeFitLimits_Lower");
   EBtimeFitLimits.second = ps.getParameter<double>("EBtimeFitLimits_Upper");
@@ -180,39 +156,11 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(const edm::ParameterS
   // use sync copying
   //
 
-  // amplitude fit parameters copying
-  cudaCheck(cudaMalloc((void**)&configParameters_.amplitudeFitParametersEB,
-                       sizeof(ecal::multifit::ConfigurationParameters::type) * EBamplitudeFitParameters.size()));
-  cudaCheck(cudaMemcpy(configParameters_.amplitudeFitParametersEB,
-                       EBamplitudeFitParameters.data(),
-                       EBamplitudeFitParameters.size() * sizeof(ecal::multifit::ConfigurationParameters::type),
-                       cudaMemcpyHostToDevice));
-  cudaCheck(cudaMalloc((void**)&configParameters_.amplitudeFitParametersEE,
-                       sizeof(ecal::multifit::ConfigurationParameters::type) * EEamplitudeFitParameters.size()));
-  cudaCheck(cudaMemcpy(configParameters_.amplitudeFitParametersEE,
-                       EEamplitudeFitParameters.data(),
-                       EEamplitudeFitParameters.size() * sizeof(ecal::multifit::ConfigurationParameters::type),
-                       cudaMemcpyHostToDevice));
-
   // time fit parameters and limits
-  configParameters_.timeFitParametersSizeEB = EBtimeFitParameters.size();
-  configParameters_.timeFitParametersSizeEE = EEtimeFitParameters.size();
   configParameters_.timeFitLimitsFirstEB = EBtimeFitLimits.first;
   configParameters_.timeFitLimitsSecondEB = EBtimeFitLimits.second;
   configParameters_.timeFitLimitsFirstEE = EEtimeFitLimits.first;
   configParameters_.timeFitLimitsSecondEE = EEtimeFitLimits.second;
-  cudaCheck(cudaMalloc((void**)&configParameters_.timeFitParametersEB,
-                       sizeof(ecal::multifit::ConfigurationParameters::type) * EBtimeFitParameters.size()));
-  cudaCheck(cudaMemcpy(configParameters_.timeFitParametersEB,
-                       EBtimeFitParameters.data(),
-                       EBtimeFitParameters.size() * sizeof(ecal::multifit::ConfigurationParameters::type),
-                       cudaMemcpyHostToDevice));
-  cudaCheck(cudaMalloc((void**)&configParameters_.timeFitParametersEE,
-                       sizeof(ecal::multifit::ConfigurationParameters::type) * EEtimeFitParameters.size()));
-  cudaCheck(cudaMemcpy(configParameters_.timeFitParametersEE,
-                       EEtimeFitParameters.data(),
-                       EEtimeFitParameters.size() * sizeof(ecal::multifit::ConfigurationParameters::type),
-                       cudaMemcpyHostToDevice));
 
   // time constant terms
   configParameters_.timeConstantTermEB = EBtimeConstantTerm;
@@ -237,19 +185,7 @@ EcalUncalibRecHitProducerGPU::EcalUncalibRecHitProducerGPU(const edm::ParameterS
   configParameters_.outOfTimeThreshG61mEE = outOfTimeThreshG61mEE;
 }
 
-EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {
-  //
-  // assume single device for now
-  //
-
-  if (configParameters_.amplitudeFitParametersEB) {
-    // configuration parameters
-    cudaCheck(cudaFree(configParameters_.amplitudeFitParametersEB));
-    cudaCheck(cudaFree(configParameters_.amplitudeFitParametersEE));
-    cudaCheck(cudaFree(configParameters_.timeFitParametersEB));
-    cudaCheck(cudaFree(configParameters_.timeFitParametersEE));
-  }
-}
+EcalUncalibRecHitProducerGPU::~EcalUncalibRecHitProducerGPU() {}
 
 void EcalUncalibRecHitProducerGPU::acquire(edm::Event const& event,
                                            edm::EventSetup const& setup,
@@ -292,6 +228,14 @@ void EcalUncalibRecHitProducerGPU::acquire(edm::Event const& event,
   auto const& timeBiasCorrectionsProduct = timeBiasCorrectionsHandle_->getProduct(ctx.stream());
   auto const& timeCalibConstantsProduct = timeCalibConstantsHandle_->getProduct(ctx.stream());
   auto const& multifitParametersProduct = multifitParametersHandle_->getProduct(ctx.stream());
+
+  // assign ptrs/values: this is done not to change how things look downstream
+  configParameters_.amplitudeFitParametersEB = multifitParametersProduct.amplitudeFitParametersEB;
+  configParameters_.amplitudeFitParametersEE = multifitParametersProduct.amplitudeFitParametersEE;
+  configParameters_.timeFitParametersEB = multifitParametersProduct.timeFitParametersEB;
+  configParameters_.timeFitParametersEE = multifitParametersProduct.timeFitParametersEE;
+  configParameters_.timeFitParametersSizeEB = multifitParametersHandle_->getValues()[2].get().size();
+  configParameters_.timeFitParametersSizeEE = multifitParametersHandle_->getValues()[3].get().size();
 
   // bundle up conditions
   ecal::multifit::ConditionsProducts conditions{pedProduct,

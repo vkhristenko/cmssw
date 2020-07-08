@@ -11,7 +11,7 @@ EcalMultifitParametersGPU::EcalMultifitParametersGPU(edm::ParameterSet const& ps
     auto const& timeFitParametersEB = ps.getParameter<std::vector<double>>(
         "EBtimeFitParameters");
     auto const& timeFitParametersEE = ps.getParameter<std::vector<double>>(
-        "EEEtimeFitParameters");
+        "EEtimeFitParameters");
 
     amplitudeFitParametersEB_.resize(amplitudeFitParametersEB.size());
     amplitudeFitParametersEE_.resize(amplitudeFitParametersEE.size());
