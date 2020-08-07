@@ -52,6 +52,11 @@ private:
     uint32_t maxChannelsF01HE, maxChannelsF5HB, maxChannelsF3HB;
   };
   ConfigParameters config_;
+  
+  // per event host data
+  HostCollectionf01 hf01_;
+  HostCollectionf5 hf5_;
+  HostCollectionf3 hf3_;
 
   // device products: product owns memory (i.e. not the module)
   DeviceCollectionf01 df01_;
@@ -84,6 +89,15 @@ HcalDigisProducerGPU::HcalDigisProducerGPU(const edm::ParameterSet& ps)
   config_.maxChannelsF01HE = ps.getParameter<uint32_t>("maxChannelsF01HE");
   config_.maxChannelsF5HB = ps.getParameter<uint32_t>("maxChannelsF5HB");
   config_.maxChannelsF3HB = ps.getParameter<uint32_t>("maxChannelsF3HB");
+
+  // this is a preallocation for the max statically known number of time samples
+  // actual stride/nsamples will be inferred from data
+  hf5_.stride = hcal::compute_stride<hcal::Flavor5>(HBHEDataFrame::MAXSAMPLES);
+  hf01_.stride = hcal::compute_stride<hcal::Flavor01>(QIE11DigiCollection::MAXSAMPLES);
+  hf3_.stride = hcal::compute_stride<hcal::Flavor3>(QIE11DigiCollection::MAXSAMPLES);
+  hf5_.reserve(config_.maxChannelsF5HB);
+  hf01_.reserve(config_.maxChannelsF01HE);
+  hf3_.reserve(config_.maxChannelsF3HB);
 }
 
 HcalDigisProducerGPU::~HcalDigisProducerGPU() {}
@@ -100,18 +114,16 @@ void HcalDigisProducerGPU::acquire(edm::Event const& event,
   edm::Handle<QIE11DigiCollection> qie11Digis;
   event.getByToken(hbheDigiToken_, hbheDigis);
   event.getByToken(qie11DigiToken_, qie11Digis);
-  
-  // tmp host data
-  HostCollectionf01 hf01;
-  HostCollectionf5 hf5;
-  HostCollectionf3 hf3;
+
+  hf5_.clear();
+  hf01_.clear();
+  hf3_.clear();
 
   // init f5 collection
   if (hbheDigis->size() > 0) {
     auto const nsamples = (*hbheDigis)[0].size();
     auto const stride = hcal::compute_stride<hcal::Flavor5>(nsamples);
-    hf5.stride = stride;
-    hf5.reserve(config_.maxChannelsF5HB);
+    hf5_.stride = stride;
   
     // flavor5 get device blobs
     df5_.stride = stride;
@@ -126,10 +138,8 @@ void HcalDigisProducerGPU::acquire(edm::Event const& event,
     auto const stride01 = hcal::compute_stride<hcal::Flavor01>(nsamples);
     auto const stride3 = hcal::compute_stride<hcal::Flavor3>(nsamples);
 
-    hf01.stride = stride01;
-    hf3.stride = stride3;
-    hf01.reserve(config_.maxChannelsF01HE);
-    hf3.reserve(config_.maxChannelsF3HB);
+    hf01_.stride = stride01;
+    hf3_.stride = stride3;
   
     // flavor 0/1 get devie blobs
     df01_.stride = stride01;
@@ -147,19 +157,19 @@ void HcalDigisProducerGPU::acquire(edm::Event const& event,
   for (auto const& hbhe : *hbheDigis) {
     auto const id = hbhe.id().rawId();
     auto const presamples = hbhe.presamples();
-    hf5.ids.push_back(id);
-    hf5.npresamples.push_back(presamples);
+    hf5_.ids.push_back(id);
+    hf5_.npresamples.push_back(presamples);
     auto const stride = hcal::compute_stride<hcal::Flavor5>(hbhe.size());
-    assert(stride == hf5.stride && "strides must be the same for every single digi of the collection");
+    assert(stride == hf5_.stride && "strides must be the same for every single digi of the collection");
     // simple for now...
     static_assert(hcal::Flavor5::HEADER_WORDS == 1);
     uint16_t header_word = (1 << 15) | (0x5 << 12) | (0 << 10) | ((hbhe.sample(0).capid() & 0x3) << 8);
-    hf5.data.push_back(header_word);
+    hf5_.data.push_back(header_word);
     for (unsigned int i = 0; i < stride - hcal::Flavor5::HEADER_WORDS; i++) {
       uint16_t s0 = (0 << 7) | (static_cast<uint8_t>(hbhe.sample(2 * i).adc()) & 0x7f);
       uint16_t s1 = (0 << 7) | (static_cast<uint8_t>(hbhe.sample(2 * i + 1).adc()) & 0x7f);
       uint16_t sample = (s1 << 8) | s0;
-      hf5.data.push_back(sample);
+      hf5_.data.push_back(sample);
     }
   }
 
@@ -170,21 +180,21 @@ void HcalDigisProducerGPU::acquire(edm::Event const& event,
       if (digi.detid().subdetId() != HcalEndcap)
         continue;
       auto const id = digi.detid().rawId();
-      hf01.ids.push_back(id);
+      hf01_.ids.push_back(id);
       for (int hw = 0; hw < hcal::Flavor01::HEADER_WORDS; hw++)
-        hf01.data.push_back((*qie11Digis)[i][hw]);
+        hf01_.data.push_back((*qie11Digis)[i][hw]);
       for (int sample = 0; sample < digi.samples(); sample++) {
-        hf01.data.push_back((*qie11Digis)[i][hcal::Flavor01::HEADER_WORDS + sample]);
+        hf01_.data.push_back((*qie11Digis)[i][hcal::Flavor01::HEADER_WORDS + sample]);
       }
     } else if (digi.flavor() == 3) {
       if (digi.detid().subdetId() != HcalBarrel)
         continue;
       auto const id = digi.detid().rawId();
-      hf3.ids.push_back(id);
+      hf3_.ids.push_back(id);
       for (int hw = 0; hw < hcal::Flavor3::HEADER_WORDS; hw++)
-        hf3.data.push_back((*qie11Digis)[i][hw]);
+        hf3_.data.push_back((*qie11Digis)[i][hw]);
       for (int sample = 0; sample < digi.samples(); sample++) {
-        hf3.data.push_back((*qie11Digis)[i][hcal::Flavor3::HEADER_WORDS + sample]);
+        hf3_.data.push_back((*qie11Digis)[i][hcal::Flavor3::HEADER_WORDS + sample]);
       }
     }
   }
@@ -198,19 +208,19 @@ void HcalDigisProducerGPU::acquire(edm::Event const& event,
     cudaCheck(cudaMemcpyAsync(dest, src.data(), src.size() * sizeof(type), cudaMemcpyHostToDevice, ctx.stream()));
   };
 
-  lambdaToTransfer(df01_.data.get(), hf01.data);
-  lambdaToTransfer(df01_.ids.get(), hf01.ids);
+  lambdaToTransfer(df01_.data.get(), hf01_.data);
+  lambdaToTransfer(df01_.ids.get(), hf01_.ids);
 
-  lambdaToTransfer(df5_.data.get(), hf5.data);
-  lambdaToTransfer(df5_.ids.get(), hf5.ids);
-  lambdaToTransfer(df5_.npresamples.get(), hf5.npresamples);
+  lambdaToTransfer(df5_.data.get(), hf5_.data);
+  lambdaToTransfer(df5_.ids.get(), hf5_.ids);
+  lambdaToTransfer(df5_.npresamples.get(), hf5_.npresamples);
 
-  lambdaToTransfer(df3_.data.get(), hf3.data);
-  lambdaToTransfer(df3_.ids.get(), hf3.ids);
+  lambdaToTransfer(df3_.data.get(), hf3_.data);
+  lambdaToTransfer(df3_.ids.get(), hf3_.ids);
 
-  df01_.size = hf01.ids.size();
-  df5_.size = hf5.ids.size();
-  df3_.size = hf3.ids.size();
+  df01_.size = hf01_.ids.size();
+  df5_.size = hf5_.ids.size();
+  df3_.size = hf3_.ids.size();
 }
 
 void HcalDigisProducerGPU::produce(edm::Event& event, edm::EventSetup const& setup) {
