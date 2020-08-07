@@ -52,8 +52,8 @@ private:
     uint32_t maxChannelsF01HE, maxChannelsF5HB, maxChannelsF3HB;
   };
   ConfigParameters config_;
-  
-  // per event host data
+
+  // per event host buffers
   HostCollectionf01 hf01_;
   HostCollectionf5 hf5_;
   HostCollectionf3 hf3_;
@@ -95,8 +95,8 @@ HcalDigisProducerGPU::HcalDigisProducerGPU(const edm::ParameterSet& ps)
   hf5_.stride = hcal::compute_stride<hcal::Flavor5>(HBHEDataFrame::MAXSAMPLES);
   hf01_.stride = hcal::compute_stride<hcal::Flavor01>(QIE11DigiCollection::MAXSAMPLES);
   hf3_.stride = hcal::compute_stride<hcal::Flavor3>(QIE11DigiCollection::MAXSAMPLES);
-  hf5_.reserve(config_.maxChannelsF5HB);
   hf01_.reserve(config_.maxChannelsF01HE);
+  hf5_.reserve(config_.maxChannelsF5HB);
   hf3_.reserve(config_.maxChannelsF3HB);
 }
 
@@ -108,6 +108,9 @@ void HcalDigisProducerGPU::acquire(edm::Event const& event,
   // raii
   cms::cuda::ScopedContextAcquire ctx{event.streamID(), std::move(holder), cudaState_};
 
+  hf01_.clear();
+  hf5_.clear();
+  hf3_.clear();
 
   // event data
   edm::Handle<HBHEDigiCollection> hbheDigis;
@@ -115,9 +118,6 @@ void HcalDigisProducerGPU::acquire(edm::Event const& event,
   event.getByToken(hbheDigiToken_, hbheDigis);
   event.getByToken(qie11DigiToken_, qie11Digis);
 
-  hf5_.clear();
-  hf01_.clear();
-  hf3_.clear();
 
   // init f5 collection
   if (hbheDigis->size() > 0) {
