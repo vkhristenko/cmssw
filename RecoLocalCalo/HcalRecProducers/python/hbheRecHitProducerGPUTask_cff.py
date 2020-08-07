@@ -32,14 +32,6 @@ hcalDigisGPU = _hcalDigisProducerGPU.clone(
     digisLabelF3HB = ""
 )
 
-# Only for Run 3 MC and data; Run 2 MC and data use 8 time samples
-from Configuration.Eras.Modifier_run3_HB_cff import run3_HB
-run3_HB.toModify(hcalDigisGPU,
-    nsamplesF01HE = 10,
-    nsamplesF3HB = 10,
-    nsamplesF5HB = 10
-)
-
 # run the HCAL local reconstruction (MAHI) on GPU
 from RecoLocalCalo.HcalRecProducers.hbheRecHitProducerGPU_cfi import hbheRecHitProducerGPU as _hbheRecHitProducerGPU
 hbheRecHitProducerGPU = _hbheRecHitProducerGPU.clone(
