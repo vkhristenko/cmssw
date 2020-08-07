@@ -49,14 +49,9 @@ private:
   cms::cuda::ContextState cudaState_;
 
   struct ConfigParameters {
-    uint32_t maxChannelsF01HE, maxChannelsF5HB, maxChannelsF3HB, nsamplesF01HE, nsamplesF5HB, nsamplesF3HB;
+    uint32_t maxChannelsF01HE, maxChannelsF5HB, maxChannelsF3HB;
   };
   ConfigParameters config_;
-
-  // tmp on the host
-  HostCollectionf01 hf01_;
-  HostCollectionf5 hf5_;
-  HostCollectionf3 hf3_;
 
   // device products: product owns memory (i.e. not the module)
   DeviceCollectionf01 df01_;
@@ -76,9 +71,6 @@ void HcalDigisProducerGPU::fillDescriptions(edm::ConfigurationDescriptions& conf
   desc.add<uint32_t>("maxChannelsF01HE", 10000u);
   desc.add<uint32_t>("maxChannelsF5HB", 10000u);
   desc.add<uint32_t>("maxChannelsF3HB", 10000u);
-  desc.add<uint32_t>("nsamplesF01HE", 8);
-  desc.add<uint32_t>("nsamplesF5HB", 8);
-  desc.add<uint32_t>("nsamplesF3HB", 8);
 
   confDesc.addWithDefaultLabel(desc);
 }
@@ -92,17 +84,6 @@ HcalDigisProducerGPU::HcalDigisProducerGPU(const edm::ParameterSet& ps)
   config_.maxChannelsF01HE = ps.getParameter<uint32_t>("maxChannelsF01HE");
   config_.maxChannelsF5HB = ps.getParameter<uint32_t>("maxChannelsF5HB");
   config_.maxChannelsF3HB = ps.getParameter<uint32_t>("maxChannelsF3HB");
-  config_.nsamplesF01HE = ps.getParameter<uint32_t>("nsamplesF01HE");
-  config_.nsamplesF5HB = ps.getParameter<uint32_t>("nsamplesF5HB");
-  config_.nsamplesF3HB = ps.getParameter<uint32_t>("nsamplesF3HB");
-
-  // preallocate on the host
-  hf01_.stride = hcal::compute_stride<hcal::Flavor01>(config_.nsamplesF01HE);
-  hf5_.stride = hcal::compute_stride<hcal::Flavor5>(config_.nsamplesF5HB);
-  hf3_.stride = hcal::compute_stride<hcal::Flavor3>(config_.nsamplesF3HB);
-  hf01_.reserve(config_.maxChannelsF01HE);
-  hf5_.reserve(config_.maxChannelsF5HB);
-  hf3_.reserve(config_.maxChannelsF3HB);
 }
 
 HcalDigisProducerGPU::~HcalDigisProducerGPU() {}
@@ -113,78 +94,103 @@ void HcalDigisProducerGPU::acquire(edm::Event const& event,
   // raii
   cms::cuda::ScopedContextAcquire ctx{event.streamID(), std::move(holder), cudaState_};
 
-  hf01_.clear();
-  hf5_.clear();
-  hf3_.clear();
 
   // event data
   edm::Handle<HBHEDigiCollection> hbheDigis;
   edm::Handle<QIE11DigiCollection> qie11Digis;
   event.getByToken(hbheDigiToken_, hbheDigis);
   event.getByToken(qie11DigiToken_, qie11Digis);
+  
+  // tmp host data
+  HostCollectionf01 hf01;
+  HostCollectionf5 hf5;
+  HostCollectionf3 hf3;
 
-  // flavor 0/1 get devie blobs
-  df01_.data = cms::cuda::make_device_unique<uint16_t[]>(
-      config_.maxChannelsF01HE * hcal::compute_stride<hcal::Flavor01>(config_.nsamplesF01HE), ctx.stream());
-  df01_.ids = cms::cuda::make_device_unique<uint32_t[]>(config_.maxChannelsF01HE, ctx.stream());
+  // init f5 collection
+  if (hbheDigis->size() > 0) {
+    auto const nsamples = (*hbheDigis)[0].size();
+    auto const stride = hcal::compute_stride<hcal::Flavor5>(nsamples);
+    hf5.stride = stride;
+    hf5.reserve(config_.maxChannelsF5HB);
+  
+    // flavor5 get device blobs
+    df5_.stride = stride;
+    df5_.data = cms::cuda::make_device_unique<uint16_t[]>(
+      config_.maxChannelsF5HB * stride, ctx.stream());
+    df5_.ids = cms::cuda::make_device_unique<uint32_t[]>(config_.maxChannelsF5HB, ctx.stream());
+    df5_.npresamples = cms::cuda::make_device_unique<uint8_t[]>(config_.maxChannelsF5HB, ctx.stream());
+  }
 
-  // flavor3 get device blobs
-  df3_.data = cms::cuda::make_device_unique<uint16_t[]>(
-      config_.maxChannelsF3HB * hcal::compute_stride<hcal::Flavor3>(config_.nsamplesF3HB), ctx.stream());
-  df3_.ids = cms::cuda::make_device_unique<uint32_t[]>(config_.maxChannelsF3HB, ctx.stream());
+  if (qie11Digis->size() > 0) {
+    auto const nsamples = qie11Digis->samples();
+    auto const stride01 = hcal::compute_stride<hcal::Flavor01>(nsamples);
+    auto const stride3 = hcal::compute_stride<hcal::Flavor3>(nsamples);
 
-  // flavor5 get device blobs
-  df5_.data = cms::cuda::make_device_unique<uint16_t[]>(
-      config_.maxChannelsF5HB * hcal::compute_stride<hcal::Flavor5>(config_.nsamplesF5HB), ctx.stream());
-  df5_.ids = cms::cuda::make_device_unique<uint32_t[]>(config_.maxChannelsF5HB, ctx.stream());
-  df5_.npresamples = cms::cuda::make_device_unique<uint8_t[]>(config_.maxChannelsF5HB, ctx.stream());
+    hf01.stride = stride01;
+    hf3.stride = stride3;
+    hf01.reserve(stride01);
+    hf3.reserve(stride3);
+  
+    // flavor 0/1 get devie blobs
+    df01_.stride = stride01;
+    df01_.data = cms::cuda::make_device_unique<uint16_t[]>(
+      config_.maxChannelsF01HE * stride01, ctx.stream());
+    df01_.ids = cms::cuda::make_device_unique<uint32_t[]>(config_.maxChannelsF01HE, ctx.stream());
+
+    // flavor3 get device blobs
+    df3_.stride = stride3;
+    df3_.data = cms::cuda::make_device_unique<uint16_t[]>(
+      config_.maxChannelsF3HB * stride3, ctx.stream());
+    df3_.ids = cms::cuda::make_device_unique<uint32_t[]>(config_.maxChannelsF3HB, ctx.stream());
+  }
 
   for (auto const& hbhe : *hbheDigis) {
     auto const id = hbhe.id().rawId();
     auto const presamples = hbhe.presamples();
-    hf5_.ids.push_back(id);
-    hf5_.npresamples.push_back(presamples);
-    int stride = hcal::compute_stride<hcal::Flavor5>(config_.nsamplesF5HB);
+    hf5.ids.push_back(id);
+    hf5.npresamples.push_back(presamples);
+    auto const stride = hcal::compute_stride<hcal::Flavor5>(hbhe.size());
+    assert(stride == hf5.stride && "strides must be the same for every single digi of the collection");
     // simple for now...
     static_assert(hcal::Flavor5::HEADER_WORDS == 1);
     uint16_t header_word = (1 << 15) | (0x5 << 12) | (0 << 10) | ((hbhe.sample(0).capid() & 0x3) << 8);
-    hf5_.data.push_back(header_word);
-    //for (int i=0; i<hcal::Flavor5::HEADER_WORDS; i++)
-    //    hf5_.data.push_back(0);
-    for (int i = 0; i < stride - hcal::Flavor5::HEADER_WORDS; i++) {
+    hf5.data.push_back(header_word);
+    for (unsigned int i = 0; i < stride - hcal::Flavor5::HEADER_WORDS; i++) {
       uint16_t s0 = (0 << 7) | (static_cast<uint8_t>(hbhe.sample(2 * i).adc()) & 0x7f);
       uint16_t s1 = (0 << 7) | (static_cast<uint8_t>(hbhe.sample(2 * i + 1).adc()) & 0x7f);
       uint16_t sample = (s1 << 8) | s0;
-      hf5_.data.push_back(sample);
+      hf5.data.push_back(sample);
     }
   }
 
   for (unsigned int i = 0; i < qie11Digis->size(); i++) {
     auto const& digi = QIE11DataFrame{(*qie11Digis)[i]};
+    assert(digi.samples() == qie11Digis->samples() && "collection nsamples must equal per digi samples");
     if (digi.flavor() == 0 or digi.flavor() == 1) {
       if (digi.detid().subdetId() != HcalEndcap)
         continue;
       auto const id = digi.detid().rawId();
-      hf01_.ids.push_back(id);
+      hf01.ids.push_back(id);
       for (int hw = 0; hw < hcal::Flavor01::HEADER_WORDS; hw++)
-        hf01_.data.push_back((*qie11Digis)[i][hw]);
+        hf01.data.push_back((*qie11Digis)[i][hw]);
       for (int sample = 0; sample < digi.samples(); sample++) {
-        hf01_.data.push_back((*qie11Digis)[i][hcal::Flavor01::HEADER_WORDS + sample]);
+        hf01.data.push_back((*qie11Digis)[i][hcal::Flavor01::HEADER_WORDS + sample]);
       }
     } else if (digi.flavor() == 3) {
       if (digi.detid().subdetId() != HcalBarrel)
         continue;
       auto const id = digi.detid().rawId();
-      hf3_.ids.push_back(id);
+      hf3.ids.push_back(id);
       for (int hw = 0; hw < hcal::Flavor3::HEADER_WORDS; hw++)
-        hf3_.data.push_back((*qie11Digis)[i][hw]);
+        hf3.data.push_back((*qie11Digis)[i][hw]);
       for (int sample = 0; sample < digi.samples(); sample++) {
-        hf3_.data.push_back((*qie11Digis)[i][hcal::Flavor3::HEADER_WORDS + sample]);
+        hf3.data.push_back((*qie11Digis)[i][hcal::Flavor3::HEADER_WORDS + sample]);
       }
     }
   }
 
   auto lambdaToTransfer = [&ctx](auto* dest, auto const& src) {
+    if (src.size() == 0) return;
     using vector_type = typename std::remove_reference<decltype(src)>::type;
     using type = typename vector_type::value_type;
     using dest_data_type = typename std::remove_pointer<decltype(dest)>::type;
@@ -192,26 +198,23 @@ void HcalDigisProducerGPU::acquire(edm::Event const& event,
     cudaCheck(cudaMemcpyAsync(dest, src.data(), src.size() * sizeof(type), cudaMemcpyHostToDevice, ctx.stream()));
   };
 
-  lambdaToTransfer(df01_.data.get(), hf01_.data);
-  lambdaToTransfer(df01_.ids.get(), hf01_.ids);
+  lambdaToTransfer(df01_.data.get(), hf01.data);
+  lambdaToTransfer(df01_.ids.get(), hf01.ids);
 
-  lambdaToTransfer(df5_.data.get(), hf5_.data);
-  lambdaToTransfer(df5_.ids.get(), hf5_.ids);
-  lambdaToTransfer(df5_.npresamples.get(), hf5_.npresamples);
+  lambdaToTransfer(df5_.data.get(), hf5.data);
+  lambdaToTransfer(df5_.ids.get(), hf5.ids);
+  lambdaToTransfer(df5_.npresamples.get(), hf5.npresamples);
 
-  lambdaToTransfer(df3_.data.get(), hf3_.data);
-  lambdaToTransfer(df3_.ids.get(), hf3_.ids);
+  lambdaToTransfer(df3_.data.get(), hf3.data);
+  lambdaToTransfer(df3_.ids.get(), hf3.ids);
+
+  df01_.size = hf01.ids.size();
+  df5_.size = hf5.ids.size();
+  df3_.size = hf3.ids.size();
 }
 
 void HcalDigisProducerGPU::produce(edm::Event& event, edm::EventSetup const& setup) {
   cms::cuda::ScopedContextProduce ctx{cudaState_};
-
-  df01_.stride = hcal::compute_stride<hcal::Flavor01>(config_.nsamplesF01HE);
-  df01_.size = hf01_.ids.size();
-  df5_.stride = hcal::compute_stride<hcal::Flavor5>(config_.nsamplesF5HB);
-  df5_.size = hf5_.ids.size();
-  df3_.stride = hcal::compute_stride<hcal::Flavor3>(config_.nsamplesF3HB);
-  df3_.size = hf3_.ids.size();
 
   ctx.emplace(event, digisF01HEToken_, std::move(df01_));
   ctx.emplace(event, digisF5HBToken_, std::move(df5_));
