@@ -128,8 +128,8 @@ void HcalDigisProducerGPU::acquire(edm::Event const& event,
 
     hf01.stride = stride01;
     hf3.stride = stride3;
-    hf01.reserve(stride01);
-    hf3.reserve(stride3);
+    hf01.reserve(config_.maxChannelsF01HE);
+    hf3.reserve(config_.maxChannelsF3HB);
   
     // flavor 0/1 get devie blobs
     df01_.stride = stride01;
