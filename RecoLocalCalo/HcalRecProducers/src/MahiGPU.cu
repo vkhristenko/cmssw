@@ -1671,7 +1671,10 @@ namespace hcal {
       int constexpr windowSize = 8;
       int const startingSample = f01nsamples - windowSize;
       assert(startingSample==0 || startingSample==2);
-      assert(f01nsamples == f5nsamples && f01nsamples == f3nsamples);
+      if (inputGPU.f01HEDigis.stride > 0 && inputGPU.f5HBDigis.stride> 0)
+          assert(f01nsamples == f5nsamples);
+      if (inputGPU.f01HEDigis.stride > 0 && inputGPU.f3HBDigis.stride > 0)
+          assert(f01nsamples == f3nsamples);
 
       dim3 threadsPerBlock{windowSize, configParameters.kprep1dChannelsPerBlock};
       int blocks = static_cast<uint32_t>(threadsPerBlock.y) > totalChannels
