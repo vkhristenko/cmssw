@@ -15,7 +15,7 @@
 class HcalDigisProducerGPU : public edm::stream::EDProducer<edm::ExternalWork> {
 public:
   explicit HcalDigisProducerGPU(edm::ParameterSet const& ps);
-  ~HcalDigisProducerGPU() override;
+  ~HcalDigisProducerGPU() override = default;
   static void fillDescriptions(edm::ConfigurationDescriptions&);
 
 private:
@@ -100,14 +100,13 @@ HcalDigisProducerGPU::HcalDigisProducerGPU(const edm::ParameterSet& ps)
   hf3_.reserve(config_.maxChannelsF3HB);
 }
 
-HcalDigisProducerGPU::~HcalDigisProducerGPU() {}
-
 void HcalDigisProducerGPU::acquire(edm::Event const& event,
                                    edm::EventSetup const& setup,
                                    edm::WaitingTaskWithArenaHolder holder) {
   // raii
   cms::cuda::ScopedContextAcquire ctx{event.streamID(), std::move(holder), cudaState_};
 
+  // clear host buffers
   hf01_.clear();
   hf5_.clear();
   hf3_.clear();
