@@ -152,272 +152,272 @@ void kernel_unpack_test(
         uint32_t const* eid2did,
         uint32_t const nbytesTotal) {
     // indices
-    auto const ifed = blockIdx.x;
-
-    // FIXME: use only the very first fed
-    //if (ifed!=10) return;
-
-    // offset in bytes
-    auto const offset = offsets[ifed];
-    // fed id
-    auto const fed = feds[ifed];
-    auto const isBarrel = is_barrel(static_cast<uint8_t>(fed - 600));
-    // size
-    auto const size = ifed==gridDim.x-1 ? nbytesTotal - offset : offsets[ifed+1] - offset;
-    auto *samples = isBarrel ? samplesEB : samplesEE;
-    auto *ids = isBarrel ? idsEB : idsEE;
-    auto *pChannelsCounter = isBarrel 
-        ? &pChannelsCounterEBEE[0] 
-        : &pChannelsCounterEBEE[1];
-
-    // FIXME: debugging
-    //printf("ifed = %u fed = %d offset = %u size = %u\n", ifed, fed, offset, size);
-
-    // offset to the right raw buffer
-    uint64_t const* buffer = reinterpret_cast<uint64_t const*>(data + offset);
-
-    // dump first 3 bits for each 64-bit word
-    //print_first3bits(buffer, size / 8);
-
-    //
-    // fed header
-    //
-    //print_raw_buffer(reinterpret_cast<uint8_t const*>(buffer), 8);
-    //printf("\n");
-    auto const fed_header = buffer[0];
-    uint32_t fed_id = (fed_header >> 8) & 0xfff;
-    uint32_t bx = (fed_header >> 20) & 0xfff;
-    uint32_t lv1 = (fed_header >> 32) & 0xffffff;
-    uint8_t trigger_type = (fed_header >> 56) & 0xf;
-    uint8_t const bid_fed_header = (fed_header >> 60) & 0xf;
-    //printf("fed = %d fed_id = %u bx = %u lv1 = %u tt=%hhu  bid = 0x%u\n",
-    //    fed, fed_id, bx, lv1, trigger_type, bid_fed_header);
-
-    //
-    // dcc header: w1
-    //
-    //print_raw_buffer(reinterpret_cast<uint8_t const*>(buffer + 1), 8);
-    //printf("\n");
-    auto const dcc_header = buffer[1];
-    uint32_t event_length = dcc_header & 0xffffff;
-    uint8_t dcc_errors = (dcc_header >> 24) & 0xff;
-    uint32_t run_number = (dcc_header >> 32) & 0xffffff;
-    uint8_t const word_dcc = (dcc_header >> 56) & 0x3f;
-    uint8_t const bid_dcc_header = (dcc_header >> 62) & 0x3;
-    //printf("fed = %d size = %u event_length = %u dcc_errors = %u run_number = %u word_dcc = 0x%u bid_dcc_header = 0x%u\n",
-    //    fed, size, 8*event_length, static_cast<uint32_t>(dcc_errors), run_number, static_cast<uint32_t>(word_dcc), static_cast<uint32_t>(bid_dcc_header));
-
-    // 
-    // dcc header w2
-    //
-    //print_raw_buffer(reinterpret_cast<uint8_t const*>(buffer + 2), 8);
-    //printf("\n");
-    auto const w2 = buffer[2];
-    uint32_t const run_type = w2 & 0xffffffff;
-    uint16_t const det_trigger_type = (w2 >> 32) & 0xffff;
-    uint8_t w2_dcc = (w2 >> 56) & 0x3f;
-    uint8_t w2_bid_dcc = (w2 >> 62) & 0x3;
-    //printf("run_type = %u det_trigger_type = %u w2_dcc = %u w2_bid_dcc = %u\n", 
-    //    run_type, det_trigger_type, w2_dcc, w2_bid_dcc);
-
-    //
-    // dcc header w3
-    //
-    auto const w3 = buffer[3];
-    //print_raw_buffer(reinterpret_cast<uint8_t const*>(&w3), 8);
-    //printf("\n");
-    uint32_t const orbit_number = w3 & 0xffffffff;
-    uint8_t const sr = (w3 >> 32) & 0x1;
-    uint8_t const zs = (w3 >> 33) & 0x1;
-    uint8_t const tzs = (w3 >> 34) & 0x1;
-    uint8_t const sr_chstatus = (w3 >> 36) & 0xf;
-    uint8_t const tcc_chstatus1 = (w3 >> 40) & 0xf;
-    uint8_t const tcc_chstatus2 = (w3 >> 44) & 0xf;
-    uint8_t const tcc_chstatus3 = (w3 >> 48) & 0xf;
-    uint8_t const tcc_chstatus4 = (w3 >> 52) & 0xf;
-    uint8_t const w3_dcc = (w3 >> 56) & 0x3f;
-    uint8_t const w3_bid_dcc = (w3 >> 62) & 0x3;
-    //printf("orbit_number = %u sr = %u zs = %u tzs = %u sr_chstatus = %u\n",
-    //    orbit_number, static_cast<uint32_t>(sr), static_cast<uint32_t>(zs),
-    //    static_cast<uint32_t>(tzs), static_cast<uint32_t>(sr_chstatus));
-    //printf("tcc_chstatus1 = %u tcc_chstatus2 = %u tcc_chstatus3 = %u tcc_chstatus4 = %u\n",
-    //    static_cast<uint32_t>(tcc_chstatus1), static_cast<uint32_t>(tcc_chstatus2),
-    //    static_cast<uint32_t>(tcc_chstatus3), static_cast<uint32_t>(tcc_chstatus4));
-
-    //
-    // w4 - w8 (including 5 64-bit words)
-    //
-    /*
-    for (uint32_t i=0; i<5; i++) {
-        auto const wi = buffer[4 + i];
-        for (uint32_t i=0; i<14; i++) {
-            uint8_t value_i = (wi >> i*4) & 0xf;
-            printf("fe_chstatus_%u = %u  ", i, static_cast<uint32_t>(value_i));
-        }
-        uint8_t wi_dcc = (wi >> 56) & 0x3f;
-        uint8_t wi_bid_dcc = (wi >> 62) & 0x3;
-        printf("wi_dcc = %u wi_bid-dcc = %u\n", 
-            static_cast<uint32_t>(wi_dcc), static_cast<uint32_t>(wi_bid_dcc));
-        printf("\n");
-    }
-    */
-
-    //
-    // TCC block
-    //
-    {
-        auto const w = buffer[9];
-        //print_raw_buffer(reinterpret_cast<uint8_t const*>(&w), 8);
-        //printf("\n");
-        uint8_t const tccid = w & 0xff;
-        uint8_t const bxlocal = (w >> 16) & 0xff;
-        uint8_t const e0 = (w >> 17) & 0x1;
-        uint8_t const w_bfield_0 = (w >> 29) & 0x7;
-        uint16_t const lv1local = (w >> 32) & 0xfff;
-        uint8_t const e1 = (w >> 44) & 0x1;
-        uint8_t const ntt = (w >> 48) & 0x7f;
-        uint8_t const ntimesamples = (w >> 55) & 0xf;
-        uint8_t const le0 = (w >> 59) & 0x1;
-        uint8_t const le1 = (w >> 60) & 0x1;
-        uint8_t const w_bfield_1 = (w >> 61) & 0x7;
-        //printf("tccid = %u bxlocal = %u e0 = %u w_bitfield_0 = %u lv1local = %u\n",
-        //    tccid, bxlocal, e0, w_bfield_0, lv1local);
-        //printf("e1 = %u ntt = %u ntimesamples = %u le0 = %u le1 = %u w_bfield_1 = %u\n",
-        //    e1, ntt, ntimesamples, le0, le1, w_bfield_1);
-    }
-
-    // 9 for fed + dcc header 
-    // 36 for 4 EE TCC blocks or 18 for 1 EB TCC block
-    // 6 for SR block size
-    //print_first3bits(buffer, size / 8);
-    //auto const* tower_block_start = buffer + 9 + 36 + 6;
-    //print_first3bits(tower_block_start, size / 8 - 10 - 36 - 6);
-
-    //
-    // print Tower block headers
-    //
-    uint8_t ntccblockwords = isBarrel ? 18 : 36;
-    auto const* tower_blocks_start = buffer + 9 + ntccblockwords + 6;
-    auto const* trailer = buffer + (size / 8 - 1);
-    auto const* current_tower_block = tower_blocks_start;
-    while (current_tower_block != trailer) {
-        auto const w = *current_tower_block;
-        uint8_t ttid = w & 0xff;
-        uint8_t ntimesamples = (w >> 8) & 0x7f;
-        uint16_t bxlocal = (w >> 16) & 0xfff;
-        uint8_t e0 = (w >> 28) & 0x1;
-        uint8_t w_bfield_0 = (w >> 30) & 0x3;
-        uint16_t lv1local = (w >> 32) & 0xfff;
-        uint8_t e1 = (w >> 44) & 0x1;
-        uint16_t block_length = (w >> 48) & 0x1ff;
-        uint16_t w_bfield_1 = (w >> 62) & 0x3;
-
-        // 
-        uint16_t const dccbx = bx & 0xfff;
-        uint16_t const dccl1 = lv1 & 0xfff;
-        //printf("dccbx = %u bxlocal = %u dccl1 = %u l1local = %u\n",
-        //    dccbx, bxlocal, dccl1, lv1local);
-        if (!is_synced_towerblock(dccbx, bxlocal, dccl1, lv1local)) {
-            current_tower_block += block_length;
-            continue;
-        }
-
-        //printf("ttid = %u ntimesamples = %u\ bxlocal = %u e0 = %u w_bfield_0 = %u\n", 
-        //    ttid, ntimesamples, bxlocal, e0, w_bfield_0);
-        //printf("lv1local = %u e1 = %u block_length = %u w_bfield-1 = %u\n",
-        //    lv1local, e1, block_length, w_bfield_1);
-
-        // go thru all the channels
-        // get the next channel coordinates
-        uint32_t nchannels = (block_length - 1) / 3;
-
-        // 1 threads per channel in this block
-        for (uint32_t ich=0; ich<nchannels; ich+=NTHREADS) {
-            auto const i_to_access = ich + threadIdx.x;
-            // threads outside of the range -> leave the loop
-            if (i_to_access>=nchannels) break;
-
-            // inc the channel's counter and get the pos where to store
-            auto const wdata = current_tower_block[1 + i_to_access*3];
-            uint8_t const stripid = wdata & 0x7;
-            uint8_t const xtalid = (wdata >> 4) & 0x7;
-            ElectronicsIdGPU eid{fed2dcc(fed), ttid, stripid, xtalid};
-            auto const didraw = isBarrel 
-                ? compute_ebdetid(eid)
-                : eid2did[eid.linearIndex()];
-            // FIXME: what kind of channels are these guys
-            if (didraw == 0) 
-                continue;
-            
-            // get samples
-            uint16_t sampleValues[10];
-            sampleValues[0] = (wdata >> 16) & 0x3fff;
-            sampleValues[1] = (wdata >> 32) & 0x3fff;
-            sampleValues[2] = (wdata >> 48) & 0x3fff;
-            auto const wdata1 = current_tower_block[2+i_to_access*3];
-            sampleValues[3] = wdata1 & 0x3fff;
-            sampleValues[4] = (wdata1 >> 16) & 0x3fff;
-            sampleValues[5] = (wdata1 >> 32) & 0x3fff;
-            sampleValues[6] = (wdata1 >> 48) & 0x3fff;
-            auto const wdata2 = current_tower_block[3+i_to_access*3];
-            sampleValues[7] = wdata2 & 0x3fff;
-            sampleValues[8] = (wdata2 >> 16) & 0x3fff;
-            sampleValues[9] = (wdata2 >> 32) & 0x3fff;
-            //printf("stripid = %u xtalid = %u\n", stripid, xtalid);
-            
-            // check gain
-            bool isSaturation = true;
-            short firstGainZeroSampID{-1}, firstGainZeroSampADC{-1};
-            for (uint32_t si=0; si<10; si++) {
-                if (gainId(sampleValues[si]) == 0) {
-                    firstGainZeroSampID = si;
-                    firstGainZeroSampADC = adc(sampleValues[si]);
-                    break;
-                }
-            }
-            if (firstGainZeroSampID!=-1) {
-                unsigned int plateauEnd = std::min(10u ,(unsigned int)(firstGainZeroSampID+5));
-                for (unsigned int s=firstGainZeroSampID; s<plateauEnd; s++) {
-                    if( gainId(sampleValues[s])==0 && 
-                        adc(sampleValues[s])==firstGainZeroSampADC ) {;}
-                    else { isSaturation=false;  break;}  //it's not saturation
-                }     
-                // get rid of channels which are stuck in gain0
-                if(firstGainZeroSampID<3) {isSaturation=false; }
-                if (!isSaturation)
-                    continue;
-            } else { // there is no zero gainId sample
-                // gain switch check
-                short numGain=1;
-                bool gainSwitchError = false;
-                for (unsigned int si=1; si<10; si++) {
-                    if ((gainId(sampleValues[si-1]) > gainId(sampleValues[si])) && 
-                        numGain<5) gainSwitchError=true;
-                    if (gainId(sampleValues[si-1]) == gainId(sampleValues[si])) numGain++;
-                    else numGain=1;
-                }
-                if (gainSwitchError)
-                    continue;
-            }
-            
-            auto const pos = atomicAdd(pChannelsCounter, 1);
-        
-            // store to global
-            ids[pos] = didraw;
-            samples[pos*10] = sampleValues[0];
-            samples[pos*10 + 1] = sampleValues[1];
-            samples[pos*10 + 2] = sampleValues[2];
-            samples[pos*10 + 3] = sampleValues[3];
-            samples[pos*10 + 4] = sampleValues[4];
-            samples[pos*10 + 5] = sampleValues[5];
-            samples[pos*10 + 6] = sampleValues[6];
-            samples[pos*10 + 7] = sampleValues[7];
-            samples[pos*10 + 8] = sampleValues[8];
-            samples[pos*10 + 9] = sampleValues[9];
-        }
-
-        current_tower_block += block_length;
-    }
+//     auto const ifed = blockIdx.x;
+// 
+//     // FIXME: use only the very first fed
+//     //if (ifed!=10) return;
+// 
+//     // offset in bytes
+//     auto const offset = offsets[ifed];
+//     // fed id
+//     auto const fed = feds[ifed];
+//     auto const isBarrel = is_barrel(static_cast<uint8_t>(fed - 600));
+//     // size
+//     auto const size = ifed==gridDim.x-1 ? nbytesTotal - offset : offsets[ifed+1] - offset;
+//     auto *samples = isBarrel ? samplesEB : samplesEE;
+//     auto *ids = isBarrel ? idsEB : idsEE;
+//     auto *pChannelsCounter = isBarrel 
+//         ? &pChannelsCounterEBEE[0] 
+//         : &pChannelsCounterEBEE[1];
+// 
+//     // FIXME: debugging
+//     //printf("ifed = %u fed = %d offset = %u size = %u\n", ifed, fed, offset, size);
+// 
+//     // offset to the right raw buffer
+//     uint64_t const* buffer = reinterpret_cast<uint64_t const*>(data + offset);
+// 
+//     // dump first 3 bits for each 64-bit word
+//     //print_first3bits(buffer, size / 8);
+// 
+//     //
+//     // fed header
+//     //
+//     //print_raw_buffer(reinterpret_cast<uint8_t const*>(buffer), 8);
+//     //printf("\n");
+//     auto const fed_header = buffer[0];
+//     uint32_t fed_id = (fed_header >> 8) & 0xfff;
+//     uint32_t bx = (fed_header >> 20) & 0xfff;
+//     uint32_t lv1 = (fed_header >> 32) & 0xffffff;
+//     uint8_t trigger_type = (fed_header >> 56) & 0xf;
+//     uint8_t const bid_fed_header = (fed_header >> 60) & 0xf;
+//     //printf("fed = %d fed_id = %u bx = %u lv1 = %u tt=%hhu  bid = 0x%u\n",
+//     //    fed, fed_id, bx, lv1, trigger_type, bid_fed_header);
+// 
+//     //
+//     // dcc header: w1
+//     //
+//     //print_raw_buffer(reinterpret_cast<uint8_t const*>(buffer + 1), 8);
+//     //printf("\n");
+//     auto const dcc_header = buffer[1];
+//     uint32_t event_length = dcc_header & 0xffffff;
+//     uint8_t dcc_errors = (dcc_header >> 24) & 0xff;
+//     uint32_t run_number = (dcc_header >> 32) & 0xffffff;
+//     uint8_t const word_dcc = (dcc_header >> 56) & 0x3f;
+//     uint8_t const bid_dcc_header = (dcc_header >> 62) & 0x3;
+//     //printf("fed = %d size = %u event_length = %u dcc_errors = %u run_number = %u word_dcc = 0x%u bid_dcc_header = 0x%u\n",
+//     //    fed, size, 8*event_length, static_cast<uint32_t>(dcc_errors), run_number, static_cast<uint32_t>(word_dcc), static_cast<uint32_t>(bid_dcc_header));
+// 
+//     // 
+//     // dcc header w2
+//     //
+//     //print_raw_buffer(reinterpret_cast<uint8_t const*>(buffer + 2), 8);
+//     //printf("\n");
+//     auto const w2 = buffer[2];
+//     uint32_t const run_type = w2 & 0xffffffff;
+//     uint16_t const det_trigger_type = (w2 >> 32) & 0xffff;
+//     uint8_t w2_dcc = (w2 >> 56) & 0x3f;
+//     uint8_t w2_bid_dcc = (w2 >> 62) & 0x3;
+//     //printf("run_type = %u det_trigger_type = %u w2_dcc = %u w2_bid_dcc = %u\n", 
+//     //    run_type, det_trigger_type, w2_dcc, w2_bid_dcc);
+// 
+//     //
+//     // dcc header w3
+//     //
+//     auto const w3 = buffer[3];
+//     //print_raw_buffer(reinterpret_cast<uint8_t const*>(&w3), 8);
+//     //printf("\n");
+//     uint32_t const orbit_number = w3 & 0xffffffff;
+//     uint8_t const sr = (w3 >> 32) & 0x1;
+//     uint8_t const zs = (w3 >> 33) & 0x1;
+//     uint8_t const tzs = (w3 >> 34) & 0x1;
+//     uint8_t const sr_chstatus = (w3 >> 36) & 0xf;
+//     uint8_t const tcc_chstatus1 = (w3 >> 40) & 0xf;
+//     uint8_t const tcc_chstatus2 = (w3 >> 44) & 0xf;
+//     uint8_t const tcc_chstatus3 = (w3 >> 48) & 0xf;
+//     uint8_t const tcc_chstatus4 = (w3 >> 52) & 0xf;
+//     uint8_t const w3_dcc = (w3 >> 56) & 0x3f;
+//     uint8_t const w3_bid_dcc = (w3 >> 62) & 0x3;
+//     //printf("orbit_number = %u sr = %u zs = %u tzs = %u sr_chstatus = %u\n",
+//     //    orbit_number, static_cast<uint32_t>(sr), static_cast<uint32_t>(zs),
+//     //    static_cast<uint32_t>(tzs), static_cast<uint32_t>(sr_chstatus));
+//     //printf("tcc_chstatus1 = %u tcc_chstatus2 = %u tcc_chstatus3 = %u tcc_chstatus4 = %u\n",
+//     //    static_cast<uint32_t>(tcc_chstatus1), static_cast<uint32_t>(tcc_chstatus2),
+//     //    static_cast<uint32_t>(tcc_chstatus3), static_cast<uint32_t>(tcc_chstatus4));
+// 
+//     //
+//     // w4 - w8 (including 5 64-bit words)
+//     //
+//     /*
+//     for (uint32_t i=0; i<5; i++) {
+//         auto const wi = buffer[4 + i];
+//         for (uint32_t i=0; i<14; i++) {
+//             uint8_t value_i = (wi >> i*4) & 0xf;
+//             printf("fe_chstatus_%u = %u  ", i, static_cast<uint32_t>(value_i));
+//         }
+//         uint8_t wi_dcc = (wi >> 56) & 0x3f;
+//         uint8_t wi_bid_dcc = (wi >> 62) & 0x3;
+//         printf("wi_dcc = %u wi_bid-dcc = %u\n", 
+//             static_cast<uint32_t>(wi_dcc), static_cast<uint32_t>(wi_bid_dcc));
+//         printf("\n");
+//     }
+//     */
+// 
+//     //
+//     // TCC block
+//     //
+//     {
+//         auto const w = buffer[9];
+//         //print_raw_buffer(reinterpret_cast<uint8_t const*>(&w), 8);
+//         //printf("\n");
+//         uint8_t const tccid = w & 0xff;
+//         uint8_t const bxlocal = (w >> 16) & 0xff;
+//         uint8_t const e0 = (w >> 17) & 0x1;
+//         uint8_t const w_bfield_0 = (w >> 29) & 0x7;
+//         uint16_t const lv1local = (w >> 32) & 0xfff;
+//         uint8_t const e1 = (w >> 44) & 0x1;
+//         uint8_t const ntt = (w >> 48) & 0x7f;
+//         uint8_t const ntimesamples = (w >> 55) & 0xf;
+//         uint8_t const le0 = (w >> 59) & 0x1;
+//         uint8_t const le1 = (w >> 60) & 0x1;
+//         uint8_t const w_bfield_1 = (w >> 61) & 0x7;
+//         //printf("tccid = %u bxlocal = %u e0 = %u w_bitfield_0 = %u lv1local = %u\n",
+//         //    tccid, bxlocal, e0, w_bfield_0, lv1local);
+//         //printf("e1 = %u ntt = %u ntimesamples = %u le0 = %u le1 = %u w_bfield_1 = %u\n",
+//         //    e1, ntt, ntimesamples, le0, le1, w_bfield_1);
+//     }
+// 
+//     // 9 for fed + dcc header 
+//     // 36 for 4 EE TCC blocks or 18 for 1 EB TCC block
+//     // 6 for SR block size
+//     //print_first3bits(buffer, size / 8);
+//     //auto const* tower_block_start = buffer + 9 + 36 + 6;
+//     //print_first3bits(tower_block_start, size / 8 - 10 - 36 - 6);
+// 
+//     //
+//     // print Tower block headers
+//     //
+//     uint8_t ntccblockwords = isBarrel ? 18 : 36;
+//     auto const* tower_blocks_start = buffer + 9 + ntccblockwords + 6;
+//     auto const* trailer = buffer + (size / 8 - 1);
+//     auto const* current_tower_block = tower_blocks_start;
+//     while (current_tower_block != trailer) {
+//         auto const w = *current_tower_block;
+//         uint8_t ttid = w & 0xff;
+//         uint8_t ntimesamples = (w >> 8) & 0x7f;
+//         uint16_t bxlocal = (w >> 16) & 0xfff;
+//         uint8_t e0 = (w >> 28) & 0x1;
+//         uint8_t w_bfield_0 = (w >> 30) & 0x3;
+//         uint16_t lv1local = (w >> 32) & 0xfff;
+//         uint8_t e1 = (w >> 44) & 0x1;
+//         uint16_t block_length = (w >> 48) & 0x1ff;
+//         uint16_t w_bfield_1 = (w >> 62) & 0x3;
+// 
+//         // 
+//         uint16_t const dccbx = bx & 0xfff;
+//         uint16_t const dccl1 = lv1 & 0xfff;
+//         //printf("dccbx = %u bxlocal = %u dccl1 = %u l1local = %u\n",
+//         //    dccbx, bxlocal, dccl1, lv1local);
+//         if (!is_synced_towerblock(dccbx, bxlocal, dccl1, lv1local)) {
+//             current_tower_block += block_length;
+//             continue;
+//         }
+// 
+//         //printf("ttid = %u ntimesamples = %u\ bxlocal = %u e0 = %u w_bfield_0 = %u\n", 
+//         //    ttid, ntimesamples, bxlocal, e0, w_bfield_0);
+//         //printf("lv1local = %u e1 = %u block_length = %u w_bfield-1 = %u\n",
+//         //    lv1local, e1, block_length, w_bfield_1);
+// 
+//         // go thru all the channels
+//         // get the next channel coordinates
+//         uint32_t nchannels = (block_length - 1) / 3;
+// 
+//         // 1 threads per channel in this block
+//         for (uint32_t ich=0; ich<nchannels; ich+=NTHREADS) {
+//             auto const i_to_access = ich + threadIdx.x;
+//             // threads outside of the range -> leave the loop
+//             if (i_to_access>=nchannels) break;
+// 
+//             // inc the channel's counter and get the pos where to store
+//             auto const wdata = current_tower_block[1 + i_to_access*3];
+//             uint8_t const stripid = wdata & 0x7;
+//             uint8_t const xtalid = (wdata >> 4) & 0x7;
+//             ElectronicsIdGPU eid{fed2dcc(fed), ttid, stripid, xtalid};
+//             auto const didraw = isBarrel 
+//                 ? compute_ebdetid(eid)
+//                 : eid2did[eid.linearIndex()];
+//             // FIXME: what kind of channels are these guys
+//             if (didraw == 0) 
+//                 continue;
+//             
+//             // get samples
+//             uint16_t sampleValues[10];
+//             sampleValues[0] = (wdata >> 16) & 0x3fff;
+//             sampleValues[1] = (wdata >> 32) & 0x3fff;
+//             sampleValues[2] = (wdata >> 48) & 0x3fff;
+//             auto const wdata1 = current_tower_block[2+i_to_access*3];
+//             sampleValues[3] = wdata1 & 0x3fff;
+//             sampleValues[4] = (wdata1 >> 16) & 0x3fff;
+//             sampleValues[5] = (wdata1 >> 32) & 0x3fff;
+//             sampleValues[6] = (wdata1 >> 48) & 0x3fff;
+//             auto const wdata2 = current_tower_block[3+i_to_access*3];
+//             sampleValues[7] = wdata2 & 0x3fff;
+//             sampleValues[8] = (wdata2 >> 16) & 0x3fff;
+//             sampleValues[9] = (wdata2 >> 32) & 0x3fff;
+//             //printf("stripid = %u xtalid = %u\n", stripid, xtalid);
+//             
+//             // check gain
+//             bool isSaturation = true;
+//             short firstGainZeroSampID{-1}, firstGainZeroSampADC{-1};
+//             for (uint32_t si=0; si<10; si++) {
+//                 if (gainId(sampleValues[si]) == 0) {
+//                     firstGainZeroSampID = si;
+//                     firstGainZeroSampADC = adc(sampleValues[si]);
+//                     break;
+//                 }
+//             }
+//             if (firstGainZeroSampID!=-1) {
+//                 unsigned int plateauEnd = std::min(10u ,(unsigned int)(firstGainZeroSampID+5));
+//                 for (unsigned int s=firstGainZeroSampID; s<plateauEnd; s++) {
+//                     if( gainId(sampleValues[s])==0 && 
+//                         adc(sampleValues[s])==firstGainZeroSampADC ) {;}
+//                     else { isSaturation=false;  break;}  //it's not saturation
+//                 }     
+//                 // get rid of channels which are stuck in gain0
+//                 if(firstGainZeroSampID<3) {isSaturation=false; }
+//                 if (!isSaturation)
+//                     continue;
+//             } else { // there is no zero gainId sample
+//                 // gain switch check
+//                 short numGain=1;
+//                 bool gainSwitchError = false;
+//                 for (unsigned int si=1; si<10; si++) {
+//                     if ((gainId(sampleValues[si-1]) > gainId(sampleValues[si])) && 
+//                         numGain<5) gainSwitchError=true;
+//                     if (gainId(sampleValues[si-1]) == gainId(sampleValues[si])) numGain++;
+//                     else numGain=1;
+//                 }
+//                 if (gainSwitchError)
+//                     continue;
+//             }
+//             
+//             auto const pos = atomicAdd(pChannelsCounter, 1);
+//         
+//             // store to global
+//             ids[pos] = didraw;
+//             samples[pos*10] = sampleValues[0];
+//             samples[pos*10 + 1] = sampleValues[1];
+//             samples[pos*10 + 2] = sampleValues[2];
+//             samples[pos*10 + 3] = sampleValues[3];
+//             samples[pos*10 + 4] = sampleValues[4];
+//             samples[pos*10 + 5] = sampleValues[5];
+//             samples[pos*10 + 6] = sampleValues[6];
+//             samples[pos*10 + 7] = sampleValues[7];
+//             samples[pos*10 + 8] = sampleValues[8];
+//             samples[pos*10 + 9] = sampleValues[9];
+//         }
+// 
+//         current_tower_block += block_length;
+//     }
 }
 
 void entryPoint(
@@ -450,9 +450,29 @@ void entryPoint(
                                nfedsWithData * sizeof(int),
                                cudaMemcpyHostToDevice,
                                cudaStream) );
-
+    
+    
+    
+//     ecal::raw::entryPoint(
+//       inputCPU_, inputGPU_, outputGPU_, scratchGPU_, outputCPU_,
+//       conditions, ctx.stream(), counter, currentCummOffset);
+    
+    
+//     unsigned char const* __restrict__ data,
+//     uint32_t const* __restrict__ offsets,
+//     int const* __restrict__ feds,
+//     uint16_t *samplesEB,
+//     uint16_t *samplesEE,
+//     uint32_t *idsEB,
+//     uint32_t *idsEE,
+//     uint32_t *pChannelsCounterEBEE,
+//     uint32_t const* eid2did,
+//     uint32_t const nbytesTotal) 
+    
+    
+//     kernel_unpack_test<1><<<nfedsWithData,1, 0, cudaStream>>>(  
     kernel_unpack_test<32><<<nfedsWithData,32, 0, cudaStream>>>(
-        inputGPU.data,
+      inputGPU.data,
         inputGPU.offsets,
         inputGPU.feds,
         outputGPU.samplesEB,
